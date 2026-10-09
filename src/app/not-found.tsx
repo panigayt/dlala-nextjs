@@ -26,7 +26,7 @@ export default function NotFound() {
         <p lang="en" dir="ltr" className="mb-2.5 text-lg text-zinc-700">
           Sorry, this page does not exist.
         </p>
-        <nav className="mt-[26px] flex flex-col gap-2.5" aria-label="home">
+        <nav className="mt-[26px] flex flex-col gap-2.5" aria-label="التنقل الرئيسي">
           <Link
             href="/"
             lang="ar"
