@@ -47,10 +47,8 @@ export async function POST(req: NextRequest) {
   const idToken = m[1];
   const keyUid = key.split('/')[2];
 
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'server-misconfigured' }, { status: 500 });
-  }
+  // Public Firebase web key (also hardcoded in client files; public by design).
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M';
   try {
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,

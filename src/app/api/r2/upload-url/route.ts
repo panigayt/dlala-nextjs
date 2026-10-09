@@ -43,10 +43,9 @@ export async function POST(req: NextRequest) {
   // Verify token via Firebase Auth REST API (no Admin SDK needed).
   // The token's `user_id` (sub) must equal the key's uid segment.
   // Email must be verified (project rule: verified email to publish/contact).
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'server-misconfigured' }, { status: 500 });
-  }
+  // Public Firebase web key (also hardcoded in client files; public by design).
+  // Falls back to the project key if env var is unset to avoid breaking uploads.
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M';
   try {
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
