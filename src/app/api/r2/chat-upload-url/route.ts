@@ -47,9 +47,13 @@ export async function POST(req: NextRequest) {
   const idToken = m[1];
   const keyUid = key.split('/')[2];
 
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: 'server-misconfigured' }, { status: 500 });
+  }
   try {
     const verifyRes = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M'}`,
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,9 +64,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'invalid-token' }, { status: 401 });
     }
     const data = await verifyRes.json();
-    const uid = data?.users?.[0]?.localId;
+    const user = data?.users?.[0];
+    const uid = user?.localId;
     if (!uid || uid !== keyUid) {
       return NextResponse.json({ error: 'uid-mismatch' }, { status: 403 });
+    }
+    if (!user?.emailVerified) {
+      return NextResponse.json({ error: 'email-not-verified' }, { status: 403 });
     }
   } catch {
     return NextResponse.json({ error: 'verify-failed' }, { status: 500 });
