@@ -246,6 +246,59 @@ export function normSearchText(s: unknown): string {
     .trim();
 }
 
+// Wanted ads (مطلوب): listings where isWanted == true and status is
+// available/negotiating, newest first. Mirrors js/wanted.js loadWanted().
+// Public read — no auth needed.
+export async function fetchWanted(limit = 120): Promise<ListingCard[]> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const structuredQuery = {
+    from: [{ collectionId: 'listings' }],
+    where: {
+      compositeFilter: {
+        op: 'AND',
+        filters: [
+          {
+            fieldFilter: {
+              field: { fieldPath: 'isWanted' },
+              op: 'EQUAL',
+              value: { booleanValue: true },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: 'status' },
+              op: 'IN',
+              value: {
+                arrayValue: {
+                  values: [{ stringValue: 'available' }, { stringValue: 'negotiating' }],
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
+    limit,
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`wanted-rest-${res.status}`);
+  }
+  const body = await res.json().catch(() => null);
+  const rawDocs = (Array.isArray(body) ? body : [])
+    .filter((r) => r.document)
+    .map((r) => r.document);
+  return rawDocs.map(restDocToObj);
+}
+
 export interface SearchFilters {
   q?: string;
   cat?: string;
@@ -367,6 +420,123 @@ export function formatPrice(n: number): string {
   // Production format: LTR digits with thousand separators + " دج"
   // (MEMORY.md: never "000150 دج", always "15000 دج").
   return n.toLocaleString('en-US').replace(/,/g, ' ') + ' دج';
+}
+
+// --- Announcements (public, read-only) -----------------------------------
+// Firestore collection `announcements`. Public list is allowed only with
+// where('active','==',true) (security rules v101). Mirrors the exact
+// behavior of ~/workspace/dlala-040/js/announcements.js.
+
+export interface Announcement {
+  id: string;
+  title?: string | Record<string, string>;
+  body?: string | Record<string, string>;
+  createdAt?: Date;
+  active?: boolean;
+  link?: string;
+}
+
+function restAnnouncement(doc: { name: string; fields?: Record<string, unknown> }): Announcement {
+  const o: Record<string, unknown> = { id: doc.name.split('/').pop() as string };
+  const fs = doc.fields || {};
+  for (const k in fs) o[k] = restValue(fs[k]);
+  return o as unknown as Announcement;
+}
+
+// Localized map lookup — js/announcements.js annLocalized (verbatim logic):
+// explicit string passes through; map prefers Arabic, then fr/en.
+export function annLocalized(map: string | Record<string, string> | undefined): string {
+  if (!map) return '';
+  if (typeof map === 'string') return map;
+  return map.ar || map.fr || map.en || '';
+}
+
+// Defense in depth: only http(s) URLs become clickable links
+// (js/announcements.js annSafeLink, verbatim logic).
+export function annSafeLink(url: unknown): string {
+  if (typeof url !== 'string') return '';
+  const s = url.trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+
+// Short preview of the body on the card, default 160 chars
+// (js/announcements.js annExcerpt, verbatim logic).
+export function annExcerpt(body: string, maxLen = 160): string {
+  const s = String(body == null ? '' : body);
+  const n = typeof maxLen === 'number' && maxLen > 0 ? maxLen : 160;
+  if (s.length <= n) return s;
+  return s.slice(0, n).replace(/\s+$/, '') + '…';
+}
+
+export async function fetchAnnouncements(limit = 50): Promise<Announcement[]> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const baseQuery = {
+    from: [{ collectionId: 'announcements' }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: 'active' },
+        op: 'EQUAL',
+        value: { booleanValue: true },
+      },
+    },
+    limit,
+  };
+  const doQuery = async (withOrder: boolean): Promise<Announcement[]> => {
+    const structuredQuery = withOrder
+      ? {
+          ...baseQuery,
+          orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+        }
+      : baseQuery;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery }),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const err = new Error(`announcements-rest-${res.status}`) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
+    }
+    const body = await res.json().catch(() => null);
+    return (Array.isArray(body) ? body : [])
+      .filter((r) => r.document)
+      .map((r) => restAnnouncement(r.document));
+  };
+  try {
+    return await doQuery(true);
+  } catch (e) {
+    // The where+orderBy composite needs a Firestore composite index.
+    // Legacy fallback (js/announcements.js annFetch): single-field query +
+    // client-side sort by createdAt desc.
+    const status = (e as Error & { status?: number }).status;
+    if (status === 400) {
+      const docs = await doQuery(false);
+      const ms = (d?: Date) => (d instanceof Date && !isNaN(d.getTime()) ? d.getTime() : 0);
+      return docs.sort((a, b) => ms(b.createdAt) - ms(a.createdAt));
+    }
+    throw e;
+  }
+}
+
+// Single announcement doc. Callers must check `active === true` before
+// rendering (the list rule only ever exposes active docs —
+// js/announcement.js loadAnnouncementDetail).
+export async function fetchAnnouncement(id: string): Promise<Announcement | null> {
+  const url =
+    FIRESTORE_REST_BASE + '/announcements/' + encodeURIComponent(id) +
+    '?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const res = await fetch(url, { cache: 'no-store' });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    if (res.status === 403) return null;
+    throw new Error(`announcement-rest-${res.status}`);
+  }
+  const doc = await res.json().catch(() => null);
+  if (!doc || !doc.fields) return null;
+  return restAnnouncement(doc);
 }
 
 export function timeAgo(d: Date | undefined, lang = 'ar'): string {

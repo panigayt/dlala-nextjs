@@ -5,6 +5,7 @@
 // client-side-matching on the server (mirrors js/home.js R-9).
 
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import {
   searchListings,
@@ -33,7 +34,7 @@ function Header() {
   return (
     <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/" className="text-xl font-bold">دلالة</a>
+        <Link href="/" className="text-xl font-bold">دلالة</Link>
         <form action="/search" method="get" className="flex gap-2">
           <input
             type="search"
@@ -97,7 +98,7 @@ async function Results({ filters }: { filters: SearchFilters }) {
       {listings.map((l) => {
         const img = cardImage(l);
         return (
-          <a
+          <Link
             key={l.id}
             href={`/listing/${l.id}`}
             className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
@@ -129,7 +130,7 @@ async function Results({ filters }: { filters: SearchFilters }) {
                 ) : null}
               </p>
             </div>
-          </a>
+          </Link>
         );
       })}
     </div>

@@ -1,0 +1,282 @@
+'use client';
+
+// Email-action handler — mirrors js/auth-action.js.
+// Firebase Auth's emails (address verification, password reset) point here
+// instead of the default Firebase handler. Handles:
+//   ?mode=verifyEmail&oobCode=...   -> applyActionCode -> success screen
+//   ?mode=resetPassword&oobCode=... -> verifyPasswordResetCode (reveals the
+//      account email) -> new-password form -> confirmPasswordReset -> success
+// continueUrl: honored only for same-origin / dzdlala.com targets —
+// everything else falls back to / (open-redirect hardening).
+//
+// All user-facing strings are verbatim from js/i18n.ar.js (production).
+
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import {
+  getFirebaseClient,
+  LoadingSpinner,
+  PageHeader,
+  CompatAuth,
+  inputCls,
+  btnCls,
+} from '@/lib/firebase-client';
+
+// Verbatim from js/i18n.ar.js
+const STR = {
+  actionLinkInvalid: 'هذا الرابط غير صالح أو انتهت صلاحيته — اطلب رابطاً جديداً',
+  verifyEmailDone: 'تم التحقق من بريدك الإلكتروني — يمكنك الآن تسجيل الدخول',
+  newPasswordTitle: 'اختر كلمة مرور جديدة',
+  newPassword: 'كلمة المرور الجديدة',
+  confirmNewPassword: 'تأكيد كلمة المرور الجديدة',
+  saveNewPassword: 'حفظ كلمة المرور الجديدة',
+  passwordChanged: 'تم تغيير كلمة المرور — سجّل الدخول بكلمة المرور الجديدة',
+  continueToSite: 'المتابعة إلى دلالة',
+  signedOutAllSessions: 'تم تسجيل خروجك من كل الجلسات — سجّل الدخول مجدداً.',
+  login: 'تسجيل الدخول',
+  loading: 'جارٍ التحميل...',
+  errorGeneric: 'حدث خطأ — حاول مجدداً',
+  authWeakPassword: 'كلمة المرور ضعيفة جداً — استخدم 8 أحرف على الأقل',
+  passwordsNoMatch: 'كلمتا المرور غير متطابقتين',
+};
+
+interface ActionAuth extends CompatAuth {
+  applyActionCode: (code: string) => Promise<void>;
+  verifyPasswordResetCode: (code: string) => Promise<string>;
+  confirmPasswordReset: (code: string, newPassword: string) => Promise<void>;
+}
+
+type Stage = 'working' | 'invalid' | 'verifyDone' | 'resetForm' | 'resetDone';
+
+// Only same-origin (or the production host over https) may receive the
+// post-action redirect. Firebase continue URLs are attacker-influenced
+// input (they ride in the email link), so this must stay strict.
+function safeContinueUrl(raw: string | null): string {
+  const fallback = '/';
+  if (!raw || typeof window === 'undefined') return fallback;
+  try {
+    const u = new URL(raw, window.location.origin);
+    const host = (u.hostname || '').toLowerCase();
+    const me = (window.location.hostname || '').toLowerCase();
+    const allowed =
+      host === me || host === 'dzdlala.com' || host === 'www.dzdlala.com';
+    if (!allowed) return fallback;
+    if (u.protocol === 'https:') return u.href;
+    if (u.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1'))
+      return u.href;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isInvalidCodeError(e: unknown): boolean {
+  const code = (e as { code?: string } | null)?.code || '';
+  return (
+    code === 'auth/expired-action-code' ||
+    code === 'auth/invalid-action-code' ||
+    code === 'auth/user-not-found' ||
+    code === 'auth/user-disabled'
+  );
+}
+
+function AuthActionInner() {
+  const params = useSearchParams();
+  const mode = params.get('mode') || '';
+  const oobCode = params.get('oobCode') || '';
+  // Computed during render (client-only) — no setState-in-effect needed.
+  const continueUrl = safeContinueUrl(params.get('continueUrl'));
+  const [stage, setStage] = useState<Stage>(oobCode ? 'working' : 'invalid');
+  const [email, setEmail] = useState('');
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const ranRef = useRef(false);
+  const oobRef = useRef(oobCode);
+
+  useEffect(() => {
+    // Action codes are single-use — never re-run after completion.
+    if (ranRef.current) return;
+    ranRef.current = true;
+    if (!oobCode) return; // stage already 'invalid' from initial state
+
+    (async () => {
+      try {
+        const client = await getFirebaseClient();
+        const auth = client.auth as unknown as ActionAuth;
+        if (mode === 'verifyEmail') {
+          await auth.applyActionCode(oobCode);
+          setStage('verifyDone');
+        } else if (mode === 'resetPassword') {
+          // Verifies the code is valid AND reveals which account it is for —
+          // an expired/tampered code throws here, before any form is shown.
+          const em = await auth.verifyPasswordResetCode(oobCode);
+          setEmail(em || '');
+          setStage('resetForm');
+        } else {
+          setStage('invalid');
+        }
+      } catch (e) {
+        if (isInvalidCodeError(e)) setStage('invalid');
+        else setStage('invalid');
+      }
+    })();
+    // All setState calls above are in async continuations (after await) —
+    // no synchronous setState in the effect body.
+  }, [params, mode, oobCode]);
+
+  async function doConfirmReset(ev: React.FormEvent) {
+    ev.preventDefault();
+    setFormError(null);
+    if (pw1.length < 8) {
+      setFormError(STR.authWeakPassword);
+      return;
+    }
+    if (pw1 !== pw2) {
+      setFormError(STR.passwordsNoMatch);
+      return;
+    }
+    setSaving(true);
+    try {
+      const client = await getFirebaseClient();
+      const auth = client.auth as unknown as ActionAuth;
+      await auth.confirmPasswordReset(oobRef.current, pw1);
+      // A password change revokes EVERY session, including this browser's —
+      // sign out locally now and say so explicitly.
+      try {
+        await client.auth.signOut();
+      } catch {
+        /* best-effort */
+      }
+      setStage('resetDone');
+    } catch (e) {
+      if (isInvalidCodeError(e)) setStage('invalid');
+      else setFormError(STR.errorGeneric);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-50" dir="rtl">
+      <PageHeader title="دلالة" />
+      <main className="max-w-md mx-auto px-4 py-10">
+        <div className="rounded-2xl bg-white shadow-sm p-6 text-center">
+          {stage === 'working' && (
+            <div>
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-700" />
+              <p className="mt-4 text-zinc-600">{STR.loading}</p>
+            </div>
+          )}
+
+          {stage === 'invalid' && (
+            <div>
+              <div className="text-5xl mb-4">🔗</div>
+              <h1 className="text-xl font-bold text-zinc-900 mb-4">
+                {STR.actionLinkInvalid}
+              </h1>
+              <a href="/auth" className={btnCls + ' inline-block no-underline'}>
+                {STR.login}
+              </a>
+            </div>
+          )}
+
+          {stage === 'verifyDone' && (
+            <div>
+              <div className="text-5xl mb-4">✅</div>
+              <h1 className="text-xl font-bold text-zinc-900 mb-5">
+                {STR.verifyEmailDone}
+              </h1>
+              <a
+                href={continueUrl}
+                className={btnCls + ' inline-block no-underline'}
+              >
+                {STR.continueToSite}
+              </a>
+            </div>
+          )}
+
+          {stage === 'resetForm' && (
+            <div className="text-right">
+              <h1 className="text-xl font-bold text-zinc-900 mb-2 text-center">
+                {STR.newPasswordTitle}
+              </h1>
+              {email && (
+                <p className="text-sm text-zinc-500 mb-5 text-center" dir="ltr">
+                  {email}
+                </p>
+              )}
+              {formError && (
+                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                  {formError}
+                </div>
+              )}
+              <form onSubmit={doConfirmReset} noValidate>
+                <label
+                  htmlFor="aaPw1"
+                  className="block text-sm font-medium text-zinc-700 mb-1"
+                >
+                  {STR.newPassword}
+                </label>
+                <input
+                  id="aaPw1"
+                  type="password"
+                  dir="ltr"
+                  autoComplete="new-password"
+                  minLength={8}
+                  className={inputCls + ' mb-4 text-left'}
+                  value={pw1}
+                  onChange={(e) => setPw1(e.target.value)}
+                  required
+                />
+                <label
+                  htmlFor="aaPw2"
+                  className="block text-sm font-medium text-zinc-700 mb-1"
+                >
+                  {STR.confirmNewPassword}
+                </label>
+                <input
+                  id="aaPw2"
+                  type="password"
+                  dir="ltr"
+                  autoComplete="new-password"
+                  minLength={8}
+                  className={inputCls + ' mb-5 text-left'}
+                  value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                  required
+                />
+                <button type="submit" className={btnCls} disabled={saving}>
+                  {saving ? STR.loading : STR.saveNewPassword}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {stage === 'resetDone' && (
+            <div>
+              <div className="text-5xl mb-4">✅</div>
+              <h1 className="text-xl font-bold text-zinc-900 mb-2">
+                {STR.passwordChanged}
+              </h1>
+              <p className="text-sm text-zinc-600 mb-5">
+                {STR.signedOutAllSessions}
+              </p>
+              <a href="/auth" className={btnCls + ' inline-block no-underline'}>
+                {STR.login}
+              </a>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default function AuthActionPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner label="جارٍ التحميل..." />}>
+      <AuthActionInner />
+    </Suspense>
+  );
+}

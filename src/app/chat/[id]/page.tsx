@@ -1,0 +1,1764 @@
+'use client';
+
+// One-to-one chat thread — mirrors js/chat.js.
+// Features: live messages, text/photo (R2) sends, price proposals,
+// phone-request flow (3 declines = permanent block), deal confirmation,
+// user block, account-block lockdown, sold-state gating, support threads.
+// All user-facing strings verbatim from js/chat.js CHAT_L10N.ar and
+// js/i18n.ar.js. Chat photos go to R2 ONLY (never Firebase Storage).
+
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import {
+  useRequireAuth,
+  LoadingSpinner,
+  CompatDocSnap,
+  FirebaseClient,
+  CompatUser,
+  btnSecondaryCls,
+} from '@/lib/firebase-client';
+import { formatPrice } from '@/lib/firestore';
+
+// Verbatim from js/chat.js CHAT_L10N.ar
+const STR = {
+  back: 'رجوع',
+  typeMessage: 'اكتب رسالة...',
+  send: 'إرسال',
+  proposePrice: 'اقتراح سعر',
+  proposalTitle: 'اقتراح سعر جديد',
+  proposalAmountPh: 'المبلغ (دج)',
+  proposalSend: 'إرسال الاقتراح',
+  proposalInvalid: 'أدخل مبلغاً صحيحاً أكبر من صفر',
+  proposalPending: 'بانتظار الرد',
+  proposalAccepted: 'تم قبول الاقتراح',
+  proposalRefused: 'تم رفض الاقتراح',
+  proposalAccept: 'قبول',
+  proposalDecline: 'رفض',
+  proposalCounter: 'اقتراح مضاد',
+  requestPhone: 'طلب رقم الهاتف',
+  phoneWaiting: 'تم إرسال الطلب — بانتظار رد الطرف الآخر',
+  phoneAccept: 'قبول',
+  phoneDecline: 'رفض',
+  phoneAcceptedMsg: 'تم قبول طلب رقم الهاتف',
+  phoneDeclinedMsg: 'تم رفض طلب رقم الهاتف',
+  phoneBlockedRequester: 'تم حظرك نهائياً من طلب رقم الهاتف في هذه المحادثة',
+  phoneBlockedOther: 'تم حظر {name} نهائياً من طلب رقم الهاتف في هذه المحادثة',
+  phoneSharedConfirm: 'شاركت رقم هاتفك في هذه المحادثة',
+  phoneSharedReceived: 'شارك {name} رقم هاتفه معك',
+  chatBlockedNotice: 'تم تقييد حسابك — لا يمكنك إرسال الرسائل حالياً',
+  chatBlockedUntil: 'تم تقييد حسابك مؤقتاً حتى {date}',
+  listingSoldBadge: 'تم البيع',
+  soldNegotiationClosed: 'الإعلان مُباع — التفاوض مغلق',
+  dealDoneSold: 'تمت الصفقة — الإعلان مُباع',
+  phoneTypeTitle: 'اكتب رقم هاتفك ثم أرسله للطرف الآخر',
+  phonePlaceholder: 'رقم الهاتف',
+  phoneSend: 'إرسال الرقم',
+  phoneInvalid: 'رقم الهاتف غير صالح',
+  phoneShared: 'تمت مشاركة رقم الهاتف',
+  phoneRequestedSuffix: 'طلب رقم هاتفك',
+  photoLabel: 'صورة',
+  unknownUser: 'مستخدم',
+  deletedListing: 'إعلان محذوف',
+  dealRequest: 'طلب تأكيد الصفقة',
+  dealPendingTitle: 'تأكيد الصفقة',
+  dealPendingBody: 'البائع يطلب منك تأكيد إتمام الصفقة',
+  dealYes: 'نعم، تمت الصفقة',
+  dealNo: 'لا، لم تتم',
+  dealConfirmed: 'تم تأكيد الصفقة بنجاح',
+  dealErrInvalidArgs: 'طلب غير صالح — حاول مجدداً',
+  dealErrUnauth: 'يجب تسجيل الدخول أولاً',
+  dealErrNotBuyer: 'فقط المشتري يمكنه تأكيد الصفقة',
+  dealErrNotPending: 'لا يوجد طلب تأكيد معلّق',
+  dealErrNotFound: 'المحادثة غير موجودة',
+  dealErrAlready: 'الصفقة مؤكدة مسبقاً',
+  dealErrUnavailable: 'الإعلان لم يعد متاحاً',
+  dealCancelled: 'تم إلغاء طلب التأكيد',
+  dealWaiting: 'طلب التأكيد مرسل — بانتظار رد المشتري',
+  supportNote: 'أنت تتحدث مع فريق دعم دلالة',
+  supportTitle: 'دعم دلالة',
+  supportGreeting: '👋 مرحباً بك في دعم دلالة — كيف يمكننا مساعدتك؟',
+  supportAutoReply:
+    'فريقنا يقوم بالتحقق من الأمر، سنعود نحوك لمزيد من التفاصيل إذا لزم الأمر',
+  mustVerifyChat: 'يجب تفعيل بريدك الإلكتروني أولاً للمراسلة',
+  tooFast: 'انتظر ثوانٍ قبل إرسال رسالة أخرى',
+  chatError: 'تعذّر فتح المحادثة',
+  supportConfigError: 'تعذّر الوصول للدعم حالياً',
+  supportSelfAdmin: 'أنت فريق الدعم — لا يمكنك مراسلة نفسك',
+  sayHello: 'قل مرحباً 👋 — ابدأ المحادثة برسالة ودية',
+  imageSendError: 'تعذّر إرسال الصورة',
+  today: 'اليوم',
+  yesterday: 'أمس',
+  you: 'أنت',
+  viewListing: 'عرض الإعلان',
+  announcementsTitle: 'إعلانات',
+  announcementsNote: 'قناة الإعلانات — للقراءة فقط',
+};
+// Verbatim from js/i18n.ar.js
+const STR2 = {
+  scamWarning:
+    '⚠️ لا تدفع مقدماً ولا تشارك رموز التفعيل — عاين السلعة بنفسك أولاً',
+  chatSendFailed: 'تعذّر إرسال الرسالة',
+  newMessages: 'رسائل جديدة ↓',
+  photoLoadFailed: 'تعذّر تحميل الصورة',
+  retrySend: 'إعادة الإرسال',
+  sendingPhoto: 'جارٍ إرسال الصورة…',
+  blockedChatNotice: 'لا يمكنكما مراسلة بعضكما.',
+  block: 'حظر',
+  unblock: 'إلغاء الحظر',
+  blockFailed: 'تعذّر تحديث الحظر — حاول مجدداً.',
+  loading: 'جارٍ التحميل...',
+  retry: 'إعادة المحاولة',
+  errorGeneric: 'حدث خطأ — حاول مجدداً',
+  messages: 'الرسائل',
+};
+
+const CONFIRM_DEAL_URL =
+  'https://europe-west3-dlala-85cea.cloudfunctions.net/confirmDeal';
+const TOGGLE_BLOCK_URL =
+  'https://europe-west3-dlala-85cea.cloudfunctions.net/toggleBlock';
+
+interface Msg {
+  id: string;
+  senderId: string;
+  text: string;
+  at: unknown;
+  isSystem: boolean;
+  systemKind?: string;
+  systemArgs?: Record<string, string>;
+  imageUrl?: string;
+  proposal?: { amount: number; status: string };
+  readAt?: unknown;
+}
+
+interface ConvData {
+  id: string;
+  participants: string[];
+  listingId?: string;
+  buyerId?: string;
+  sellerId?: string;
+  phoneRequestBy?: string;
+  phoneRequestStatus?: string;
+  phoneRequestCount?: number;
+  declinesByRequester?: Record<string, number>;
+  dealConfirmPending?: boolean;
+  dealConfirmedByBuyer?: boolean;
+  hiddenFor?: string[];
+}
+
+function tsMs(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  if (v instanceof Date) return v.getTime();
+  if (typeof v === 'object') {
+    const o = v as { toDate?: () => Date; seconds?: number };
+    if (typeof o.toDate === 'function') {
+      try {
+        return o.toDate().getTime();
+      } catch {
+        return 0;
+      }
+    }
+    if (typeof o.seconds === 'number') return o.seconds * 1000;
+  }
+  return 0;
+}
+
+function cleanText(s: string): string {
+  let out = String(s || '').replace(/[‪-‮⁦-⁩]/g, '');
+  if (out.length > 2000) out = out.slice(0, 2000);
+  return out.trim();
+}
+
+// Arabic-Indic digits -> ASCII, then 9-20 digits — mirrors chat.js.
+function normalizePhone(s: string): string {
+  const ar = '٠١٢٣٤٥٦٧٨٩';
+  let d = String(s || '').replace(/[٠-٩]/g, (ch) => String(ar.indexOf(ch)));
+  d = d.replace(/\D/g, '');
+  return d.length >= 9 && d.length <= 20 ? d : '';
+}
+
+function localizedTitle(title: unknown): string {
+  if (!title) return '';
+  if (typeof title === 'string') return title;
+  if (typeof title === 'object') {
+    const o = title as Record<string, string>;
+    return o.ar || o.fr || o.en || '';
+  }
+  return '';
+}
+
+function dayLabel(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((today.getTime() - day.getTime()) / 86400000);
+  if (diff === 0) return STR.today;
+  if (diff === 1) return STR.yesterday;
+  return d.toLocaleDateString('ar-DZ');
+}
+
+function fmtChatTime(ts: number): string {
+  const d = new Date(ts);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function systemText(m: Msg): string {
+  const kind = m.systemKind || '';
+  const args = m.systemArgs || {};
+  switch (kind) {
+    case 'phone_requested':
+      return (args.name || '') + ' ' + STR.phoneRequestedSuffix;
+    case 'phone_accepted':
+      return STR.phoneAcceptedMsg;
+    case 'phone_declined':
+      return STR.phoneDeclinedMsg;
+    case 'phone_shared':
+      return STR.phoneShared;
+    case 'support_greeting':
+      return STR.supportGreeting;
+    case 'support_autoreply':
+      return STR.supportAutoReply;
+    default:
+      return m.text || '';
+  }
+}
+
+function proposalStatusText(status: string): string {
+  return status === 'accepted'
+    ? STR.proposalAccepted
+    : status === 'refused'
+      ? STR.proposalRefused
+      : STR.proposalPending;
+}
+
+// Phone flow state — pure derivation, mirrors chat.js phoneFlowState.
+interface PhoneFlow {
+  pendingBy: string;
+  acceptedBy: string;
+  declines: Record<string, number>;
+  sharedBy: Record<string, boolean>;
+  myBlocked: boolean;
+}
+function phoneFlowState(
+  conv: ConvData | null,
+  messages: Msg[],
+  myUid: string,
+  extraShared: Record<string, boolean>
+): PhoneFlow {
+  const st: PhoneFlow = {
+    pendingBy: '',
+    acceptedBy: '',
+    declines: {},
+    sharedBy: {},
+    myBlocked: false,
+  };
+  for (const m of messages || []) {
+    if (!m || !m.isSystem) continue;
+    const k = m.systemKind || '';
+    const s = m.senderId || '';
+    if (k === 'phone_requested') {
+      st.pendingBy = s;
+    } else if (k === 'phone_declined') {
+      const slot = conv
+        ? { status: conv.phoneRequestStatus || '', by: conv.phoneRequestBy || '' }
+        : { status: '', by: '' };
+      const target =
+        st.pendingBy || (slot.status === 'declined' && slot.by ? slot.by : '');
+      if (target) {
+        st.declines[target] = (st.declines[target] || 0) + 1;
+        st.pendingBy = '';
+      }
+    } else if (k === 'phone_accepted') {
+      st.pendingBy = '';
+    } else if (k === 'phone_shared') {
+      if (s) st.sharedBy[s] = true;
+    }
+  }
+  const status = (conv && conv.phoneRequestStatus) || 'none';
+  const by = (conv && conv.phoneRequestBy) || '';
+  if (status === 'requested') st.pendingBy = by;
+  else if (status === 'accepted') st.acceptedBy = by;
+  else if (status === 'declined') st.pendingBy = '';
+  for (const u of Object.keys(extraShared))
+    if (extraShared[u]) st.sharedBy[u] = true;
+  const officialDeclines = Number(
+    (conv && conv.declinesByRequester && conv.declinesByRequester[myUid]) || 0
+  );
+  st.myBlocked = officialDeclines >= 3 || (st.declines[myUid] || 0) >= 3;
+  return st;
+}
+
+function mintMessageId(myUid: string): string {
+  return (
+    'm_' +
+    myUid +
+    '_' +
+    Date.now().toString(36) +
+    '_' +
+    Math.random().toString(36).slice(2, 8)
+  );
+}
+
+function ChatInner() {
+  const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const convId = (params.id as string) || '';
+  const authState = useRequireAuth();
+
+  const [conv, setConv] = useState<ConvData | null>(null);
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [fatal, setFatal] = useState<string | null>(null);
+  const [otherName, setOtherName] = useState('');
+  const [listingChip, setListingChip] = useState<{
+    title: string;
+    photo: string;
+    id: string;
+  } | null>(null);
+  const [listingSold, setListingSold] = useState(false);
+  const [listingGone, setListingGone] = useState(false);
+  const [amBlocked, setAmBlocked] = useState(false);
+  const [blockUntilMs, setBlockUntilMs] = useState<number | null>(null);
+  const [userBlockSevered, setUserBlockSevered] = useState(false);
+  const [iBlockedThem, setIBlockedThem] = useState(false);
+  const [revealSharedBy, setRevealSharedBy] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [input, setInput] = useState('');
+  const [proposalOpen, setProposalOpen] = useState(false);
+  const [proposalAmt, setProposalAmt] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [statusBar, setStatusBar] = useState<{
+    mode: 'info' | 'error';
+    text: string;
+  } | null>(null);
+  const [failedSend, setFailedSend] = useState<{
+    text?: string;
+    imageUrl?: string | null;
+    proposal?: number | null;
+    mid: string;
+  } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const clientRef = useRef<FirebaseClient | null>(null);
+  const userRef = useRef<CompatUser | null>(null);
+  const convRef = useRef<ConvData | null>(null);
+  const msgsRef = useRef<Msg[]>([]);
+  const unsubsRef = useRef<(() => void)[]>([]);
+  const sendInFlightRef = useRef(false);
+  const lastSendAtRef = useRef(0);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const openedRef = useRef(false);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2600);
+  }, []);
+
+  const isSupport = conv?.listingId === 'support';
+  const isAnn = conv?.listingId === 'announcements';
+  const myUid = authState.status === 'signed-in' ? authState.user.uid : '';
+  const otherUid =
+    conv && (conv.participants || []).find((p) => p !== myUid);
+  const isSeller = conv?.sellerId === myUid;
+  const isBuyer = conv?.buyerId === myUid;
+  const sold = listingSold || listingGone || !!conv?.dealConfirmedByBuyer;
+  const composerLocked = amBlocked || userBlockSevered;
+
+  const pf = phoneFlowState(conv, msgs, myUid, revealSharedBy);
+
+  // ---------- helpers ----------
+
+  function scrollBottom() {
+    const sc = scrollerRef.current;
+    if (sc) sc.scrollTop = sc.scrollHeight;
+  }
+
+  // ---------- bootstrap ----------
+
+  function markRead(client: FirebaseClient, data: ConvData, uid: string) {
+    try {
+      client.db
+        .doc(`conversations/${data.id}`)
+        .update({
+          [`unread.${uid}`]: 0,
+          [`lastReadAt.${uid}`]: client.FieldValue.serverTimestamp(),
+        })
+        .catch(() => {});
+    } catch {
+      /* best-effort */
+    }
+    client.db
+      .collection('conversations')
+      .doc(data.id)
+      .collection('messages')
+      .orderBy('at', 'desc')
+      .limit(100)
+      .get()
+      .then((snap) => {
+        const other = (data.participants || []).find((p) => p !== uid) || '';
+        const batch = client.db.batch();
+        let n = 0;
+        for (const d of snap.docs) {
+          const m = (d.data() || {}) as Record<string, unknown>;
+          if (n < 50 && m.senderId === other && !m.isSystem && !m.readAt) {
+            batch.update(d.ref, {
+              readAt: client.FieldValue.serverTimestamp(),
+            });
+            n++;
+          }
+        }
+        if (n) batch.commit().catch(() => {});
+      })
+      .catch(() => {});
+  }
+
+  const openThread = useCallback(
+    async (client: FirebaseClient, user: CompatUser) => {
+      const uid = user.uid;
+      let snap: CompatDocSnap;
+      try {
+        snap = await client.db.doc(`conversations/${convId}`).get();
+      } catch {
+        setFatal(STR.chatError);
+        return;
+      }
+      if (!snap.exists) {
+        if (convId === `supp_${uid}`) {
+          // Create the deterministic support thread.
+          try {
+            const cfg = await client.db.doc('config/support').get();
+            const adminId = cfg.exists
+              ? String((cfg.data() || {}).adminId || '')
+              : '';
+            if (!adminId) throw new Error('no-admin-config');
+            if (adminId === uid) throw new Error('no-admin-self');
+            const FV = client.FieldValue;
+            await client.db.doc(`conversations/${convId}`).set({
+              listingId: 'support',
+              buyerId: uid,
+              sellerId: adminId,
+              participants: [uid, adminId],
+              dealConfirmPending: false,
+              dealConfirmedByBuyer: false,
+              hiddenFor: [],
+              phoneRequestBy: '',
+              phoneRequestStatus: 'none',
+              phoneRequestCount: 0,
+              lastMessage: null,
+              unread: { [uid]: 0, [adminId]: 0 },
+              lastReadAt: { [uid]: null, [adminId]: null },
+              createdAt: FV.serverTimestamp(),
+              updatedAt: FV.serverTimestamp(),
+            });
+            const sys = async (kind: string) => {
+              const mref = client.db
+                .collection('conversations')
+                .doc(convId)
+                .collection('messages')
+                .doc();
+              const batch = client.db.batch();
+              batch.set(mref, {
+                senderId: uid,
+                text: '',
+                at: FV.serverTimestamp(),
+                isSystem: true,
+                systemKind: kind,
+              });
+              batch.update(client.db.doc(`conversations/${convId}`), {
+                updatedAt: FV.serverTimestamp(),
+              });
+              await batch.commit();
+            };
+            await sys('support_greeting');
+            await sys('support_autoreply');
+            snap = await client.db.doc(`conversations/${convId}`).get();
+          } catch (e) {
+            setFatal(
+              (e as Error)?.message === 'no-admin-self'
+                ? STR.supportSelfAdmin
+                : STR.supportConfigError
+            );
+            return;
+          }
+        } else {
+          setFatal(STR.chatError);
+          return;
+        }
+      }
+      const data = { id: snap.id, ...((snap.data() || {}) as object) } as ConvData;
+      if (!(data.participants || []).includes(uid)) {
+        setFatal(STR.chatError);
+        return;
+      }
+      convRef.current = data;
+      setConv(data);
+
+      // Verified email required for normal threads; support threads allow
+      // any signed-in user.
+      if (data.listingId !== 'support' && !user.emailVerified) {
+        setFatal(STR.mustVerifyChat);
+        return;
+      }
+
+      // Header: peer name + listing chip
+      const other = (data.participants || []).find((p) => p !== uid) || '';
+      (async () => {
+        let name = STR.unknownUser;
+        if (data.listingId === 'support') name = STR.supportTitle;
+        else if (data.listingId === 'announcements') name = STR.announcementsTitle;
+        else if (other) {
+          try {
+            const d = await client.db.doc(`users_public/${other}`).get();
+            if (d.exists) {
+              const m = d.data() || {};
+              name =
+                (m.name as string) ||
+                ((m.username as string) ? '@' + m.username : '') ||
+                STR.unknownUser;
+            }
+          } catch {
+            /* keep fallback */
+          }
+        }
+        setOtherName(name);
+      })();
+      (async () => {
+        const lid = data.listingId;
+        if (!lid || lid === 'support' || lid === 'announcements') return;
+        try {
+          const d = await client.db.doc(`listings/${lid}`).get();
+          if (d.exists) {
+            const m = d.data() || {};
+            const thumbs =
+              (m.photo_thumbs as (string | null)[]) ||
+              (m.thumbUrls as string[]) ||
+              (m.photoUrls as string[]) ||
+              [];
+            setListingChip({
+              title: localizedTitle(m.title) || STR.deletedListing,
+              photo: thumbs[0] || '',
+              id: lid,
+            });
+            setListingSold(
+              m.status === 'sold' || m.soldConfirmed === true
+            );
+          } else {
+            setListingChip({ title: STR.deletedListing, photo: '', id: lid });
+          }
+        } catch (e) {
+          if ((e as { code?: string })?.code === 'permission-denied') {
+            // Sold/hidden listings deny reads to non-sellers — negotiation
+            // is closed either way.
+            setListingGone(true);
+          }
+        }
+      })();
+
+      // Block states
+      (async () => {
+        try {
+          const d = await client.db.doc(`blocks/${uid}`).get();
+          let expMs: number | null = null;
+          if (d.exists) {
+            const raw = (d.data() || {}).expiresAt;
+            expMs =
+              raw && typeof (raw as { toDate?: () => Date }).toDate === 'function'
+                ? (raw as { toDate: () => Date }).toDate().getTime()
+                : typeof raw === 'number'
+                  ? raw
+                  : null;
+          }
+          const blocked = d.exists && (expMs == null || expMs > Date.now());
+          setAmBlocked(blocked);
+          setBlockUntilMs(blocked ? expMs : null);
+        } catch {
+          /* keep previous */
+        }
+      })();
+      (async () => {
+        if (!other || data.listingId === 'support' || data.listingId === 'announcements') {
+          setUserBlockSevered(false);
+          return;
+        }
+        try {
+          const [mine, theirs] = await Promise.all([
+            client.db.doc(`blocks/${uid}_${other}`).get().catch(() => null),
+            client.db.doc(`blocks/${other}_${uid}`).get().catch(() => null),
+          ]);
+          const iB = !!(
+            mine &&
+            mine.exists &&
+            (mine.data() || {}).blockerUid
+          );
+          const theyB = !!(
+            theirs &&
+            theirs.exists &&
+            (theirs.data() || {}).blockerUid
+          );
+          setIBlockedThem(iB);
+          setUserBlockSevered(iB || theyB);
+        } catch {
+          /* best-effort */
+        }
+      })();
+      // Reveal state (phone already shared survives message loss)
+      (async () => {
+        try {
+          const r = await client.db.doc(`reveals/${convId}`).get();
+          if (r.exists && (r.data() || {}).ownerId) {
+            setRevealSharedBy({
+              [String((r.data() || {}).ownerId)]: true,
+            });
+          }
+        } catch {
+          /* best-effort */
+        }
+      })();
+
+      // Live subscriptions
+      const unsubs: (() => void)[] = [];
+      unsubs.push(
+        client.db.doc(`conversations/${convId}`).onSnapshot(
+          (s) => {
+            if (s.exists) {
+              const d = {
+                id: s.id,
+                ...((s.data() || {}) as object),
+              } as ConvData;
+              convRef.current = d;
+              setConv(d);
+            }
+          },
+          () => {}
+        )
+      );
+      unsubs.push(
+        client.db
+          .collection('conversations')
+          .doc(convId)
+          .collection('messages')
+          .orderBy('at', 'asc')
+          .limit(100)
+          .onSnapshot(
+            (snap2) => {
+              const list: Msg[] = snap2.docs.map(
+                (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
+              );
+              msgsRef.current = list;
+              setMsgs(list);
+              scrollBottom();
+            },
+            () => {}
+          )
+      );
+      unsubsRef.current = unsubs;
+      openedRef.current = true;
+      markRead(client, data, uid);
+
+      // ?offer= pre-fill (never auto-send — crafted-link hardening)
+      const offer = searchParams.get('offer');
+      if (
+        offer &&
+        Number(offer) > 0 &&
+        data.listingId !== 'support' &&
+        data.listingId !== 'announcements'
+      ) {
+        setProposalAmt(offer);
+        setProposalOpen(true);
+      }
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('offer')) {
+          url.searchParams.delete('offer');
+          window.history.replaceState(null, '', url.toString());
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [convId, searchParams]
+  );
+
+  useEffect(() => {
+    if (authState.status !== 'signed-in') return;
+    if (!convId) {
+      router.push('/conversations');
+      return;
+    }
+    clientRef.current = authState.client;
+    userRef.current = authState.user;
+    // Data-fetch effect: openThread is async and only sets state in async
+    // continuations (after await). No synchronous setState — the
+    // cascading-render concern does not apply.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    openThread(authState.client, authState.user);
+    return () => {
+      for (const u of unsubsRef.current) {
+        try {
+          u();
+        } catch {
+          /* noop */
+        }
+      }
+      unsubsRef.current = [];
+      openedRef.current = false;
+    };
+  }, [authState, convId, openThread, router]);
+
+  // ---------- send paths ----------
+
+  function blockedSendGuard(): boolean {
+    if (amBlocked) {
+      showToast(STR.chatBlockedNotice);
+      return true;
+    }
+    if (userBlockSevered) {
+      showToast(STR2.blockedChatNotice);
+      return true;
+    }
+    return false;
+  }
+
+  async function sendChatMessage(opts: {
+    text?: string;
+    imageUrl?: string | null;
+    proposal?: number | null;
+    mid?: string;
+  }): Promise<string | null> {
+    const client = clientRef.current;
+    const user = userRef.current;
+    const c = convRef.current;
+    if (!client || !user || !c) return null;
+    if (blockedSendGuard()) return null;
+    if (sendInFlightRef.current) {
+      showToast(STR.tooFast);
+      return null;
+    }
+    const now = Date.now();
+    if (now - lastSendAtRef.current < 3000) {
+      showToast(STR.tooFast);
+      return null;
+    }
+    const t = cleanText(opts.text || '');
+    if (!t && !opts.imageUrl && opts.proposal == null) return null;
+    const msgId = opts.mid || mintMessageId(user.uid);
+    const oUid = (c.participants || []).find((p) => p !== user.uid) || '';
+    const FV = client.FieldValue;
+    const msg: Record<string, unknown> = {
+      senderId: user.uid,
+      text: t || (opts.imageUrl ? '📷' : ''),
+      at: FV.serverTimestamp(),
+      isSystem: false,
+    };
+    if (opts.imageUrl) msg.imageUrl = opts.imageUrl;
+    if (opts.proposal != null)
+      msg.proposal = { amount: Number(opts.proposal), status: 'pending' };
+    sendInFlightRef.current = true;
+    try {
+      const batch = client.db.batch();
+      batch.set(
+        client.db
+          .collection('conversations')
+          .doc(convId)
+          .collection('messages')
+          .doc(msgId),
+        msg
+      );
+      batch.update(client.db.doc(`conversations/${convId}`), {
+        updatedAt: FV.serverTimestamp(),
+        lastUserMessageAt: FV.serverTimestamp(),
+        lastMessage: {
+          text: t ? t.slice(0, 500) : opts.imageUrl ? '📷' : '',
+          proposalAmount: opts.proposal != null ? Number(opts.proposal) : null,
+          senderId: user.uid,
+          at: FV.serverTimestamp(),
+        },
+        [`unread.${oUid}`]: FV.increment(1),
+        hiddenFor: FV.arrayRemove(oUid),
+      });
+      await batch.commit();
+      lastSendAtRef.current = Date.now();
+      setFailedSend(null);
+      setStatusBar(null);
+      return msgId;
+    } catch (e) {
+      // Retry-after-commit: the batch may have committed server-side
+      // while the response was lost. Check the deterministic id first.
+      if ((e as { code?: string })?.code === 'permission-denied') {
+        try {
+          const check = await client.db
+            .collection('conversations')
+            .doc(convId)
+            .collection('messages')
+            .doc(msgId)
+            .get();
+          if (check.exists) {
+            lastSendAtRef.current = Date.now();
+            setFailedSend(null);
+            setStatusBar(null);
+            return msgId;
+          }
+        } catch {
+          /* real failure below */
+        }
+      }
+      setFailedSend({
+        text: opts.text,
+        imageUrl: opts.imageUrl,
+        proposal: opts.proposal,
+        mid: msgId,
+      });
+      setStatusBar({ mode: 'error', text: STR2.chatSendFailed });
+      return null;
+    } finally {
+      sendInFlightRef.current = false;
+    }
+  }
+
+  function doSendText() {
+    const v = input;
+    if (!cleanText(v)) return;
+    sendChatMessage({ text: v }).then((id) => {
+      if (id) setInput('');
+    });
+  }
+
+  async function retrySend() {
+    const p = failedSend;
+    setStatusBar(null);
+    if (!p) {
+      setFailedSend(null);
+      return;
+    }
+    const id = await sendChatMessage({
+      text: p.text,
+      imageUrl: p.imageUrl,
+      proposal: p.proposal,
+      mid: p.mid,
+    });
+    if (id) {
+      setFailedSend(null);
+      if (p.text != null && input === p.text) setInput('');
+    }
+  }
+
+  // Photo via R2 ONLY (never Firebase Storage).
+  async function sendPhoto(file: File) {
+    const client = clientRef.current;
+    const user = userRef.current;
+    if (!client || !user || !file) return;
+    if (!file.type || !file.type.startsWith('image/')) {
+      showToast(STR.imageSendError);
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      showToast(STR.imageSendError);
+      return;
+    }
+    if (blockedSendGuard()) return;
+    setStatusBar({ mode: 'info', text: STR2.sendingPhoto });
+    try {
+      // Downscale to 1280px JPEG 0.8 — mirrors chat.js downscaleChat.
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const maxDim = 1280;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const cv = document.createElement('canvas');
+          cv.width = w;
+          cv.height = h;
+          cv.getContext('2d')?.drawImage(img, 0, 0, w, h);
+          cv.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error('blob'))),
+            'image/jpeg',
+            0.8
+          );
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('img'));
+        };
+        img.src = url;
+      });
+      const idToken = await user.getIdToken();
+      const safeName = `p${Date.now()}.jpg`;
+      const key = `chat/${convId}/${user.uid}/${safeName}`;
+      const res = await fetch('/api/r2/chat-upload-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ key, contentType: 'image/jpeg' }),
+      });
+      if (!res.ok) throw new Error('upload-url');
+      const { url, publicUrl } = await res.json();
+      const put = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: blob,
+      });
+      if (!put.ok) throw new Error('r2-put');
+      setStatusBar(null);
+      const id = await sendChatMessage({ imageUrl: publicUrl });
+      if (!id && !failedSend) {
+        setFailedSend({ imageUrl: publicUrl, mid: mintMessageId(user.uid) });
+        setStatusBar({ mode: 'error', text: STR2.chatSendFailed });
+      }
+    } catch {
+      setFailedSend({ mid: mintMessageId(user.uid) });
+      setStatusBar({ mode: 'error', text: STR2.chatSendFailed });
+      showToast(STR.imageSendError);
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  // ---------- proposals ----------
+
+  async function respondProposal(msgId: string, status: 'accepted' | 'refused') {
+    const client = clientRef.current;
+    if (!client || blockedSendGuard()) return;
+    if (sold) {
+      showToast(STR.soldNegotiationClosed);
+      return;
+    }
+    try {
+      await client.db
+        .collection('conversations')
+        .doc(convId)
+        .collection('messages')
+        .doc(msgId)
+        .update({ 'proposal.status': status });
+    } catch {
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  function counterProposal(msgId: string) {
+    respondProposal(msgId, 'refused').then(() => {
+      if (!sold) {
+        setProposalOpen(true);
+      }
+    });
+  }
+
+  async function sendProposal() {
+    if (blockedSendGuard()) return;
+    if (sold) {
+      showToast(STR.soldNegotiationClosed);
+      return;
+    }
+    const amt = Number(proposalAmt);
+    if (!amt || amt <= 0) {
+      showToast(STR.proposalInvalid);
+      return;
+    }
+    const id = await sendChatMessage({ proposal: amt });
+    if (id) {
+      setProposalOpen(false);
+      setProposalAmt('');
+    }
+  }
+
+  // ---------- phone flow ----------
+
+  async function appendSystem(
+    kind: string,
+    args: Record<string, string> = {}
+  ): Promise<void> {
+    const client = clientRef.current;
+    const user = userRef.current;
+    if (!client || !user) return;
+    const FV = client.FieldValue;
+    const batch = client.db.batch();
+    batch.set(
+      client.db.collection('conversations').doc(convId).collection('messages').doc(),
+      {
+        senderId: user.uid,
+        text: '',
+        at: FV.serverTimestamp(),
+        isSystem: true,
+        systemKind: kind,
+        ...(Object.keys(args).length ? { systemArgs: args } : {}),
+      }
+    );
+    batch.update(client.db.doc(`conversations/${convId}`), {
+      updatedAt: FV.serverTimestamp(),
+    });
+    await batch.commit();
+  }
+
+  async function requestPhone() {
+    const client = clientRef.current;
+    const user = userRef.current;
+    const c = convRef.current;
+    if (!client || !user || !c || blockedSendGuard()) return;
+    const prevBy = c.phoneRequestBy;
+    const prevStatus = c.phoneRequestStatus;
+    const next = { ...c, phoneRequestBy: user.uid, phoneRequestStatus: 'requested' };
+    convRef.current = next;
+    setConv(next);
+    try {
+      await client.db.doc(`conversations/${convId}`).update({
+        phoneRequestBy: user.uid,
+        phoneRequestStatus: 'requested',
+        phoneRequestCount: client.FieldValue.increment(1),
+        updatedAt: client.FieldValue.serverTimestamp(),
+      });
+      await appendSystem('phone_requested', {
+        name: (user.displayName || '').trim().split(' ')[0] || STR.you,
+      }).catch(() => {});
+    } catch {
+      const rb = { ...c, phoneRequestBy: prevBy, phoneRequestStatus: prevStatus };
+      convRef.current = rb;
+      setConv(rb);
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  async function answerPhone(status: 'accepted' | 'declined') {
+    const client = clientRef.current;
+    const c = convRef.current;
+    if (!client || !c || blockedSendGuard()) return;
+    const prevStatus = c.phoneRequestStatus;
+    const next = { ...c, phoneRequestStatus: status };
+    convRef.current = next;
+    setConv(next);
+    try {
+      const payload: Record<string, unknown> = {
+        phoneRequestStatus: status,
+        updatedAt: client.FieldValue.serverTimestamp(),
+      };
+      if (status === 'declined' && c.phoneRequestBy) {
+        payload[`declinesByRequester.${c.phoneRequestBy}`] =
+          client.FieldValue.increment(1);
+      }
+      await client.db.doc(`conversations/${convId}`).update(payload);
+      await appendSystem(
+        status === 'accepted' ? 'phone_accepted' : 'phone_declined',
+        {}
+      ).catch(() => {});
+    } catch {
+      const rb = { ...c, phoneRequestStatus: prevStatus };
+      convRef.current = rb;
+      setConv(rb);
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  async function sharePhone() {
+    const client = clientRef.current;
+    const user = userRef.current;
+    const c = convRef.current;
+    if (!client || !user || !c || blockedSendGuard()) return;
+    const normalized = normalizePhone(phoneInput);
+    if (!normalized) {
+      showToast(STR.phoneInvalid);
+      return;
+    }
+    try {
+      const FV = client.FieldValue;
+      await client.db.doc(`reveals/${convId}`).set({
+        conversationId: convId,
+        requesterId: c.phoneRequestBy || '',
+        ownerId: user.uid,
+        status: 'accepted',
+        sharedPhone: normalized,
+        updatedAt: FV.serverTimestamp(),
+      });
+      await appendSystem('phone_shared', {});
+      const id = await sendChatMessage({ text: normalized });
+      if (!id) throw new Error('phone message not sent');
+      setRevealSharedBy((prev) => ({ ...prev, [user.uid]: true }));
+      setPhoneInput('');
+    } catch {
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  // ---------- deal flow ----------
+
+  function dealConfirmErr(code: string): string {
+    switch (code) {
+      case 'invalid_args':
+        return STR.dealErrInvalidArgs;
+      case 'unauthenticated':
+        return STR.dealErrUnauth;
+      case 'not_buyer':
+        return STR.dealErrNotBuyer;
+      case 'not_pending':
+        return STR.dealErrNotPending;
+      case 'not_found':
+        return STR.dealErrNotFound;
+      case 'already_confirmed':
+        return STR.dealErrAlready;
+      case 'listing_unavailable':
+        return STR.dealErrUnavailable;
+      default:
+        return STR.dealErrInvalidArgs;
+    }
+  }
+
+  async function dealConfirmYes() {
+    const user = userRef.current;
+    if (!user || blockedSendGuard()) return;
+    try {
+      const token = await user.getIdToken();
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 15000);
+      let resp: Response;
+      try {
+        resp = await fetch(CONFIRM_DEAL_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token,
+          },
+          body: JSON.stringify({ conversationId: convId }),
+          signal: ctl.signal,
+        });
+      } finally {
+        clearTimeout(t);
+      }
+      const data = await resp.json().catch(() => null);
+      if (resp.ok && data && data.ok) {
+        showToast(STR.dealConfirmed);
+        return;
+      }
+      showToast(dealConfirmErr(data && data.error));
+    } catch {
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  async function dealConfirmNo() {
+    const client = clientRef.current;
+    const c = convRef.current;
+    if (!client || !c || blockedSendGuard()) return;
+    try {
+      await client.db.doc(`conversations/${convId}`).update({
+        dealConfirmPending: false,
+        updatedAt: client.FieldValue.serverTimestamp(),
+      });
+      try {
+        await client.db.doc(`listings/${c.listingId}`).update({
+          soldConfirmed: false,
+        });
+      } catch {
+        /* best-effort */
+      }
+      showToast(STR.dealCancelled);
+    } catch {
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  async function dealRequest() {
+    const client = clientRef.current;
+    if (!client || blockedSendGuard()) return;
+    try {
+      await client.db.doc(`conversations/${convId}`).update({
+        dealConfirmPending: true,
+        updatedAt: client.FieldValue.serverTimestamp(),
+      });
+    } catch {
+      showToast(STR2.errorGeneric);
+    }
+  }
+
+  // ---------- block ----------
+
+  async function toggleBlock() {
+    const client = clientRef.current;
+    const user = userRef.current;
+    if (!client || !user || !otherUid) return;
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch(TOGGLE_BLOCK_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ data: { uid: otherUid }, idToken }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json || !json.result || typeof json.result.blocked !== 'boolean') {
+        throw new Error('blockFailed');
+      }
+      const blocked = json.result.blocked as boolean;
+      setIBlockedThem(blocked);
+      setUserBlockSevered(blocked || userBlockSevered);
+      if (blocked) setUserBlockSevered(true);
+      else {
+        // Re-check the pair state after unblock.
+        try {
+          const theirs = await client.db
+            .doc(`blocks/${otherUid}_${user.uid}`)
+            .get()
+            .catch(() => null);
+          const theyB = !!(
+            theirs &&
+            theirs.exists &&
+            (theirs.data() || {}).blockerUid
+          );
+          setUserBlockSevered(theyB);
+        } catch {
+          /* keep */
+        }
+      }
+    } catch {
+      showToast(STR2.blockFailed);
+    }
+  }
+
+  // ---------- render ----------
+
+  if (authState.status !== 'signed-in') {
+    return <LoadingSpinner label={STR2.loading} />;
+  }
+
+  if (fatal) {
+    return (
+      <div className="min-h-screen bg-zinc-50" dir="rtl">
+        <main className="max-w-2xl mx-auto px-4 py-16 text-center">
+          <h1 className="text-lg font-bold text-zinc-900 mb-5">{fatal}</h1>
+          <div className="flex gap-2 justify-center">
+            <button
+              className="rounded-lg bg-emerald-700 px-4 py-2.5 font-bold text-white hover:bg-emerald-800"
+              onClick={() => window.location.reload()}
+            >
+              {STR2.retry}
+            </button>
+            <a
+              href="/conversations"
+              className={btnSecondaryCls + ' no-underline inline-block'}
+            >
+              {STR2.messages}
+            </a>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!conv) {
+    return <LoadingSpinner label={STR2.loading} />;
+  }
+
+  const fmtBlockDate = (ms: number) => {
+    try {
+      return new Date(ms).toLocaleDateString('ar-DZ', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Phone panel (per-direction) — mirrors renderPhonePanel.
+  function renderPhonePanel() {
+    if (isSupport || isAnn) return null;
+    if (userBlockSevered) {
+      return (
+        <div className="mx-3 my-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+          🚫 {STR2.blockedChatNotice}
+        </div>
+      );
+    }
+    const oUid = otherUid || '';
+    const count = conv?.phoneRequestCount || 0;
+    const slotBusy = pf.pendingBy !== '' || pf.acceptedBy !== '';
+    const name = otherName || STR.unknownUser;
+    return (
+      <div className="mx-3 my-2 space-y-2">
+        {pf.sharedBy[oUid] ? (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+            ✅ {STR.phoneSharedReceived.replace('{name}', name)}
+          </div>
+        ) : pf.myBlocked ? (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            🚫 {STR.phoneBlockedRequester}
+          </div>
+        ) : pf.pendingBy === myUid ? (
+          <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+            📞 {STR.phoneWaiting}
+          </div>
+        ) : pf.acceptedBy === myUid ? (
+          <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+            📞 {STR.phoneAcceptedMsg}
+          </div>
+        ) : (
+          !slotBusy &&
+          count < 3 && (
+            <button
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              onClick={requestPhone}
+            >
+              📞 {STR.requestPhone}
+            </button>
+          )
+        )}
+
+        {pf.sharedBy[myUid] ? (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+            ✅ {STR.phoneSharedConfirm}
+          </div>
+        ) : (pf.declines[oUid] || 0) >= 3 ? (
+          <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            🚫 {STR.phoneBlockedOther.replace('{name}', name)}
+          </div>
+        ) : pf.pendingBy === oUid ? (
+          <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+            📞 {name} {STR.phoneRequestedSuffix}
+            <div className="flex gap-2 mt-2">
+              <button
+                className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
+                onClick={() => answerPhone('accepted')}
+              >
+                {STR.phoneAccept}
+              </button>
+              <button
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                onClick={() => answerPhone('declined')}
+              >
+                {STR.phoneDecline}
+              </button>
+            </div>
+          </div>
+        ) : (
+          pf.acceptedBy === oUid && (
+            <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+              📞 {STR.phoneTypeTitle}
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  dir="ltr"
+                  placeholder={STR.phonePlaceholder}
+                  className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-base text-zinc-900 text-left"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                />
+                <button
+                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
+                  onClick={sharePhone}
+                >
+                  {STR.phoneSend}
+                </button>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
+
+  // Deal panel — mirrors renderDealPanel.
+  function renderDealPanel() {
+    if (isSupport || isAnn) return null;
+    if (conv?.dealConfirmedByBuyer) {
+      return (
+        <div className="mx-3 my-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+          ✅ {STR.dealConfirmed}
+        </div>
+      );
+    }
+    if (listingSold) {
+      return (
+        <div className="mx-3 my-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+          🤝 {STR.dealDoneSold}
+        </div>
+      );
+    }
+    if (conv?.dealConfirmPending) {
+      if (isBuyer) {
+        return (
+          <div className="mx-3 my-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-zinc-800">
+            <b>{STR.dealPendingTitle}</b>
+            <br />
+            {STR.dealPendingBody}
+            <div className="flex gap-2 mt-2">
+              <button
+                className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
+                onClick={dealConfirmYes}
+              >
+                {STR.dealYes}
+              </button>
+              <button
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                onClick={dealConfirmNo}
+              >
+                {STR.dealNo}
+              </button>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="mx-3 my-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
+          ⏳ {STR.dealWaiting}
+        </div>
+      );
+    }
+    if (isSeller) {
+      return (
+        <div className="mx-3 my-2">
+          <button
+            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            onClick={dealRequest}
+          >
+            🤝 {STR.dealRequest}
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }
+
+  let lastDay = '';
+  const msgNodes = msgs.map((m) => {
+    const ts = tsMs(m.at);
+    const nodes: React.ReactNode[] = [];
+    if (ts) {
+      const day = dayLabel(ts);
+      if (day !== lastDay) {
+        lastDay = day;
+        nodes.push(
+          <div key={`day-${m.id}`} className="flex justify-center my-3">
+            <span className="rounded-full bg-zinc-200 px-3 py-1 text-xs text-zinc-600">
+              {day}
+            </span>
+          </div>
+        );
+      }
+    }
+    if (m.isSystem) {
+      nodes.push(
+        <div key={m.id} className="flex justify-center my-2">
+          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-500">
+            {systemText(m)}
+          </span>
+        </div>
+      );
+      return nodes;
+    }
+    const mine = m.senderId === myUid;
+    const p = m.proposal;
+    nodes.push(
+      <div
+        key={m.id}
+        className={`flex ${mine ? 'justify-start' : 'justify-end'} my-1`}
+      >
+        <div
+          className={`max-w-[80%] rounded-2xl px-3 py-2 shadow-sm ${
+            mine
+              ? 'bg-emerald-700 text-white rounded-tl-sm'
+              : 'bg-white text-zinc-900 rounded-tr-sm'
+          }`}
+        >
+          {m.imageUrl && (
+            <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
+              <img
+                src={m.imageUrl}
+                alt={STR.photoLabel}
+                loading="lazy"
+                className="rounded-lg max-h-64 w-auto mb-1"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </a>
+          )}
+          {p ? (
+            <div>
+              <div className="font-bold">💰 {formatPrice(p.amount)}</div>
+              <div
+                className={`text-xs mt-1 ${
+                  p.status === 'accepted'
+                    ? 'text-emerald-200'
+                    : p.status === 'refused'
+                      ? 'text-red-200'
+                      : mine
+                        ? 'text-emerald-100'
+                        : 'text-zinc-500'
+                }`}
+              >
+                {proposalStatusText(p.status)}
+              </div>
+              {!mine && p.status === 'pending' && !isAnn && !isSupport && !sold && (
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  <button
+                    className="rounded-lg bg-white/90 text-emerald-800 px-2.5 py-1 text-xs font-bold"
+                    onClick={() => respondProposal(m.id, 'accepted')}
+                  >
+                    {STR.proposalAccept}
+                  </button>
+                  <button
+                    className="rounded-lg bg-white/20 px-2.5 py-1 text-xs"
+                    onClick={() => respondProposal(m.id, 'refused')}
+                  >
+                    {STR.proposalDecline}
+                  </button>
+                  <button
+                    className="rounded-lg bg-white/20 px-2.5 py-1 text-xs"
+                    onClick={() => counterProposal(m.id)}
+                  >
+                    {STR.proposalCounter}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            m.text && <div className="whitespace-pre-wrap break-words">{m.text}</div>
+          )}
+          <div
+            className={`flex items-center gap-1 mt-1 text-[11px] ${
+              mine ? 'text-emerald-100' : 'text-zinc-400'
+            }`}
+          >
+            {ts > 0 && <span>{fmtChatTime(ts)}</span>}
+            {mine && m.readAt ? <span>✓✓</span> : null}
+          </div>
+        </div>
+      </div>
+    );
+    return nodes;
+  });
+
+  return (
+    <div className="min-h-screen bg-zinc-50 flex flex-col" dir="rtl">
+      {/* header */}
+      <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
+        <div className="max-w-2xl mx-auto px-3 py-2.5 flex items-center gap-2">
+          <button
+            aria-label={STR.back}
+            className="w-9 h-9 rounded-full hover:bg-emerald-600 flex items-center justify-center text-xl"
+            onClick={() => {
+              if (window.history && history.length > 1) history.back();
+              else router.push('/conversations');
+            }}
+          >
+            ‹
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold truncate">{otherName || '…'}</div>
+            {listingChip && listingChip.id && (
+              <a
+                href={`/listing/${encodeURIComponent(listingChip.id)}`}
+                className="flex items-center gap-1.5 text-xs text-emerald-100 hover:underline truncate"
+              >
+                {listingChip.photo && (
+                  <img
+                    src={listingChip.photo}
+                    alt=""
+                    className="w-5 h-5 rounded object-cover"
+                  />
+                )}
+                <span className="truncate">{listingChip.title}</span>
+              </a>
+            )}
+            {listingChip && !listingChip.id && (
+              <div className="text-xs text-emerald-100">{listingChip.title}</div>
+            )}
+            {sold && (
+              <span className="inline-block bg-red-700 text-white text-xs font-bold px-2.5 py-0.5 rounded-full mt-0.5">
+                🏷️ {STR.listingSoldBadge}
+              </span>
+            )}
+          </div>
+          {otherUid && !isSupport && !isAnn && (
+            <button
+              className="text-xs rounded-lg border border-emerald-500 px-2.5 py-1.5 hover:bg-emerald-600"
+              onClick={toggleBlock}
+            >
+              {iBlockedThem ? STR2.unblock : STR2.block}
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* account-block banner */}
+      {amBlocked && (
+        <div className="mx-3 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+          🚫{' '}
+          {blockUntilMs != null
+            ? STR.chatBlockedUntil.replace('{date}', fmtBlockDate(blockUntilMs))
+            : STR.chatBlockedNotice}
+        </div>
+      )}
+      {userBlockSevered && !amBlocked && (
+        <div className="mx-3 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+          🚫 {STR2.blockedChatNotice}
+        </div>
+      )}
+
+      {/* thread note */}
+      {isAnn && (
+        <div className="mx-3 mt-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-600 text-center">
+          {STR.announcementsNote}
+        </div>
+      )}
+      {isSupport && (
+        <div className="mx-3 mt-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-600 text-center">
+          {STR.supportNote}
+        </div>
+      )}
+
+      {renderPhonePanel()}
+      {renderDealPanel()}
+
+      {/* messages */}
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-2">
+        {msgs.length === 0 ? (
+          <div className="text-center py-10 text-zinc-500">
+            <div className="text-4xl mb-2">👋</div>
+            <p className="text-sm">{STR.sayHello}</p>
+          </div>
+        ) : (
+          msgNodes
+        )}
+      </div>
+
+      {/* send status bar */}
+      {statusBar && (
+        <div
+          className={`mx-3 mb-1 rounded-lg px-3 py-2 text-sm flex items-center justify-between ${
+            statusBar.mode === 'error'
+              ? 'bg-red-50 border border-red-200 text-red-700'
+              : 'bg-zinc-100 text-zinc-700'
+          }`}
+        >
+          <span>{statusBar.text}</span>
+          {statusBar.mode === 'error' && (
+            <button
+              className="font-bold underline"
+              onClick={retrySend}
+            >
+              {STR2.retrySend}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* proposal form */}
+      {proposalOpen && (
+        <div className="mx-3 mb-1 rounded-xl bg-white shadow-sm p-3">
+          <div className="font-bold text-sm text-zinc-900 mb-2">
+            {STR.proposalTitle}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={1}
+              inputMode="numeric"
+              placeholder={STR.proposalAmountPh}
+              className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900"
+              value={proposalAmt}
+              onChange={(e) => setProposalAmt(e.target.value)}
+            />
+            <button
+              className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800"
+              onClick={sendProposal}
+            >
+              {STR.proposalSend}
+            </button>
+            <button
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-700"
+              onClick={() => setProposalOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* composer */}
+      {!isAnn && (
+        <footer className="sticky bottom-0 bg-white border-t border-zinc-200">
+          <div className="max-w-2xl mx-auto px-3 py-2">
+            <div className="text-[11px] text-amber-700 mb-1.5">
+              {STR2.scamWarning}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) sendPhoto(f);
+                }}
+              />
+              <button
+                aria-label={STR.photoLabel}
+                className="w-10 h-10 rounded-full hover:bg-zinc-100 text-xl shrink-0 disabled:opacity-40"
+                disabled={composerLocked}
+                onClick={() => fileRef.current?.click()}
+              >
+                📷
+              </button>
+              <button
+                aria-label={STR.proposePrice}
+                className="w-10 h-10 rounded-full hover:bg-zinc-100 text-xl shrink-0 disabled:opacity-40"
+                disabled={composerLocked || sold}
+                style={sold ? { opacity: 0.4 } : undefined}
+                onClick={() => setProposalOpen((v) => !v)}
+              >
+                💰
+              </button>
+              <input
+                aria-label={STR.typeMessage}
+                placeholder={STR.typeMessage}
+                maxLength={2000}
+                autoComplete="off"
+                className="flex-1 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:border-emerald-600 focus:outline-none min-w-0"
+                value={input}
+                disabled={composerLocked}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    doSendText();
+                  }
+                }}
+              />
+              <button
+                className="rounded-full bg-emerald-700 px-4 py-2.5 font-bold text-white hover:bg-emerald-800 disabled:opacity-60 shrink-0"
+                disabled={composerLocked}
+                onClick={doSendText}
+              >
+                {STR.send}
+              </button>
+            </div>
+          </div>
+        </footer>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 rounded-full bg-zinc-900 text-white px-5 py-3 shadow-lg text-sm">
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner label={STR2.loading} />}>
+      <ChatInner />
+    </Suspense>
+  );
+}

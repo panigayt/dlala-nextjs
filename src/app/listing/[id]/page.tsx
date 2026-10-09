@@ -10,6 +10,7 @@
 //     render the trilingual 404.
 
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import {
@@ -53,9 +54,9 @@ function NotFoundView() {
       <p className="mt-1 text-zinc-600" lang="fr">Cette annonce n&rsquo;existe pas ou a été supprimée.</p>
       <p className="mt-1 text-zinc-600" lang="en">This listing does not exist or was removed.</p>
       <div className="mt-6">
-        <a href="/" className="inline-block rounded-lg bg-emerald-700 text-white px-6 py-3 font-medium">
+        <Link href="/" className="inline-block rounded-lg bg-emerald-700 text-white px-6 py-3 font-medium">
           تصفح الإعلانات
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -65,7 +66,7 @@ function Header() {
   return (
     <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/" className="text-xl font-bold">دلالة</a>
+        <Link href="/" className="text-xl font-bold">دلالة</Link>
         <nav className="text-sm">سوق الجزائر للإعلانات المبوبة</nav>
       </div>
     </header>
@@ -184,20 +185,20 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
                 className="w-12 h-12 rounded-full object-cover"
               />
             )}
-            <a
+            <Link
               href={`/seller/${l.sellerId}`}
               className="font-bold text-emerald-700 hover:underline"
             >
               {(l as unknown as { sellerName?: string }).sellerName}
-            </a>
+            </Link>
           </div>
         ) : (
-          <a
-            href={`/seller/${l.sellerId}`}
-            className="mt-2 inline-block font-bold text-emerald-700 hover:underline"
-          >
-            عرض صفحة البائع
-          </a>
+            <Link
+              href={`/seller/${l.sellerId}`}
+              className="mt-2 inline-block font-bold text-emerald-700 hover:underline"
+            >
+              عرض صفحة البائع
+            </Link>
         )}
       </div>
 

@@ -17,6 +17,7 @@ function formatTimeAgo(iso: string, lang = 'ar'): string {
 
 export default function TimeAgo({ iso, lang = 'ar' }: { iso: string; lang?: string }) {
   const [text, setText] = useState('');
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: avoids Date.now() during SSR/prerender */
   useEffect(() => {
     setText(formatTimeAgo(iso, lang));
   }, [iso, lang]);
