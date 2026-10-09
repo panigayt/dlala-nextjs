@@ -153,7 +153,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           {l.condition && (
             <div>
               <span className="text-zinc-500">الحالة: </span>
-              <b>{l.condition}</b>
+              <b>{l.condition === 'used' ? 'مستعمل' : l.condition === 'new' ? 'جديد' : l.condition}</b>
             </div>
           )}
           {l.createdAt && (
