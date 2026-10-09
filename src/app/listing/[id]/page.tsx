@@ -210,7 +210,6 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
-      <p className="mt-8 text-center text-xs text-zinc-400">SSR + ISR (60s) · Next.js · $0/month</p>
     </main>
   );
 }
