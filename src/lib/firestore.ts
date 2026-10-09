@@ -351,28 +351,55 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
   }
 
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: 'listings' }],
-        where: filters.length > 1
-          ? { compositeFilter: { op: 'AND', filters } }
-          : filters[0],
-        orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
-        select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
-        limit: f.q ? 100 : limit, // text query needs a pool to scan
-      },
-    }),
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`search-rest-${res.status}`);
+  const runQuery = async (useFilters: unknown[]) => {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'listings' }],
+          where: useFilters.length > 1
+            ? { compositeFilter: { op: 'AND', filters: useFilters } }
+            : useFilters[0],
+          orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+          select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
+          limit: f.q ? 100 : limit, // text query needs a pool to scan
+        },
+      }),
+      cache: 'no-store',
+    });
+    if (!r.ok) throw new Error(`search-rest-${r.status}`);
+    return r;
+  };
+
+  let res;
+  let usedFallback = false;
+  try {
+    res = await runQuery(filters);
+  } catch (e) {
+    // Missing composite index: fall back to status-only query + client-side filtering
+    // (mirrors js/home.js index-error fallback).
+    const msg = e instanceof Error ? e.message : '';
+    if (!msg.includes('400') && !msg.includes('FAILED_PRECONDITION')) throw e;
+    usedFallback = true;
+    res = await runQuery([filters[0]]);
+  }
   const body = await res.json().catch(() => null);
   const rawDocs = (Array.isArray(body) ? body : [])
     .filter((r) => r.document)
     .map((r) => r.document);
   let docs = rawDocs.map(restDocToObj);
+
+  // Fallback path: apply cat/wilaya/price filters client-side.
+  if (usedFallback) {
+    docs = docs.filter((d) => {
+      if (f.cat && d.categoryId !== f.cat) return false;
+      if (f.wilaya && String(d.wilayaCode) !== String(f.wilaya)) return false;
+      if (f.min !== undefined && f.min !== '' && (d.price ?? 0) < Number(f.min)) return false;
+      if (f.max !== undefined && f.max !== '' && (d.price ?? 0) > Number(f.max)) return false;
+      return true;
+    });
+  }
 
   // Text query: normalized substring match on title/description
   // (js/home.js renderFeed R-9 branch, verbatim logic).
