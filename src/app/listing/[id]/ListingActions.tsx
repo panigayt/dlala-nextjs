@@ -6,18 +6,36 @@
 //   parity with js/app.js toggleFavorite).
 // - Contact seller button (guest nudge → /auth, verified-email gate,
 //   double-tap guard, find-or-create conversation → /chat/[id]).
+// - Share button (verbatim js/market.js shareListing): canonical
+//   dzdlala.com/listing.html?id= URL (works in browsers, the Android app's
+//   deep-link routing, and iOS Safari). navigator.share when available,
+//   otherwise a WhatsApp / Facebook / copy-link dialog. Visible to everyone,
+//   including the owner (legacy parity: owners hide favorite/contact/report
+//   but keep share).
+// - Report ad button (js/listing.js onReportAd + js/market.js
+//   openReportDialog): guest nudge first (LIS-4), then the verified-email
+//   gate (requireVerified inside openReportDialog), then a dialog with a
+//   reason select + optional details + optional evidence photo (R2).
+//   Deterministic id {uid}_listing_{id} — one report per reporter per ad;
+//   the create-only rule rejects duplicates as permission-denied, which maps
+//   to "already reported" (0.0.0.36 F-15), not a generic failure.
+//   Evidence-photo orphan cleanup on failed writes (0.0.0.43 Round 38
+//   Team H parity).
 // Legacy behavior notes:
-// - LIS-4: guests tapping favorite/contact get a toast explaining why, then
-//   login — never a silent bounce to /auth.
+// - LIS-4: guests tapping favorite/contact/report get a toast explaining why,
+//   then login — never a silent bounce to /auth.
 // - The favorite button renders neutral until the isFavorite check resolves
 //   (never a false ♡/♥); guests default to ♡.
-// - Owner viewing their own listing: favorite + contact are HIDDEN entirely.
-// - Sold listing: contact is disabled; favorite still works.
+// - Owner viewing their own listing: favorite/contact/report are HIDDEN
+//   entirely; share stays visible.
+// - Sold listing: contact is disabled; favorite/report/share still work.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
+import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 
 // Verbatim strings from js/i18n.ar.js
 const STR = {
@@ -30,7 +48,84 @@ const STR = {
   contacting: 'جارٍ فتح المحادثة...',
   soldNotice: 'الإعلان مُباع',
   errorGeneric: 'حدث خطأ — حاول مجدداً',
+  shareAd: 'مشاركة الإعلان',
+  loginToReport: 'سجّل الدخول للإبلاغ عن هذا الإعلان',
+  reportAd: 'الإبلاغ عن الإعلان',
+  reportReason: 'سبب البلاغ',
+  reportDetails: 'تفاصيل إضافية',
+  reportDetailsHint: 'اشرح ما حدث…',
+  reportPhoto: 'صورة دليل (اختياري)',
+  optional: 'اختياري',
+  sendReport: 'إرسال البلاغ',
+  reportSent: 'تم إرسال البلاغ. شكراً لك.',
+  reportFailed: 'تعذّر إرسال البلاغ. حاول مجدداً.',
+  reportExists: 'لقد أبلغت عن هذا مسبقاً.',
+  copyLink: 'نسخ الرابط',
+  linkCopied: 'تم نسخ الرابط.',
+  close: 'إغلاق',
 };
+
+// Verbatim REPORT_REASONS order from js/market.js.
+const REASONS: ReadonlyArray<readonly [string, string]> = [
+  ['scam', 'احتيال'],
+  ['fake', 'إعلان وهمي'],
+  ['prohibited', 'محتوى محظور'],
+  ['spam', 'إزعاج / سبام'],
+  ['abuse', 'إساءة'],
+  ['other', 'أخرى'],
+];
+
+// Canonical share URL — verbatim js/market.js shareListing (the '?id=' form
+// is routed by the Android app AND served by hosting, so one URL works in
+// browsers, the app, and iOS Safari).
+const shareUrlFor = (listingId: string) =>
+  'https://dzdlala.com/listing.html?id=' + listingId;
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      dir="rtl"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={STR.close}
+            className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="mt-3">{children}</div>
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   listingId: string;
@@ -53,6 +148,13 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   const [fav, setFav] = useState<boolean | null>(null); // null = checking / neutral
   const [toast, setToast] = useState<string | null>(null);
   const [contacting, setContacting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [repReason, setRepReason] = useState<string>('scam');
+  const [repDetails, setRepDetails] = useState('');
+  const [repPhoto, setRepPhoto] = useState<File | null>(null);
+  const [repError, setRepError] = useState<string | null>(null);
+  const [repSending, setRepSending] = useState(false);
   const toastTimer = useRef<number | null>(null);
   const favInFlight = useRef(false);
   const contactInFlight = useRef(false);
@@ -109,6 +211,134 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     },
     [router]
   );
+
+  const shareUrl = shareUrlFor(listingId);
+
+  const onShare = useCallback(() => {
+    const nav = window.navigator as Navigator & {
+      share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+    };
+    if (typeof nav.share === 'function') {
+      // 19 Sep 2026 note in legacy: the app intercept is silent, so the
+      // catch swallows the "user cancelled" noise too.
+      nav.share({ title: 'DLALA', text: title, url: shareUrl }).catch(() => {});
+      return;
+    }
+    setShareOpen(true);
+  }, [title, shareUrl]);
+
+  const onCopyLink = useCallback(async () => {
+    try {
+      await window.navigator.clipboard.writeText(shareUrl);
+      setShareOpen(false);
+      // 19 Sep 2026 (legacy): visible in-page confirmation, not alert().
+      showToast(setToast, STR.linkCopied, toastTimer);
+    } catch {
+      // Legacy fallback when the clipboard API is unavailable/blocked.
+      window.prompt(STR.copyLink, shareUrl);
+    }
+  }, [shareUrl]);
+
+  // Report ad — js/listing.js onReportAd: guest nudge first (LIS-4), then
+  // openReportDialog which itself requires a verified email (requireVerified).
+  const onReportClick = useCallback(async () => {
+    if (auth.status === 'loading') return;
+    if (!user || !client) {
+      guestNudgeThenLogin(STR.loginToReport);
+      return;
+    }
+    if (user.uid === sellerId) return; // owner never sees this button
+    // Verified-email gate (requireVerified parity — same reload pattern as
+    // the contact button: the cached user object stays stale after the user
+    // clicks the link in another tab).
+    try {
+      await user.reload();
+    } catch {
+      /* offline — use cached */
+    }
+    if (!user.emailVerified) {
+      showToast(setToast, STR.verifyToContact, toastTimer);
+      return;
+    }
+    setRepError(null);
+    setReportOpen(true);
+  }, [auth.status, user, client, sellerId, guestNudgeThenLogin]);
+
+  const onSendReport = useCallback(async () => {
+    if (!user || !client || repSending) return;
+    setRepSending(true);
+    setRepError(null);
+    // Hoisted so the catch block can clean up an uploaded evidence photo
+    // when the report write fails (0.0.0.43 Round 38 Team H parity).
+    let photoUrl = '';
+    let reportId = '';
+    let idToken = '';
+    try {
+      const f = repPhoto;
+      if (f) {
+        if (!f.type.startsWith('image/') || f.size > 8 * 1024 * 1024) {
+          throw new Error('photo');
+        }
+        idToken = await user.getIdToken();
+        const key = `listings/${user.uid}/report-${listingId}/ev_${Date.now()}.jpg`;
+        const up = await withTimeout(uploadToR2(f, key, idToken), 60000);
+        photoUrl = up.publicUrl;
+      }
+      // Legacy userName(currentUser): displayName || email, before the '@'.
+      const reporterName = ((user.displayName || user.email || '') as string).split('@')[0];
+      // 0.0.0.36 F-15: deterministic report id — one report per reporter
+      // per ad. create-only rules reject the duplicate write, so the same
+      // reporter can never flood the admin inbox with repeats.
+      reportId = `${user.uid}_listing_${listingId}`;
+      await withTimeout(
+        client.db.doc(`reports/${reportId}`).set({
+          reporterId: user.uid,
+          reporterName,
+          targetType: 'listing',
+          targetId: listingId,
+          targetTitle: title || '',
+          targetUserId: sellerId || '',
+          reason: repReason,
+          details: repDetails.trim(),
+          photoUrl,
+          status: 'new',
+          createdAt: client.FieldValue.serverTimestamp(),
+        }),
+        20000
+      );
+      setReportOpen(false);
+      setRepPhoto(null);
+      setRepDetails('');
+      showToast(setToast, STR.reportSent, toastTimer);
+    } catch (e) {
+      console.error(e);
+      // The write failed AFTER the evidence photo uploaded — if the
+      // existing report (if any) doesn't point at OUR photo, our upload is
+      // a pure orphan and is deleted. Any read failure keeps the photo
+      // rather than risking one that committed server-side
+      // (retry-after-commit).
+      if (photoUrl && (e as { code?: string })?.code === 'permission-denied') {
+        try {
+          const existing = await withTimeout(
+            client.db.doc(`reports/${reportId}`).get(),
+            8000
+          );
+          const data = existing.data() as { photoUrl?: string } | undefined;
+          const committed = existing.exists && data && data.photoUrl === photoUrl;
+          if (!committed) {
+            const tok = idToken || (await user.getIdToken());
+            await deleteR2Objects([photoUrl], tok).catch(() => {});
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+      const code = (e as { code?: string })?.code || '';
+      setRepError(code === 'permission-denied' ? STR.reportExists : STR.reportFailed);
+    } finally {
+      if (mounted.current) setRepSending(false);
+    }
+  }, [user, client, repSending, repPhoto, repReason, repDetails, listingId, sellerId, title]);
 
   const onFavoriteTap = useCallback(async () => {
     if (auth.status === 'loading') return;
@@ -251,40 +481,140 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     }
   }, [auth.status, contacting, user, client, sellerId, sold, listingId, router, guestNudgeThenLogin]);
 
-  // Owner viewing their own listing: hide all buyer actions
-  // (favorite/contact make no sense on your own ad — js/listing.js parity).
-  if (auth.status === 'signed-in' && isOwn) return null;
+  // Owner viewing their own listing: hide buyer actions (favorite/contact/
+  // report make no sense on your own ad) but KEEP share — js/listing.js
+  // parity (owner actions are Edit, Delete, Share).
+  const showBuyerActions = !(auth.status === 'signed-in' && isOwn);
 
   return (
     <div className="mt-4 flex flex-wrap gap-3">
+      {showBuyerActions && (
+        <button
+          type="button"
+          onClick={onFavoriteTap}
+          aria-pressed={fav === true}
+          aria-busy={fav === null}
+          className={
+            'rounded-lg px-5 py-2.5 font-bold border transition ' +
+            (fav === true
+              ? 'bg-red-50 border-red-300 text-red-600'
+              : 'bg-white border-zinc-300 text-zinc-700 hover:border-red-300')
+          }
+        >
+          {fav === true ? '♥' : '♡'} {STR.favorites}
+        </button>
+      )}
+      {showBuyerActions && (
+        <button
+          type="button"
+          onClick={onContact}
+          disabled={sold || contacting}
+          title={sold ? STR.soldNotice : undefined}
+          className={
+            'rounded-lg px-5 py-2.5 font-bold text-white transition ' +
+            (sold || contacting
+              ? 'bg-emerald-700 opacity-50 cursor-not-allowed'
+              : 'bg-emerald-700 hover:bg-emerald-800')
+          }
+        >
+          {contacting ? STR.contacting : STR.contactSeller}
+        </button>
+      )}
       <button
         type="button"
-        onClick={onFavoriteTap}
-        aria-pressed={fav === true}
-        aria-busy={fav === null}
-        className={
-          'rounded-lg px-5 py-2.5 font-bold border transition ' +
-          (fav === true
-            ? 'bg-red-50 border-red-300 text-red-600'
-            : 'bg-white border-zinc-300 text-zinc-700 hover:border-red-300')
-        }
+        onClick={onShare}
+        className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
       >
-        {fav === true ? '♥' : '♡'} {STR.favorites}
+        ↗ {STR.shareAd}
       </button>
-      <button
-        type="button"
-        onClick={onContact}
-        disabled={sold || contacting}
-        title={sold ? STR.soldNotice : undefined}
-        className={
-          'rounded-lg px-5 py-2.5 font-bold text-white transition ' +
-          (sold || contacting
-            ? 'bg-emerald-700 opacity-50 cursor-not-allowed'
-            : 'bg-emerald-700 hover:bg-emerald-800')
-        }
-      >
-        {contacting ? STR.contacting : STR.contactSeller}
-      </button>
+      {showBuyerActions && (
+        <button
+          type="button"
+          onClick={onReportClick}
+          className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-red-300"
+        >
+          ⚑ {STR.reportAd}
+        </button>
+      )}
+      {shareOpen && (
+        <Modal title={STR.shareAd} onClose={() => setShareOpen(false)}>
+          <div className="flex flex-wrap gap-2">
+            <a
+              className="rounded-lg bg-emerald-700 text-white font-bold px-4 py-2"
+              href={`https://wa.me/?text=${encodeURIComponent(title + ' — DLALA')}%20${encodeURIComponent(shareUrl)}`}
+              target="_blank"
+              rel="noopener"
+            >
+              WhatsApp
+            </a>
+            <a
+              className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
+              target="_blank"
+              rel="noopener"
+            >
+              Facebook
+            </a>
+            <button
+              type="button"
+              onClick={onCopyLink}
+              className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
+            >
+              {STR.copyLink}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {reportOpen && (
+        <Modal title={STR.reportAd} onClose={() => !repSending && setReportOpen(false)}>
+          <label className="block text-sm font-medium">{STR.reportReason}</label>
+          <select
+            value={repReason}
+            onChange={(e) => setRepReason(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 bg-white"
+          >
+            {REASONS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <label className="mt-3 block text-sm font-medium">
+            {STR.reportDetails} <span className="text-zinc-400">({STR.optional})</span>
+          </label>
+          <textarea
+            value={repDetails}
+            onChange={(e) => setRepDetails(e.target.value)}
+            maxLength={1000}
+            rows={3}
+            placeholder={STR.reportDetailsHint}
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2"
+          />
+          <label className="mt-3 block text-sm font-medium">{STR.reportPhoto}</label>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(e) => setRepPhoto(e.target.files?.[0] || null)}
+            className="mt-1 w-full text-sm"
+          />
+          {repError && (
+            <div
+              role="alert"
+              className="mt-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2"
+            >
+              {repError}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onSendReport}
+            disabled={repSending}
+            className="mt-4 w-full rounded-lg bg-red-600 text-white font-bold px-5 py-2.5 disabled:opacity-50"
+          >
+            {STR.sendReport}
+          </button>
+        </Modal>
+      )}
       {toast && (
         <div
           role="status"
