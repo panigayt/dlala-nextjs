@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { tasteMirrorUid } from '@/lib/taste';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
+import { useLang } from '@/lib/i18n';
 
 export const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M',
@@ -260,11 +261,12 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
 }
 
 export function LoadingSpinner({ label }: { label?: string }) {
+  const { lang, t } = useLang();
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main className="max-w-2xl mx-auto px-4 py-16 text-center">
         <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-700" />
-        <p className="mt-4 text-zinc-600">{label || 'جارٍ التحميل...'}</p>
+        <p className="mt-4 text-zinc-600">{label || t('loading')}</p>
       </main>
     </div>
   );

@@ -28,12 +28,12 @@ import {
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES, dzPriceWords } from '@/lib/categories';
 import { pubT } from '@/lib/publish-strings';
+import { useLang } from '@/lib/i18n';
 import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
 import { checkDuplicates } from '@/lib/duplicates';
 import { drawWatermark } from './watermark';
 
-const t = (k: string) => pubT(k, 'ar');
 const MAX_PHOTOS = 10;
 const PUBLISH_FN_URL =
   'https://europe-west3-dlala-85cea.cloudfunctions.net/publishListing';
@@ -194,6 +194,8 @@ interface CatQuestionsProps {
 }
 
 function CatQuestions({ cat, answers, setAnswer }: CatQuestionsProps) {
+  const { lang } = useLang();
+  const t = useCallback((k: string) => pubT(k, lang), [lang]);
   const rowCls = 'grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4';
   const lblCls = 'block text-sm font-medium text-zinc-700 mb-1';
   const req = <span className="text-red-500"> *</span>;
@@ -509,6 +511,8 @@ function PublishForm({
   editId: string | null;
   initialMode: string | null;
 }) {
+  const { lang } = useLang();
+  const t = useCallback((k: string) => pubT(k, lang), [lang]);
   // Draft restore — read once via lazy initializer (client-only, no effect)
   const readDraft = () => {
     if (editId || typeof window === 'undefined') return null;
@@ -602,7 +606,7 @@ function PublishForm({
         setError(t('editLoadError'));
       }
     })();
-  }, [editId, client, user.uid]);
+  }, [editId, client, user.uid, t]);
 
   const onPickPhotos = async (files: FileList | null) => {
     if (!files) return;
@@ -1102,7 +1106,7 @@ function PublishForm({
   const lblCls = 'block text-sm font-medium text-zinc-700 mb-1';
 
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50">
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-4">{t('publish')}</h1>
 
@@ -1170,7 +1174,7 @@ function PublishForm({
               >
                 <option value="">—</option>
                 {CATEGORIES.map((c) => (
-                  <option key={c.id} value={c.id}>{c.ar}</option>
+                  <option key={c.id} value={c.id}>{c[lang]}</option>
                 ))}
               </select>
             </div>
@@ -1186,7 +1190,7 @@ function PublishForm({
                   <option value="">—</option>
                   {WILAYAS.map((w) => (
                     <option key={w.code} value={String(w.code)}>
-                      {w.code} - {w.ar}
+                      {w.code} - {lang === 'ar' ? w.ar : (lang === 'en' && w.en ? w.en : w.fr)}
                     </option>
                   ))}
                 </select>
@@ -1434,6 +1438,8 @@ function PublishForm({
 }
 
 function PublishPageInner() {
+  const { lang } = useLang();
+  const t = useCallback((k: string) => pubT(k, lang), [lang]);
   const auth = useRequireAuth();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
