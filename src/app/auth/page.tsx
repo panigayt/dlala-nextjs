@@ -29,73 +29,41 @@ import {
   type FirebaseCompat,
 } from '../../lib/firebase-compat';
 import { authReturnTarget } from '../../lib/auth-return';
+import { useLang } from '../../lib/i18n';
 import {
   isDisposableEmail,
   hasPlusAddress,
 } from '../../lib/auth-security';
-
-// Arabic user-facing strings — verbatim from js/i18n.ar.js (production).
-const STR = {
-  loginError: 'بيانات الدخول غير صحيحة',
-  signupError: 'تعذّر إنشاء الحساب — تحقق من البيانات',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  resetLinkSent: 'تم إرسال رابط الاستعادة إلى بريدك',
-  resetEmailInvalid: 'أدخل بريداً إلكترونياً صالحاً',
-  authConnectionProblem: 'مشكلة في الاتصال — تحقق من الإنترنت وحاول مجدداً',
-  authEmailInUse: 'هذا البريد مسجّل بالفعل — سجّل الدخول',
-  authTooManyRequests: 'محاولات كثيرة — انتظر قليلاً ثم حاول مجدداً',
-  authUserDisabled: 'هذا الحساب معطّل — تواصل مع الدعم',
-  authWeakPassword: 'كلمة المرور ضعيفة جداً — استخدم 8 أحرف على الأقل',
-  pleaseWait: 'جارٍ الانتظار...',
-  sdkLoadFailed: 'تعذر تحميل خدمة الدخول — تحقق من الاتصال وحاول مجدداً',
-  usernameTaken: 'اسم المستخدم محجوز',
-  disposableEmail: 'البريد المؤقت غير مسموح — استخدم بريدًا حقيقيًا',
-  plusEmailNotAllowed: 'العناوين التي تحتوي + غير مسموحة — استخدم بريدك الأساسي',
-  termsRequired: 'يجب الموافقة على شروط الاستخدام للتسجيل.',
-  nameHint: 'بالأحرف اللاتينية فقط، مثال: Zak Benali',
-  usernameHint: '3 إلى 20 حرفًا: a-z 0-9 . _',
-  verifyEmailTitle: 'فعّل بريدك الإلكتروني',
-  verifyEmailBody: 'أرسلنا لك رابط التفعيل. فعّل بريدك لتتمكن من النشر ومراسلة البائعين.',
-  verifyStatusLabel: 'حالة التفعيل:',
-  verifyStatusPending: 'بانتظار التفعيل',
-  verifyStatusDone: 'تم التفعيل ✓',
-  verifyStillPending: 'لم يتم التفعيل بعد — تحقق من بريدك ثم حاول مجدداً',
-  verifiedContinue: 'فعّلت البريد — تابع',
-  resendEmail: 'إعادة إرسال الرابط',
-  logout: 'تسجيل الخروج',
-  emailSent: 'تم إرسال رابط التفعيل',
-  signupDocRetry: 'تم إنشاء حسابك، لكن تعذّر حفظ الملف الشخصي — سيُنشأ تلقائياً عند تسجيل الدخول.',
-};
 
 // Friendly localized messages for Firebase auth errors.
 // Mirrors js/auth.js authErrorMessage() exactly:
 // wrong-password/user-not-found -> "incorrect credentials"; network/timeout ->
 // "connection problem". Never blame credentials for a network fault, and never
 // surface raw codes or raw JS errors.
-function authErrorMessage(e: unknown, fallback: string): string {
+function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: string): string {
   const code = (e as { code?: string } | null)?.code || '';
   switch (code) {
     case 'auth/wrong-password':
     case 'auth/user-not-found':
     case 'auth/invalid-credential':
-      return STR.loginError;
+      return t('loginError');
     case 'auth/invalid-email':
-      return STR.resetEmailInvalid;
+      return t('resetEmailInvalid');
     case 'auth/network-request-failed':
     case 'auth/timeout':
     case 'deadline-exceeded':
     case 'sdk-load-failed':
-      return STR.authConnectionProblem;
+      return t('authConnectionProblem');
     case 'auth/email-already-in-use':
-      return STR.authEmailInUse;
+      return t('authEmailInUse');
     case 'auth/weak-password':
-      return STR.authWeakPassword;
+      return t('authWeakPassword');
     case 'auth/too-many-requests':
-      return STR.authTooManyRequests;
+      return t('authTooManyRequests');
     case 'auth/user-disabled':
-      return STR.authUserDisabled;
+      return t('authUserDisabled');
     default:
-      return fallback;
+      return t(fallbackKey);
   }
 }
 
@@ -171,6 +139,10 @@ const PENDING_KEY = 'dlala_pending_profile';
 
 export default function AuthPage() {
   const router = useRouter();
+  // Round 110: all user-facing strings come from the shared i18n store
+  // (js/i18n.js setLang parity) — the header language switcher
+  // re-renders this page in the chosen language.
+  const { t, lang } = useLang();
   // js/auth.js boot parity: ?mode=signup starts guests on the signup form
   // (lazy init — no setState-in-effect).
   const [mode, setMode] = useState<Mode>(() => {
@@ -255,7 +227,7 @@ export default function AuthPage() {
     setOkMsg(null);
     const em = email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      setError(STR.resetEmailInvalid);
+      setError(t('resetEmailInvalid'));
       return;
     }
     setLoading(true);
@@ -316,7 +288,7 @@ export default function AuthPage() {
       }
     } catch (e) {
       if (mounted.current) {
-        setError(authErrorMessage(e, STR.loginError));
+        setError(authErrorMessage(e, t, 'loginError'));
         setLoading(false);
       }
     }
@@ -330,22 +302,22 @@ export default function AuthPage() {
     const handle = username.trim().toLowerCase();
     const em = email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      setError(STR.resetEmailInvalid);
+      setError(t('resetEmailInvalid'));
       return;
     }
     // Latin-script rules mirror the app: name Latin, handle 3-20 [a-z0-9._]
     if (!/^[A-Za-z][A-Za-z .'-]{1,38}$/.test(displayName) || !/^[a-z0-9._]{3,20}$/.test(handle)) {
-      setError(STR.signupError);
+      setError(t('signupError'));
       return;
     }
     // Terms are accepted exactly once, at signup — never shown again.
     if (!terms) {
-      setError(STR.termsRequired);
+      setError(t('termsRequired'));
       return;
     }
     // Client-side 8-char minimum (Firebase's server policy stays untouched).
     if (password.length < 8) {
-      setError(STR.authWeakPassword);
+      setError(t('authWeakPassword'));
       return;
     }
     setLoading(true);
@@ -358,7 +330,7 @@ export default function AuthPage() {
       // registry pre-check.
       if (isDisposableEmail(em)) {
         if (mounted.current) {
-          setError(STR.disposableEmail);
+          setError(t('disposableEmail'));
           setLoading(false);
         }
         return;
@@ -369,7 +341,7 @@ export default function AuthPage() {
       // "disposable" email and must not say so.
       if (hasPlusAddress(em)) {
         if (mounted.current) {
-          setError(STR.plusEmailNotAllowed);
+          setError(t('plusEmailNotAllowed'));
           setLoading(false);
         }
         return;
@@ -383,7 +355,7 @@ export default function AuthPage() {
       );
       if (regSnap.exists()) {
         if (mounted.current) {
-          setError(STR.usernameTaken);
+          setError(t('usernameTaken'));
           setLoading(false);
         }
         return;
@@ -427,7 +399,7 @@ export default function AuthPage() {
       if (!mounted.current) return;
       setLoading(false);
       showVerifyGate(cred.user);
-      if (docRetryNote) setError(STR.signupDocRetry);
+      if (docRetryNote) setError(t('signupDocRetry'));
     } catch (e) {
       // L9: retry-after-commit — createUser may have committed server-side
       // while the response was lost; the retry then fails with
@@ -465,7 +437,7 @@ export default function AuthPage() {
         }
       }
       if (mounted.current) {
-        setError(authErrorMessage(e, STR.signupError));
+        setError(authErrorMessage(e, t, 'signupError'));
         setLoading(false);
       }
     }
@@ -477,7 +449,7 @@ export default function AuthPage() {
     setOkMsg(null);
     const em = email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      setError(STR.resetEmailInvalid);
+      setError(t('resetEmailInvalid'));
       return;
     }
     setLoading(true);
@@ -485,12 +457,12 @@ export default function AuthPage() {
       const fb = await getFirebase();
       await withAuthRetry(() => fb.auth().sendPasswordResetEmail(em));
       if (mounted.current) {
-        setOkMsg(STR.resetLinkSent);
+        setOkMsg(t('resetLinkSent'));
         setLoading(false);
       }
     } catch (e) {
       if (mounted.current) {
-        setError(authErrorMessage(e, STR.errorGeneric));
+        setError(authErrorMessage(e, t, 'errorGeneric'));
         setLoading(false);
       }
     }
@@ -517,7 +489,7 @@ export default function AuthPage() {
       } catch (e) {
         console.error('verify-continue reload failed:', e);
         if (mounted.current) {
-          setError(authErrorMessage(e, STR.errorGeneric));
+          setError(authErrorMessage(e, t, 'errorGeneric'));
           setLoading(false);
         }
         return;
@@ -529,12 +501,12 @@ export default function AuthPage() {
         router.push(returnTarget());
       } else {
         // Still not verified — say so plainly, don't leave them guessing.
-        setError(STR.verifyStillPending);
+        setError(t('verifyStillPending'));
         setLoading(false);
       }
     } catch (e) {
       if (mounted.current) {
-        setError(authErrorMessage(e, STR.errorGeneric));
+        setError(authErrorMessage(e, t, 'errorGeneric'));
         setLoading(false);
       }
     }
@@ -557,12 +529,12 @@ export default function AuthPage() {
       await withAuthRetry(() => u.sendEmailVerification());
       if (mounted.current) {
         // Success and failure states are exclusive.
-        setOkMsg(STR.emailSent);
+        setOkMsg(t('emailSent'));
         setLoading(false);
       }
     } catch (e) {
       if (mounted.current) {
-        setError(authErrorMessage(e, STR.errorGeneric));
+        setError(authErrorMessage(e, t, 'errorGeneric'));
         setLoading(false);
       }
     }
@@ -576,7 +548,7 @@ export default function AuthPage() {
       // A failed sign-out must surface in the VISIBLE mode (verify), never
       // in the hidden login mode.
       console.error(e);
-      if (mounted.current) setError(authErrorMessage(e, STR.errorGeneric));
+      if (mounted.current) setError(authErrorMessage(e, t, 'errorGeneric'));
       return;
     }
     if (mounted.current) switchMode('login');
@@ -590,13 +562,13 @@ export default function AuthPage() {
     'w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 transition-colors';
 
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <header className="bg-emerald-700 text-white shadow">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link href="/" className="text-xl font-bold">
-            دلالة
+            {t('appName')}
           </Link>
-          <span className="text-sm">سوق الجزائر للإعلانات المبوبة</span>
+          <span className="text-sm">{t('authTagline')}</span>
         </div>
       </header>
 
@@ -604,7 +576,7 @@ export default function AuthPage() {
         <div className="rounded-2xl bg-white shadow-sm p-6">
           {mode === 'login' && (
             <div>
-              <h1 className="text-xl font-bold text-zinc-900 mb-5">تسجيل الدخول</h1>
+              <h1 className="text-xl font-bold text-zinc-900 mb-5">{t('login')}</h1>
               {error && (
                 <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
@@ -612,7 +584,7 @@ export default function AuthPage() {
               )}
               <form onSubmit={handleLogin} noValidate>
                 <label htmlFor="lEmail" className="block text-sm font-medium text-zinc-700 mb-1">
-                  البريد الإلكتروني
+                  {t('email')}
                 </label>
                 <input
                   id="lEmail"
@@ -625,7 +597,7 @@ export default function AuthPage() {
                   required
                 />
                 <label htmlFor="lPass" className="block text-sm font-medium text-zinc-700 mb-1">
-                  كلمة المرور
+                  {t('password')}
                 </label>
                 <input
                   id="lPass"
@@ -638,7 +610,7 @@ export default function AuthPage() {
                   required
                 />
                 <button type="submit" className={btnCls} disabled={loading}>
-                  {loading ? STR.pleaseWait : 'دخول'}
+                  {loading ? t('pleaseWait') : t('loginBtn')}
                 </button>
               </form>
               <p className="mt-4 text-sm text-center">
@@ -647,17 +619,17 @@ export default function AuthPage() {
                   onClick={() => switchMode('reset')}
                   className="text-emerald-700 hover:underline"
                 >
-                  نسيت كلمة المرور؟
+                  {t('forgotPassword')}
                 </button>
               </p>
               <p className="mt-2 text-sm text-center text-zinc-600">
-                ما عندكش حساب؟{' '}
+                {t('noAccountQ')}{' '}
                 <button
                   type="button"
                   onClick={() => switchMode('signup')}
                   className="text-emerald-700 font-medium hover:underline"
                 >
-                  أنشئ واحداً
+                  {t('createAccountLink')}
                 </button>
               </p>
             </div>
@@ -665,7 +637,7 @@ export default function AuthPage() {
 
           {mode === 'signup' && (
             <div>
-              <h1 className="text-xl font-bold text-zinc-900 mb-5">حساب جديد</h1>
+              <h1 className="text-xl font-bold text-zinc-900 mb-5">{t('signup')}</h1>
               {error && (
                 <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
@@ -673,9 +645,9 @@ export default function AuthPage() {
               )}
               <form onSubmit={handleSignup} noValidate>
                 <label htmlFor="sName" className="block text-sm font-medium text-zinc-700 mb-1">
-                  الاسم
+                  {t('name')}
                 </label>
-                <p className="text-xs text-zinc-500 mb-1">{STR.nameHint}</p>
+                <p className="text-xs text-zinc-500 mb-1">{t('nameHint')}</p>
                 <input
                   id="sName"
                   dir="ltr"
@@ -687,9 +659,9 @@ export default function AuthPage() {
                   required
                 />
                 <label htmlFor="sUser" className="block text-sm font-medium text-zinc-700 mb-1">
-                  اسم المستخدم
+                  {t('username')}
                 </label>
-                <p className="text-xs text-zinc-500 mb-1">{STR.usernameHint}</p>
+                <p className="text-xs text-zinc-500 mb-1">{t('usernameHint')}</p>
                 <input
                   id="sUser"
                   dir="ltr"
@@ -701,7 +673,7 @@ export default function AuthPage() {
                   required
                 />
                 <label htmlFor="sEmail" className="block text-sm font-medium text-zinc-700 mb-1">
-                  البريد الإلكتروني
+                  {t('email')}
                 </label>
                 <input
                   id="sEmail"
@@ -714,7 +686,7 @@ export default function AuthPage() {
                   required
                 />
                 <label htmlFor="sPass" className="block text-sm font-medium text-zinc-700 mb-1">
-                  كلمة المرور (8 أحرف على الأقل)
+                  {t('passwordMin8')}
                 </label>
                 <input
                   id="sPass"
@@ -736,24 +708,24 @@ export default function AuthPage() {
                     onChange={(e) => setTerms(e.target.checked)}
                   />
                   <span>
-                    أوافق على{' '}
+                    {t('agreeTo')}{' '}
                     <Link href="/terms" className="text-emerald-700 hover:underline">
-                      شروط الاستخدام
+                      {t('termsLink')}
                     </Link>
                   </span>
                 </label>
                 <button type="submit" className={btnCls} disabled={loading}>
-                  {loading ? STR.pleaseWait : 'إنشاء الحساب'}
+                  {loading ? t('pleaseWait') : t('signupBtn')}
                 </button>
               </form>
               <p className="mt-4 text-sm text-center text-zinc-600">
-                عندك حساب؟{' '}
+                {t('haveAccountQ')}{' '}
                 <button
                   type="button"
                   onClick={() => switchMode('login')}
                   className="text-emerald-700 font-medium hover:underline"
                 >
-                  سجّل الدخول
+                  {t('signInLink')}
                 </button>
               </p>
             </div>
@@ -761,7 +733,7 @@ export default function AuthPage() {
 
           {mode === 'reset' && (
             <div>
-              <h1 className="text-xl font-bold text-zinc-900 mb-5">نسيت كلمة المرور؟</h1>
+              <h1 className="text-xl font-bold text-zinc-900 mb-5">{t('forgotPassword')}</h1>
               {error && (
                 <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
@@ -774,7 +746,7 @@ export default function AuthPage() {
               )}
               <form onSubmit={handleReset} noValidate>
                 <label htmlFor="rEmail" className="block text-sm font-medium text-zinc-700 mb-1">
-                  البريد الإلكتروني
+                  {t('email')}
                 </label>
                 <input
                   id="rEmail"
@@ -787,7 +759,7 @@ export default function AuthPage() {
                   required
                 />
                 <button type="submit" className={btnCls} disabled={loading}>
-                  {loading ? STR.pleaseWait : 'إرسال رابط الاستعادة'}
+                  {loading ? t('pleaseWait') : t('sendResetLink')}
                 </button>
               </form>
               <p className="mt-4 text-sm text-center">
@@ -796,7 +768,7 @@ export default function AuthPage() {
                   onClick={() => switchMode('login')}
                   className="text-emerald-700 font-medium hover:underline"
                 >
-                  العودة لتسجيل الدخول
+                  {t('backToLogin')}
                 </button>
               </p>
             </div>
@@ -804,9 +776,9 @@ export default function AuthPage() {
 
           {mode === 'verify' && (
             <div>
-              <h1 className="text-xl font-bold text-zinc-900 mb-3">{STR.verifyEmailTitle}</h1>
+              <h1 className="text-xl font-bold text-zinc-900 mb-3">{t('verifyEmailTitle')}</h1>
               <div className="mb-4 rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-800">
-                {STR.verifyEmailBody}
+                {t('verifyEmailBody')}
               </div>
               {verifyEmail && (
                 <p className="mb-2 text-sm text-zinc-600" dir="ltr" style={{ textAlign: 'right' }}>
@@ -814,9 +786,9 @@ export default function AuthPage() {
                 </p>
               )}
               <p className="mb-4 text-sm text-zinc-600">
-                {STR.verifyStatusLabel}{' '}
+                {t('verifyStatusLabel')}{' '}
                 <strong className={verifyDone ? 'text-emerald-700' : 'text-amber-700'}>
-                  {verifyDone ? STR.verifyStatusDone : STR.verifyStatusPending}
+                  {verifyDone ? t('verifyStatusDone') : t('verifyStatusPending')}
                 </strong>
               </p>
               {error && (
@@ -830,7 +802,7 @@ export default function AuthPage() {
                 </div>
               )}
               <button type="button" className={btnCls} disabled={loading} onClick={handleVerifyContinue}>
-                {loading ? STR.pleaseWait : STR.verifiedContinue}
+                {loading ? t('pleaseWait') : t('verifiedContinue')}
               </button>
               <div className="mt-3 flex gap-2">
                 <button
@@ -839,7 +811,7 @@ export default function AuthPage() {
                   disabled={loading}
                   onClick={handleResend}
                 >
-                  {STR.resendEmail}
+                  {t('resendEmail')}
                 </button>
                 <button
                   type="button"
@@ -847,7 +819,7 @@ export default function AuthPage() {
                   disabled={loading}
                   onClick={handleVerifyLogout}
                 >
-                  {STR.logout}
+                  {t('logout')}
                 </button>
               </div>
             </div>
