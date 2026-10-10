@@ -7,6 +7,8 @@
 //                                        restValue, restDocToObj, cardSelectClause)
 //   ~/workspace/dlala-040/js/home.js    (buildFeedRestQuery default branch)
 
+import type { Lang } from './i18n';
+
 export const FIREBASE_API_KEY = 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M';
 export const FIRESTORE_REST_BASE =
   'https://firestore.googleapis.com/v1/projects/dlala-85cea/databases/(default)/documents';
@@ -1191,16 +1193,23 @@ export async function fetchAnnouncement(id: string): Promise<Announcement | null
   return restAnnouncement(doc);
 }
 
-export function timeAgo(d: Date | undefined, lang = 'ar'): string {
+// Verbatim js/app.js timeAgo (0.0.0.31 FIX-WEB-025 day plurals) — trilingual.
+export function timeAgo(d: Date | undefined, lang: Lang = 'ar'): string {
   if (!d || !(d instanceof Date) || isNaN(d.getTime())) return '';
-  const s = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (s < 60) return lang === 'ar' ? 'الآن' : "à l'instant";
-  const m = Math.floor(s / 60);
-  if (m < 60) return lang === 'ar' ? `منذ ${m} د` : `il y a ${m} min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return lang === 'ar' ? `منذ ${h} س` : `il y a ${h} h`;
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return lang === 'ar' ? 'الآن' : lang === 'fr' ? "à l'instant" : 'now';
+  if (mins < 60) return `${mins} ${lang === 'ar' ? 'د' : 'min'}`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h} ${lang === 'ar' ? 'س' : 'h'}`;
   const days = Math.floor(h / 24);
-  return lang === 'ar' ? `منذ ${days} يوم` : `il y a ${days} j`;
+  if (lang === 'ar') {
+    if (days === 1) return 'منذ يوم';
+    if (days === 2) return 'منذ يومين';
+    if (days <= 10) return `منذ ${days} أيام`;
+    return `منذ ${days} يوماً`;
+  }
+  if (lang === 'fr') return `il y a ${days} j`;
+  return `${days}d ago`;
 }
 
 // ================= VITRINE SHOWCASES (Round 55) =================

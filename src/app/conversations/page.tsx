@@ -18,27 +18,8 @@ import {
 } from '@/lib/firebase-client';
 import { formatPrice, timeAgo } from '@/lib/firestore';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
-
-// Verbatim strings (i18n.ar.js; hideChat*/undo from CHAT_L10N.ar)
-const STR = {
-  messages: 'الرسائل',
-  supportContact: 'اتصل بالدعم',
-  supportTitle: 'دعم دلالة',
-  announcementsTitle: 'إعلانات',
-  noConversations: 'لا توجد محادثات بعد',
-  noConversationsHint: 'عندما تراسل بائعاً ستظهر محادثاتك هنا',
-  photoLabel: 'صورة',
-  hideChat: 'إخفاء المحادثة',
-  hideChatConfirm: 'إخفاء هذه المحادثة من قائمتك؟',
-  chatHidden: 'تم إخفاء المحادثة',
-  undo: 'تراجع',
-  unknownUser: 'مستخدم',
-  deletedListing: 'إعلان محذوف',
-  you: 'أنت',
-  loading: 'جارٍ التحميل...',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  retry: 'إعادة المحاولة',
-};
+import { convSt } from './conversations-strings';
+import { useLang, type Lang } from '@/lib/i18n';
 
 interface Conv {
   id: string;
@@ -118,25 +99,26 @@ function redactPhones(s: string): string {
   return String(s).replace(PHONE_RE, '••••••••');
 }
 
-function previewText(conv: Conv, uid: string): string {
+function previewText(conv: Conv, uid: string, lang: Lang): string {
   const lm = conv.lastMessage;
   if (!lm) return '';
   let s: string;
   if (lm.proposalAmount != null) s = '💰 ' + formatPrice(lm.proposalAmount);
   else {
     const t = lm.text || '';
-    s = t === '📷' ? '📷 ' + STR.photoLabel : t;
+    s = t === '📷' ? '📷 ' + convSt(lang, 'photoLabel') : t;
   }
-  if (uid && lm.senderId === uid) s = STR.you + ': ' + s;
+  if (uid && lm.senderId === uid) s = convSt(lang, 'you') + ': ' + s;
   return redactPhones(s);
 }
 
-function localizedTitle(title: unknown): string {
+// Legacy localizedText parity (js/app.js): map[LANG] first, then ar.
+function localizedTitle(title: unknown, lang: Lang): string {
   if (!title) return '';
   if (typeof title === 'string') return title;
   if (typeof title === 'object') {
     const o = title as Record<string, string>;
-    return o.ar || o.fr || o.en || '';
+    return o[lang] || o.ar || o.fr || o.en || '';
   }
   return '';
 }
@@ -154,6 +136,10 @@ export default function ConversationsPage() {
   const clientRef = useRef<FirebaseClient | null>(null);
   const userRef = useRef<CompatUser | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  // Round 73 pattern (chat page): language switch re-renders = legacy
+  // onLangChange() parity.
+  const { lang } = useLang();
+  const st = (k: string) => convSt(lang, k);
 
   const showToast = useCallback((msg: string, ms = 4000) => {
     setToast(msg);
@@ -164,7 +150,7 @@ export default function ConversationsPage() {
   }, []);
 
   const loadMeta = useCallback(
-    async (items: Conv[], uid: string, client: FirebaseClient) => {
+    async (items: Conv[], uid: string, client: FirebaseClient, lang: Lang) => {
       const otherUids = [
         ...new Set(
           items
@@ -191,13 +177,13 @@ export default function ConversationsPage() {
               const name =
                 (m.name as string) ||
                 ((m.username as string) ? '@' + m.username : '') ||
-                STR.unknownUser;
+                convSt(lang, 'unknownUser');
               return [id, name] as const;
             }
           } catch {
             /* keep fallback */
           }
-          return [id, STR.unknownUser] as const;
+          return [id, convSt(lang, 'unknownUser')] as const;
         })
       );
       // Listings
@@ -214,13 +200,13 @@ export default function ConversationsPage() {
                 [];
               return [
                 id,
-                { title: localizedTitle(m.title) || STR.deletedListing, photo: thumbs[0] || '' },
+                { title: localizedTitle(m.title, lang) || convSt(lang, 'deletedListing'), photo: thumbs[0] || '' },
               ] as const;
             }
           } catch {
             /* keep fallback */
           }
-          return [id, { title: STR.deletedListing, photo: '' }] as const;
+          return [id, { title: convSt(lang, 'deletedListing'), photo: '' }] as const;
         })
       );
       setNames((prev) => {
@@ -243,7 +229,7 @@ export default function ConversationsPage() {
   );
 
   const subscribe = useCallback(
-    (client: FirebaseClient, user: CompatUser) => {
+    (client: FirebaseClient, user: CompatUser, lang: Lang) => {
       const uid = user.uid;
       if (unsubRef.current) {
         try {
@@ -265,7 +251,7 @@ export default function ConversationsPage() {
         setConvs(docs);
         // 0.0.0.22 (Zak): save the fresh render for instant paint on next
         // boot. Best-effort; the live subscription is the source of truth.
-        loadMeta(docs, uid, client).then((meta) => {
+        loadMeta(docs, uid, client, lang).then((meta) => {
           try {
             snapshotWrite('convs', uid, {
               convs: docs.map((c) => ({
@@ -289,7 +275,7 @@ export default function ConversationsPage() {
         });
       };
       const onErr = () => {
-        setError(STR.errorGeneric);
+        setError(convSt(lang, 'errorGeneric'));
       };
       try {
         // Ordered live query; falls back to unordered + client sort when
@@ -311,6 +297,9 @@ export default function ConversationsPage() {
         unsubRef.current = base.limit(60).onSnapshot(onSnap, onErr);
       }
     },
+    // lang is passed as an argument (not closed over); the effect lists it
+    // in deps so a language switch re-subscribes with the new lang
+    // (legacy onLangChange() re-render parity).
     [loadMeta]
   );
 
@@ -332,14 +321,14 @@ export default function ConversationsPage() {
       /* fall through to the live path */
     }
     /* eslint-enable react-hooks/set-state-in-effect */
-    subscribe(authState.client, authState.user);
+    subscribe(authState.client, authState.user, lang);
     const onVis = () => {
       if (
         !document.hidden &&
         clientRef.current &&
         userRef.current
       ) {
-        subscribe(clientRef.current, userRef.current);
+        subscribe(clientRef.current, userRef.current, lang);
       }
     };
     document.addEventListener('visibilitychange', onVis);
@@ -354,22 +343,22 @@ export default function ConversationsPage() {
         unsubRef.current = null;
       }
     };
-  }, [authState, subscribe]);
+  }, [authState, subscribe, lang]);
 
   async function hideConversation(id: string) {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user) return;
-    if (!window.confirm(STR.hideChatConfirm)) return;
+    if (!window.confirm(st('hideChatConfirm'))) return;
     try {
       await client.db
         .doc(`conversations/${id}`)
         .update({ hiddenFor: client.FieldValue.arrayUnion(user.uid) });
       setConvs((prev) => prev.filter((c) => c.id !== id));
       setHiddenId(id);
-      showToast(STR.chatHidden, 6000);
+      showToast(st('chatHidden'), 6000);
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -382,24 +371,24 @@ export default function ConversationsPage() {
         .doc(`conversations/${id}`)
         .update({ hiddenFor: client.FieldValue.arrayRemove(user.uid) });
       if (clientRef.current && userRef.current)
-        subscribe(clientRef.current, userRef.current);
+        subscribe(clientRef.current, userRef.current, lang);
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(st('errorGeneric'));
     }
     setToast(null);
     setHiddenId(null);
   }
 
   if (authState.status !== 'signed-in') {
-    return <LoadingSpinner label={STR.loading} />;
+    return <LoadingSpinner label={st('loading')} />;
   }
   const uid = authState.user.uid;
   const hasSupport = convs.some((c) => c.listingId === 'support');
 
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <h1 className="text-xl font-bold text-zinc-900 mb-4">{STR.messages}</h1>
+        <h1 className="text-xl font-bold text-zinc-900 mb-4">{st('messages')}</h1>
 
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-3 text-sm text-red-700">
@@ -409,10 +398,10 @@ export default function ConversationsPage() {
               onClick={() =>
                 clientRef.current &&
                 userRef.current &&
-                subscribe(clientRef.current, userRef.current)
+                subscribe(clientRef.current, userRef.current, lang)
               }
             >
-              {STR.retry}
+              {st('retry')}
             </button>
           </div>
         )}
@@ -427,9 +416,9 @@ export default function ConversationsPage() {
                 🎧
               </div>
               <div className="min-w-0">
-                <div className="font-bold text-zinc-900">{STR.supportTitle}</div>
+                <div className="font-bold text-zinc-900">{st('supportTitle')}</div>
                 <div className="text-sm text-zinc-500 truncate">
-                  {STR.supportContact}
+                  {st('supportContact')}
                 </div>
               </div>
             </a>
@@ -441,16 +430,17 @@ export default function ConversationsPage() {
             const isAnn = c.listingId === 'announcements';
             const isSellerHere = c.sellerId === uid && c.buyerId !== uid;
             const name = isSupport
-              ? STR.supportTitle
+              ? st('supportTitle')
               : isAnn
-                ? STR.announcementsTitle
-                : names[other] || STR.unknownUser;
+                ? st('announcementsTitle')
+                : names[other] || st('unknownUser');
             const li = c.listingId ? listings[c.listingId] : undefined;
             const unreadNum = Number((c.unread && c.unread[uid]) || 0) || 0;
             const when = timeAgo(
               tsMs(c.updatedAt || c.createdAt)
                 ? new Date(tsMs(c.updatedAt || c.createdAt))
-                : undefined
+                : undefined,
+              lang
             );
             return (
               <div
@@ -495,7 +485,7 @@ export default function ConversationsPage() {
                     )}
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-zinc-500 truncate">
-                        {previewText(c, uid)}
+                        {previewText(c, uid, lang)}
                       </span>
                       {unreadNum > 0 && (
                         <span className="shrink-0 min-w-5 h-5 px-1 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">
@@ -508,8 +498,8 @@ export default function ConversationsPage() {
                 {!isSellerHere && (
                   <button
                     className="shrink-0 w-8 h-8 rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-                    title={STR.hideChat}
-                    aria-label={STR.hideChat}
+                    title={st('hideChat')}
+                    aria-label={st('hideChat')}
                     onClick={() => hideConversation(c.id)}
                   >
                     ✕
@@ -523,9 +513,9 @@ export default function ConversationsPage() {
             <div className="rounded-xl bg-white shadow-sm p-8 text-center">
               <div className="text-5xl mb-3">💬</div>
               <h3 className="font-bold text-zinc-900 mb-1">
-                {STR.noConversations}
+                {st('noConversations')}
               </h3>
-              <p className="text-sm text-zinc-500">{STR.noConversationsHint}</p>
+              <p className="text-sm text-zinc-500">{st('noConversationsHint')}</p>
             </div>
           )}
         </div>
@@ -539,7 +529,7 @@ export default function ConversationsPage() {
               className="text-sm font-bold text-emerald-300 hover:text-emerald-200"
               onClick={() => undoHide(hiddenId)}
             >
-              {STR.undo}
+              {st('undo')}
             </button>
           )}
         </div>
