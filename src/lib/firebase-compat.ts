@@ -129,3 +129,23 @@ export function withTimeout<T>(p: Promise<T>, ms = 15000): Promise<T> {
     ),
   ]);
 }
+
+// --- Auth resilience helpers (js/auth.js 15 Sep 2026 repair parity) ---------
+// Auth requests could hang forever (M1). withTimeout bounds every call; a
+// single automatic retry on network failure follows.
+export function isNetworkAuthError(e: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator && (navigator as { onLine?: boolean }).onLine === false) return true;
+  const code = (e as { code?: string } | null)?.code || '';
+  // 'deadline-exceeded' is this port's timeout code (withTimeout above);
+  // legacy throws 'auth/timeout' for the same case — included for parity.
+  return code === 'auth/network-request-failed' || code === 'auth/timeout' || code === 'deadline-exceeded';
+}
+// One automatic retry on network failure (M1). Any other error is rethrown.
+export async function withAuthRetry<T>(fn: () => Promise<T>, ms = 15000): Promise<T> {
+  try {
+    return await withTimeout(fn(), ms);
+  } catch (e) {
+    if (isNetworkAuthError(e)) return withTimeout(fn(), ms); // single retry
+    throw e;
+  }
+}

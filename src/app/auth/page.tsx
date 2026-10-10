@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   getFirebase,
+  withAuthRetry,
   withTimeout,
   type CompatAuth,
   type CompatUser,
@@ -261,7 +262,7 @@ export default function AuthPage() {
     try {
       const fb = await getFirebase();
       const auth = fb.auth();
-      const cred = await withTimeout(auth.signInWithEmailAndPassword(em, password));
+      const cred = await withAuthRetry(() => auth.signInWithEmailAndPassword(em, password));
       // M3: sign-in success is determined by the sign-in result itself.
       // A post-login reload() failure must NOT flip a success into a
       // failure — log it and continue with the cached verification flag.
@@ -387,7 +388,7 @@ export default function AuthPage() {
         }
         return;
       }
-      const cred = await withTimeout(auth.createUserWithEmailAndPassword(em, password));
+      const cred = await withAuthRetry(() => auth.createUserWithEmailAndPassword(em, password));
       // The Auth account now exists. Post-creation steps must NEVER orphan
       // it — on failure we still advance (the user doc is created idempotently
       // by ensureUserDoc on the next sign-in too) and report what happened.
@@ -482,7 +483,7 @@ export default function AuthPage() {
     setLoading(true);
     try {
       const fb = await getFirebase();
-      await withTimeout(fb.auth().sendPasswordResetEmail(em));
+      await withAuthRetry(() => fb.auth().sendPasswordResetEmail(em));
       if (mounted.current) {
         setOkMsg(STR.resetLinkSent);
         setLoading(false);
@@ -553,7 +554,7 @@ export default function AuthPage() {
         }
         return;
       }
-      await withTimeout(u.sendEmailVerification());
+      await withAuthRetry(() => u.sendEmailVerification());
       if (mounted.current) {
         // Success and failure states are exclusive.
         setOkMsg(STR.emailSent);
