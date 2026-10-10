@@ -105,6 +105,12 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     // Site chrome (Group C) — verbatim from js/i18n.ar.js (js/app.js renderChrome parity).
     menu: 'القائمة', close: 'إغلاق', home: 'الرئيسية', wanted: 'مطلوب',
     announcements: 'إعلانات الفريق', messages: 'الرسائل', alerts: 'التنبيهات',
+    // Team announcements (Round 120) — verbatim from js/i18n.ar.js unless noted.
+    share: 'مشاركة', readMore: 'اقرأ المزيد',
+    announcementNotFound: 'الإعلان غير موجود.', announcementLink: 'زيارة الرابط',
+    noAnnouncements: 'لا توجد إعلانات رسمية حالياً',
+    annSearchPh: 'ابحث في الإعلانات...', // port-added (AnnList search placeholder)
+    annSearchEmpty: 'لا توجد إعلانات مطابقة لبحثك.', // port-added (AnnList search empty state)
     allRights: 'دلالة — سوق الجزائر الحر',
     guidesTitle: 'أدلة الشراء', guideCar: 'دليل السيارات', guidePrices: 'دليل الأسعار',
     guidePhone: 'دليل الهواتف', guideScam: 'دليل الحماية من الاحتيال',
@@ -408,6 +414,12 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     // Site chrome (Group C) — verbatim from js/i18n.fr.js (js/app.js renderChrome parity).
     menu: 'Menu', close: 'Fermer', home: 'Accueil', wanted: 'Recherché',
     announcements: "Annonces de l'équipe", messages: 'Messages', alerts: 'Alertes',
+    // Team announcements (Round 120) — verbatim from js/i18n.fr.js unless noted.
+    share: 'Partager', readMore: 'Lire la suite',
+    announcementNotFound: 'Annonce introuvable.', announcementLink: 'Visiter le lien',
+    noAnnouncements: 'Aucune annonce officielle pour le moment',
+    annSearchPh: 'Rechercher dans les annonces...', // port-added (AnnList search placeholder)
+    annSearchEmpty: 'Aucune annonce ne correspond à votre recherche.', // port-added (AnnList search empty state)
     allRights: 'DLALA — le souk libre d’Algérie',
     guidesTitle: 'Guides d’achat', guideCar: 'Guide voitures', guidePrices: 'Guide des prix',
     guidePhone: 'Guide téléphones', guideScam: 'Guide anti-arnaques',
@@ -711,6 +723,12 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     // Site chrome (Group C) — verbatim from js/i18n.en.js (js/app.js renderChrome parity).
     menu: 'Menu', close: 'Close', home: 'Home', wanted: 'Wanted',
     announcements: 'Team announcements', messages: 'Messages', alerts: 'Alerts',
+    // Team announcements (Round 120) — verbatim from js/i18n.en.js unless noted.
+    share: 'Share', readMore: 'Read more',
+    announcementNotFound: 'Announcement not found.', announcementLink: 'Visit link',
+    noAnnouncements: 'No official announcements right now',
+    annSearchPh: 'Search announcements...', // port-added (AnnList search placeholder)
+    annSearchEmpty: 'No announcements match your search.', // port-added (AnnList search empty state)
     allRights: 'DLALA — Algeria’s free souk',
     guidesTitle: 'Buying guides', guideCar: 'Car guide', guidePrices: 'Price guide',
     guidePhone: 'Phone guide', guideScam: 'Scam protection guide',

@@ -1098,11 +1098,14 @@ function restAnnouncement(doc: { name: string; fields?: Record<string, unknown> 
 }
 
 // Localized map lookup — js/announcements.js annLocalized (verbatim logic):
-// explicit string passes through; map prefers Arabic, then fr/en.
-export function annLocalized(map: string | Record<string, string> | undefined): string {
+// explicit string passes through; map prefers the UI language, then ar/fr/en.
+// Round 120 restores the dropped `lang` parameter (the port always preferred
+// Arabic, so FR/EN users saw Arabic titles even when a localized version existed).
+export function annLocalized(map: string | Record<string, string> | undefined, lang: string = 'ar'): string {
   if (!map) return '';
   if (typeof map === 'string') return map;
-  return map.ar || map.fr || map.en || '';
+  const L = lang || 'ar';
+  return map[L] || map.ar || map.fr || map.en || '';
 }
 
 // Defense in depth: only http(s) URLs become clickable links
