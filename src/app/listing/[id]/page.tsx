@@ -45,6 +45,7 @@ import OwnerSellerCard from './OwnerSellerCard';
 import FollowButton from '@/components/FollowButton';
 import ReportUserButton from '@/components/ReportUserButton';
 import Gallery from './Gallery';
+import { lqipUrlFor } from '@/lib/image-variants';
 import MatchingOffers, { type MatchOfferDoc } from './MatchingOffers';
 import TasteViewRecorder from './TasteViewRecorder';
 import ViewRecorder from './ViewRecorder';
@@ -270,6 +271,11 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   const l = listing;
   const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
+  // 0.0.0.1s per-index thumbnail preference (js/app.js detailInnerHtml):
+  // photo_thumbs, then legacy thumbUrls, then the full photo.
+  const thumbs = photos.map(
+    (p, i) => (l.photo_thumbs && l.photo_thumbs[i]) || (l.thumbUrls && l.thumbUrls[i]) || p
+  );
   const title = cardTitle(l);
   // Per-listing JSON-LD (js/seo.js listingJsonLd parity). Rendered as a
   // script tag — crawlers read JSON-LD anywhere in the HTML. '<' is
@@ -347,8 +353,16 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         />
       )}
       {/* Gallery — clickable thumbnails + fullscreen lightbox
-          (client component; mirrors js/listing.js LIS-8 gallery). */}
-      <Gallery photos={photos} fallback={cardImage(l)} title={title} />
+          (client component; mirrors js/listing.js LIS-8 gallery,
+          LIS-9 progressive hero, LIS-10 idle prewarm). */}
+      <Gallery
+        photos={photos}
+        fallback={cardImage(l)}
+        title={title}
+        hasVariants={!!l.photoVariants}
+        heroLqip={lqipUrlFor(l)}
+        thumbs={thumbs}
+      />
 
       {/* Head: title / price / meta */}
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">

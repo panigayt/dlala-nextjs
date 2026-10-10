@@ -30,3 +30,12 @@ body {
 .img-blurup { filter: blur(12px); clip-path: inset(0); }
 .img-blurup.hi { filter: blur(0); transition: filter .45s ease; }
 @media (prefers-reduced-motion: reduce) { .img-blurup.hi { transition: none; } }
+
+/* Gallery progressive hero (js/listing.js LIS-9 parity): the hero paints
+   blurred while it shows the instant LQIP/thumb, then unblurs when the
+   W640/W1024 upgrade arrives. Same 12px / .45s treatment as .img-blurup,
+   but managed by the gallery's own probe chain — the Speed-29 delegated
+   handler only claims .img-blurup, so the hero never gets double-driven. */
+.g-hero { transition: filter .45s ease; }
+.g-hero.blurred { filter: blur(12px); }
+@media (prefers-reduced-motion: reduce) { .g-hero { transition: none; } }

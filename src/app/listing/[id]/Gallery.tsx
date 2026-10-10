@@ -14,8 +14,15 @@
 //   (2.5x, centered on the tap point); dragging pans while zoomed;
 //   switching photos ALWAYS resets to the normal size. Zoom math lives
 //   in ./zoom.ts (verbatim port of the lbView helpers in js/listing.js).
+// - LIS-9 (16 Sep 2026): progressive hero — instant paint from the w32
+//   LQIP (photo 0) or the strip thumb, then upgrade to the W640/W1024
+//   hero variant on arrival (probe chain: variant → full → keep paint).
+//   Prewarm math lives in ./gallery-prewarm.ts.
+// - LIS-10 (24 Sep 2026, Zak): on idle, warm the next 1–2 photos'
+//   display URLs + their strip thumbs so tapping through is instant;
+//   skipped on metered/2G.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LB_SWIPE_MIN,
   LB_TAP_MAX_DELAY,
@@ -26,6 +33,16 @@ import {
   lbZoomToggle,
   type ZoomState,
 } from './zoom';
+import {
+  displayUrlFor,
+  isMeteredOrSlow,
+  isMobileWidth,
+  prewarmOnIdle,
+  prewarmTargets,
+  probeImage,
+  warmImage,
+  type ConnectionLike,
+} from './gallery-prewarm';
 
 const AR_CLOSE = 'إغلاق';
 const AR_PREV = 'الصورة السابقة';
@@ -36,12 +53,24 @@ export default function Gallery({
   photos,
   fallback,
   title,
+  hasVariants = false,
+  heroLqip = '',
+  thumbs = [],
 }: {
   photos: string[];
   fallback: string;
   title: string;
+  // LIS-9/LIS-10: the publish pipeline wrote W-series variants (R11+).
+  hasVariants?: boolean;
+  // Speed 29: w32 LQIP for photo 0 ('' = none — old listing).
+  heroLqip?: string;
+  // 0.0.0.1s per-index strip thumbs (photo_thumbs → thumbUrls → full).
+  thumbs?: string[];
 }) {
-  const all = photos.length ? photos : fallback ? [fallback] : [];
+  const all = useMemo(
+    () => (photos.length ? photos : fallback ? [fallback] : []),
+    [photos, fallback]
+  );
   const [sel, setSel] = useState(0);
   const [lbOpen, setLbOpen] = useState(false);
   const [lbIdx, setLbIdx] = useState(0);
@@ -53,6 +82,94 @@ export default function Gallery({
   const zoomRef = useRef<ZoomState>({ z: 1, x: 0, y: 0 });
 
   const zoomReset = useCallback(() => lbResetZoom(imgRef.current, zoomRef.current), []);
+
+  // LIS-9 (16 Sep 2026): progressive main photo. The hero paints instantly
+  // from the (likely cached) thumbnail — the w32 LQIP for photo 0 — then
+  // upgrades to the display URL (W640/W1024 hero when the publish pipeline
+  // wrote variants, else the full photo) on arrival.
+  // Probe chain: variant → full photo → keep the instant paint.
+  // The instant src is derived at render (no effect needed); the effect
+  // below only applies the async upgrade. The blur is managed by this
+  // component's own probe chain (the Speed-29 delegated handler only
+  // claims .img-blurup, which the hero never gets).
+  const selClamped = all.length ? Math.max(0, Math.min(sel, all.length - 1)) : 0;
+  const instantSrc =
+    selClamped === 0 && heroLqip
+      ? heroLqip
+      : thumbs[selClamped] || all[selClamped] || '';
+  // The async upgrade, keyed by photo index (a stale upgrade for the same
+  // photo is still the right bytes, so it is reused, not discarded).
+  const [upgrade, setUpgrade] = useState<{ sel: number; src: string } | null>(
+    null
+  );
+  const shownSrc =
+    upgrade && upgrade.sel === selClamped ? upgrade.src : instantSrc;
+  const shownSharp =
+    upgrade && upgrade.sel === selClamped ? true : instantSrc !== heroLqip;
+  // Token guards the async probe chain against rapid photo switching.
+  const probeToken = useRef(0);
+
+  useEffect(() => {
+    if (!all.length) return;
+    const token = ++probeToken.current;
+    const i = selClamped;
+    const full = all[i];
+    const instant = instantSrc;
+    let cancelled = false;
+    const alive = () => !cancelled && probeToken.current === token;
+    void (async () => {
+      const target = displayUrlFor(full, hasVariants, isMobileWidth());
+      if (target === instant) return; // already at the best version
+      try {
+        await probeImage(target);
+        if (alive()) setUpgrade({ sel: i, src: target });
+        return;
+      } catch {
+        // Variant missing (pre-0.0.0.1w listing): fall back to the full photo.
+      }
+      if (target !== full) {
+        try {
+          await probeImage(full);
+          if (alive()) setUpgrade({ sel: i, src: full });
+        } catch {
+          // Keep the instant paint — better than a broken image.
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // instantSrc is derived from selClamped/thumbs/heroLqip/all above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selClamped, all, thumbs, heroLqip, hasVariants]);
+
+  // LIS-10 (24 Sep 2026, Zak: «باقي الصور تاخذ وقت كبير لكي تحمل»): warm
+  // the next 1–2 photos' display URLs (+ their strip thumbs, LIS-10b) on
+  // idle, right after the first paint — tapping through the gallery is
+  // then instant instead of seconds. Skipped on metered/2G (0.0.0.21
+  // Step 3). Re-armed when the selection moves so the 1–2-ahead window
+  // stays correct as the user taps through (legacy ran once at hydration).
+  useEffect(() => {
+    if (all.length < 2) return;
+    prewarmOnIdle(() => {
+      try {
+        const nav = typeof navigator !== 'undefined' ? navigator : undefined;
+        const conn = (nav as unknown as { connection?: ConnectionLike } | undefined)
+          ?.connection;
+        if (isMeteredOrSlow(conn)) return;
+        const targets = prewarmTargets(
+          all,
+          thumbs,
+          selClamped,
+          hasVariants,
+          isMobileWidth()
+        );
+        targets.forEach((u) => warmImage(u));
+      } catch {
+        /* prewarm must never break the page */
+      }
+    });
+  }, [selClamped, all, thumbs, hasVariants]);
 
   const openLightbox = useCallback((idx: number) => {
     openerRef.current =
@@ -204,9 +321,13 @@ export default function Gallery({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={all[sel]}
+          src={shownSrc}
           alt={`${title} — صورة ${sel + 1}/${all.length}`}
-          className="w-full aspect-[4/3] object-cover"
+          className={
+            'w-full aspect-[4/3] object-cover g-hero' + (shownSharp ? '' : ' blurred')
+          }
+          fetchPriority="high"
+          decoding="async"
         />
       </button>
       {all.length > 1 && (
@@ -225,9 +346,10 @@ export default function Gallery({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={p}
+                src={thumbs[i] || p}
                 alt=""
-                loading="lazy"
+                loading={i === 0 ? 'eager' : 'lazy'}
+                decoding="async"
                 className="w-20 h-20 object-cover"
               />
             </button>
