@@ -631,22 +631,28 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   // parity (owner actions are Edit, Delete, Share).
   const showBuyerActions = !(auth.status === 'signed-in' && isOwn);
 
+  // Round 138: 0.0.0.39 parity — actions live in a bordered card
+  // (.detail-box.actions-card), 2-col grid, compact 12.5px buttons.
+  // Primary (offer/contact): solid emerald. fav/share/report: #eef4f1
+  // bg + emerald text; fav.on -> solid emerald. Orders mirror the legacy
+  // CSS (offer 1, contact 2, fav 3, share 4, report 5 full-width).
+  const BTN_BASE =
+    'px-1 py-2 text-[12.5px] font-bold rounded-lg border-0 transition disabled:opacity-50 disabled:cursor-not-allowed ';
+  const BTN_PRIMARY = 'bg-[#0b6b4f] text-white hover:bg-[#085c43] ';
+  const BTN_SECONDARY = 'bg-[#eef4f1] text-[#0b6b4f] hover:bg-[#dfe9e4] ';
+
   return (
-    <div className="mt-4 flex flex-wrap gap-3">
+    <div className="mt-[14px] rounded-xl bg-white border border-[#e5e7eb] p-[10px]">
+      <div className="grid grid-cols-2 gap-[6px]">
       {showBuyerActions && (
         <button
           type="button"
-          onClick={onFavoriteTap}
-          aria-pressed={fav === true}
-          aria-busy={fav === null}
-          className={
-            'rounded-lg px-5 py-2.5 font-bold border transition ' +
-            (fav === true
-              ? 'bg-red-50 border-red-300 text-red-600'
-              : 'bg-white border-zinc-300 text-zinc-700 hover:border-red-300')
-          }
+          onClick={onProposeClick}
+          disabled={sold || offerSending}
+          title={sold ? t('soldNotice') : undefined}
+          className={BTN_BASE + BTN_PRIMARY + 'order-1'}
         >
-          {fav === true ? '♥' : '♡'} {t('favorites')}
+          {offerSending ? t('loading') : `💰 ${t('proposePrice')}`}
         </button>
       )}
       {showBuyerActions && (
@@ -655,12 +661,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           onClick={onContact}
           disabled={sold || contacting}
           title={sold ? t('soldNotice') : undefined}
-          className={
-            'rounded-lg px-5 py-2.5 font-bold text-white transition ' +
-            (sold || contacting
-              ? 'bg-emerald-700 opacity-50 cursor-not-allowed'
-              : 'bg-emerald-700 hover:bg-emerald-800')
-          }
+          className={BTN_BASE + BTN_PRIMARY + 'order-2'}
         >
           {contacting ? t('contacting') : t('contactSeller')}
         </button>
@@ -668,23 +669,24 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       {showBuyerActions && (
         <button
           type="button"
-          onClick={onProposeClick}
-          disabled={sold || offerSending}
-          title={sold ? t('soldNotice') : undefined}
+          onClick={onFavoriteTap}
+          aria-pressed={fav === true}
+          aria-busy={fav === null}
           className={
-            'rounded-lg px-5 py-2.5 font-bold border bg-white transition ' +
-            (sold || offerSending
-              ? 'border-zinc-300 text-zinc-400 opacity-50 cursor-not-allowed'
-              : 'border-amber-400 text-amber-700 hover:border-amber-500')
+            BTN_BASE +
+            'order-3 ' +
+            (fav === true
+              ? 'bg-[#0b6b4f] text-white'
+              : BTN_SECONDARY + (fav === null ? 'opacity-55' : ''))
           }
         >
-          {offerSending ? t('loading') : `💰 ${t('proposePrice')}`}
+          {fav === true ? '♥' : '♡'} {t('favorites')}
         </button>
       )}
       <button
         type="button"
         onClick={onShare}
-        className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
+        className={BTN_BASE + BTN_SECONDARY + 'order-4'}
       >
         ↗ {t('shareAd')}
       </button>
@@ -692,7 +694,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         <button
           type="button"
           onClick={onReportClick}
-          className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-red-300"
+          className={BTN_BASE + BTN_SECONDARY + 'order-5 col-span-2'}
         >
           ⚑ {t('reportAd')}
         </button>
@@ -704,7 +706,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
+            className={BTN_BASE + BTN_PRIMARY + 'order-6'}
           >
             ✏️ {t('edit')}
           </button>
@@ -712,12 +714,13 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             type="button"
             onClick={onDelete}
             disabled={deleting}
-            className="rounded-lg px-5 py-2.5 font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+            className={BTN_BASE + 'order-7 bg-red-600 text-white hover:bg-red-700'}
           >
             {deleting ? t('deleting') : `🗑 ${t('delete')}`}
           </button>
         </>
       )}
+      </div>
       {shareOpen && (
         <Modal title={t('shareAd')} onClose={() => setShareOpen(false)}>
           <div className="flex flex-wrap gap-2">

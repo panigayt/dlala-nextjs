@@ -171,10 +171,10 @@ export function SellerCardBody({
               className="w-12 h-12 rounded-full object-cover shrink-0"
             />
           )}
-          <span className="font-bold truncate">
+          <span className="font-bold truncate text-zinc-900">
             <Link
               href={`/seller/${sellerId}`}
-              className="text-emerald-700 hover:underline"
+              className="hover:underline"
             >
               {name}
             </Link>
@@ -188,17 +188,20 @@ export function SellerCardBody({
         </div>
       </div>
       {ratingRow && <p className="mt-1 text-sm text-zinc-500">{ratingRow}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
+      {/* Round 138: legacy .seller-card .btn parity — solid emerald
+          view-store/page (flex:1), #eef4f1 report-user; 8px padding,
+          12.5px font, 8px radius (style-listing.css). */}
+      <div className="mt-2 flex gap-2">
         <Link
           href={`/seller/${sellerId}`}
-          className="rounded-lg border border-zinc-300 bg-white px-4 py-2 font-bold text-zinc-700 hover:border-emerald-500"
+          className="flex-1 rounded-lg bg-[#0b6b4f] px-2 py-2 text-[12.5px] font-bold text-white text-center hover:bg-[#085c43]"
         >
           {isPro ? t('viewStore') : t('viewProfile')}
         </Link>
         <ReportUserButton
           uid={sellerId}
           targetTitle={displayName || ''}
-          className="rounded-lg border border-zinc-300 bg-white px-4 py-2 font-bold text-zinc-700 hover:border-red-300"
+          className="flex-1 rounded-lg bg-[#eef4f1] px-2 py-2 text-[12.5px] font-bold text-[#0b6b4f] text-center hover:bg-[#dfe9e4]"
         />
       </div>
     </>
