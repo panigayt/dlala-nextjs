@@ -70,7 +70,7 @@ function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: str
 // --- Firestore helpers (js/auth.js parity) ---
 
 interface DocRefLike {
-  get: () => Promise<{ exists: () => boolean }>;
+  get: () => Promise<{ exists: boolean }>;
 }
 
 function fieldValue(fb: FirebaseCompat) {
@@ -83,7 +83,7 @@ function fieldValue(fb: FirebaseCompat) {
 async function ensureUserDoc(fb: FirebaseCompat, uid: string, name: string, username: string): Promise<void> {
   const db = fb.firestore();
   const snap = await withTimeout((db.doc('users/' + uid) as unknown as DocRefLike).get());
-  if (snap.exists()) return;
+  if (snap.exists) return;
   const batch = db.batch();
   batch.set(db.doc('users/' + uid), {
     name: name || '',
@@ -123,7 +123,7 @@ async function claimUsername(
     if (!/^[a-z0-9._]{3,20}$/.test(c)) continue;
     try {
       const snap = await withTimeout((db.doc('usernames/' + c) as unknown as DocRefLike).get());
-      if (!snap.exists()) return c;
+      if (!snap.exists) return c;
     } catch {
       // treat as taken, try the next candidate
     }
@@ -251,7 +251,7 @@ export default function AuthPage() {
         const snap = await withTimeout(
           (fb.firestore().doc('users/' + cred.user.uid) as unknown as DocRefLike).get()
         );
-        if (!snap.exists()) {
+        if (!snap.exists) {
           let nm = cred.user.displayName || '';
           let un: string | null = null;
           try {
@@ -353,7 +353,7 @@ export default function AuthPage() {
       const regSnap = await withTimeout(
         (fb.firestore().doc('usernames/' + handle) as unknown as DocRefLike).get()
       );
-      if (regSnap.exists()) {
+      if (regSnap.exists) {
         if (mounted.current) {
           setError(t('usernameTaken'));
           setLoading(false);
