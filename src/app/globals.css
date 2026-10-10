@@ -85,3 +85,32 @@ body {
 .rf-name { font-weight: 700; font-size: 14px; }
 .rf-name .uname { color: #6b7280; font-weight: 400; font-size: 12px; }
 .section-title { font-size: 16px; font-weight: 800; margin: 2px 2px 10px; }
+
+/* Tips ticker — auto-rotating safety tips (15 Sep 2026, ported from the Android app).
+   Verbatim from ~/workspace/dlala-040/css/style.css — Round 122. */
+.tips-ticker {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff8e6; border: 1px solid #f0dfae; border-radius: 10px;
+  padding: 8px 12px; margin-bottom: 12px; cursor: pointer;
+  font-size: 13px; color: #6b5518; min-height: 20px;
+}
+.tips-icon { flex-shrink: 0; }
+.tips-text { transition: opacity .35s ease, transform .35s ease; }
+.tips-text.tips-out { opacity: 0; transform: translateY(6px); }
+.tips-text.tips-in { opacity: 1; transform: translateY(0); }
+/* A-09 (0.0.0.21): no slide animation while the user hovers/focuses the
+   ticker (the 4s rotation interval itself is paused by the pause toggle). */
+.tips-ticker:hover .tips-text,
+.tips-ticker:focus-within .tips-text { transition: none; }
+.tips-ticker:focus-visible { outline: 2px solid var(--emerald); outline-offset: 2px; }
+/* 0.0.0.40: tips pause button — prevent overlap with text on mobile */
+.tips-pause-btn {
+  flex-shrink: 0;
+  margin-inline-start: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  color: inherit;
+}

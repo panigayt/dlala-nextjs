@@ -322,6 +322,16 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     storeWilayaLabel: 'مكان النشاط (الولاية)',
     storeWilayaPlaceholder: 'اختر الولاية',
     storeRequestedHint: 'سنراجع طلبك ونعلمك بالنتيجة.', // [port] — no legacy key
+    // Tips ticker (js/home.js initTipsTicker — verbatim js/i18n.ar.js)
+    tip1: 'لا تدفع أي مبلغ مسبقاً قبل معاينة المنتج بنفسك',
+    tip2: 'يفضّل اختيار المنتجات القريبة منك لتتمكن من معاينتها',
+    tip3: 'بلّغ عن أي إعلان مشبوه أو أي مشكلة تواجهك',
+    tip4: 'قابل البائع في مكان عام وآمن',
+    tip5: 'اللهم ارزقنا رزقاً حلالاً طيباً وبارك لنا فيه',
+    tip6: 'أستغفر الله العظيم وأتوب إليه',
+    tipsPause: 'إيقاف النصائح مؤقتًا',
+    tipsPlay: 'استئناف النصائح',
+    safetyTips: 'نصائح السلامة',
   },
   fr: {
     account: 'Mon compte', settings: 'Paramètres', myAds: 'Mes annonces', myFollows: 'Mes abonnements',
@@ -634,6 +644,16 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     storeWilayaLabel: "Wilaya d'activité",
     storeWilayaPlaceholder: 'Choisir la wilaya',
     storeRequestedHint: 'Nous examinerons votre demande et vous informerons du résultat.', // [port] — no legacy key
+    // Tips ticker (js/home.js initTipsTicker — verbatim js/i18n.fr.js)
+    tip1: 'Ne versez jamais d’argent à l’avance avant d’avoir vu le produit',
+    tip2: 'Préférez les produits près de chez vous pour les inspecter vous-même',
+    tip3: 'Signalez toute annonce suspecte ou tout problème rencontré',
+    tip4: 'Rencontrez le vendeur dans un lieu public et sûr',
+    tip5: 'Ô Allah, accorde-nous une subsistance licite et pure, et bénis-la',
+    tip6: 'Je demande pardon à Allah et je me repens à Lui',
+    tipsPause: 'Mettre les conseils en pause',
+    tipsPlay: 'Reprendre les conseils',
+    safetyTips: 'Conseils de sécurité',
   },
   en: {
     account: 'My account', settings: 'Settings', myAds: 'My ads', myFollows: 'My follows',
@@ -946,6 +966,16 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     storeWilayaLabel: 'Business wilaya',
     storeWilayaPlaceholder: 'Select wilaya',
     storeRequestedHint: 'We will review your request and notify you of the outcome.', // [port] — no legacy key
+    // Tips ticker (js/home.js initTipsTicker — verbatim js/i18n.en.js)
+    tip1: 'Never pay any money in advance before inspecting the product yourself',
+    tip2: 'Prefer products near you so you can inspect them yourself',
+    tip3: 'Report any suspicious ad or any problem you encounter',
+    tip4: 'Meet the seller in a public, safe place',
+    tip5: 'O Allah, grant us lawful, pure sustenance and bless it',
+    tip6: 'I seek Allah’s forgiveness and repent to Him',
+    tipsPause: 'Pause tips',
+    tipsPlay: 'Resume tips',
+    safetyTips: 'Safety tips',
   },
 };
 

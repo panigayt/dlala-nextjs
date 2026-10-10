@@ -10,6 +10,7 @@
 // onLangChange() parity.
 
 import HomeHeader from '@/components/HomeHeader';
+import TipsTicker from '@/components/TipsTicker';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
 import { resultsCountText, type ListingCard } from '@/lib/firestore';
 import { useLang } from '@/lib/i18n';
@@ -35,6 +36,8 @@ export default function HomePage({
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {/* Round 122: tips ticker above the search bar — legacy index.html order. */}
+        <TipsTicker />
         <HomeHeader />
         <h2 className="text-lg font-semibold text-zinc-800 mb-4">{t('latestAds')}</h2>
 
