@@ -17,6 +17,7 @@ import {
   btnSecondaryCls,
 } from '@/lib/firebase-client';
 import { formatPrice, timeAgo } from '@/lib/firestore';
+import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 
 // Verbatim strings (i18n.ar.js; hideChat*/undo from CHAT_L10N.ar)
 const STR = {
@@ -73,6 +74,36 @@ function tsMs(v: unknown): number {
     if (typeof o.seconds === 'number') return o.seconds * 1000;
   }
   return 0;
+}
+
+// 0.0.0.22 (Zak): instant paint — last conversations render from
+// localStorage, before the SDKs/auth/network. The live subscription then
+// refreshes silently. Returns { convs, names, listings } or null.
+function paintConvsSnapshot(): {
+  convs: Conv[];
+  names: Record<string, string>;
+  listings: Record<string, { title: string; photo: string }>;
+} | null {
+  const snap = snapshotRead<{
+    convs?: Record<string, unknown>[];
+    names?: Record<string, string>;
+    listings?: Record<string, { title: string; photo: string }>;
+  }>('convs');
+  if (!snap || !snap.data || !Array.isArray(snap.data.convs) || !snap.data.convs.length)
+    return null;
+  try {
+    const convs = snap.data.convs
+      .filter((c) => c && (c as { id?: unknown }).id)
+      .map((c) => ({ ...c, id: String((c as { id: unknown }).id) }) as Conv);
+    if (!convs.length) return null;
+    return {
+      convs,
+      names: snap.data.names || {},
+      listings: snap.data.listings || {},
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Algerian phone shapes redacted in list previews (privacy) — mirrors
@@ -202,6 +233,11 @@ export default function ConversationsPage() {
         for (const [id, info] of listingEntries) next[id] = info;
         return next;
       });
+      // Return fresh maps for snapshot writing (0.0.0.22).
+      return {
+        names: Object.fromEntries(nameEntries),
+        listings: Object.fromEntries(listingEntries),
+      };
     },
     []
   );
@@ -227,7 +263,30 @@ export default function ConversationsPage() {
           .filter((c) => !(c.hiddenFor || []).includes(uid))
           .sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt));
         setConvs(docs);
-        loadMeta(docs, uid, client);
+        // 0.0.0.22 (Zak): save the fresh render for instant paint on next
+        // boot. Best-effort; the live subscription is the source of truth.
+        loadMeta(docs, uid, client).then((meta) => {
+          try {
+            snapshotWrite('convs', uid, {
+              convs: docs.map((c) => ({
+                id: c.id,
+                participants: c.participants || [],
+                lastMessage: c.lastMessage || null,
+                unread: c.unread || {},
+                listingId: c.listingId || '',
+                hiddenFor: c.hiddenFor || [],
+                updatedAt: snapMs(c.updatedAt),
+                createdAt: snapMs(c.createdAt),
+              })),
+              names: meta.names,
+              listings: meta.listings,
+            });
+          } catch {
+            /* best-effort */
+          }
+        }).catch(() => {
+          /* meta load failed — skip snapshot */
+        });
       };
       const onErr = () => {
         setError(STR.errorGeneric);
@@ -259,6 +318,20 @@ export default function ConversationsPage() {
     if (authState.status !== 'signed-in') return;
     clientRef.current = authState.client;
     userRef.current = authState.user;
+    /* eslint-disable react-hooks/set-state-in-effect -- 0.0.0.22 instant paint: synchronous snapshot paint on mount */
+    // 0.0.0.22 (Zak): paint the last good render synchronously, before the
+    // live subscription delivers. The subscription then refreshes silently.
+    try {
+      const cached = paintConvsSnapshot();
+      if (cached) {
+        setConvs(cached.convs);
+        setNames(cached.names);
+        setListings(cached.listings);
+      }
+    } catch {
+      /* fall through to the live path */
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
     subscribe(authState.client, authState.user);
     const onVis = () => {
       if (

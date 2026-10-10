@@ -22,6 +22,7 @@ import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { stripExif } from '@/lib/stripExif';
 import { useLang } from '@/lib/i18n';
+import { snapshotRead, snapshotWrite } from '@/lib/snapshot';
 
 interface ProfileData {
   name?: string;
@@ -36,6 +37,25 @@ interface ProfileData {
 }
 
 type ProfileState = 'loading' | 'error' | 'empty' | 'ready';
+
+// 0.0.0.22 (Zak): instant paint — last profile from localStorage, before the
+// SDKs/auth/network. Silently refreshed by loadProfile().
+function paintProfileSnapshot(): ProfileData | null {
+  const snap = snapshotRead<ProfileData>('profile');
+  if (!snap || !snap.data) return null;
+  try {
+    const d = snap.data;
+    if (!d || typeof d !== 'object') return null;
+    return {
+      name: d.name || '',
+      username: d.username || '',
+      bio: d.bio || '',
+      photoPath: d.photoPath || '',
+    };
+  } catch {
+    return null;
+  }
+}
 
 type DbLike = {
   doc: (p: string) => {
@@ -119,7 +139,25 @@ function AccountContent({ user }: { user: CompatUser }) {
 
   // ---- Load profile ----------------------------------------------------------
   const loadProfile = useCallback(async () => {
-    setState('loading');
+    // 0.0.0.22 (Zak): a snapshot already painted stays — refresh silently.
+    // Check synchronously before any await.
+    let paintedFromCache = false;
+    try {
+      const cached = paintProfileSnapshot();
+      if (cached && mounted.current) {
+        setProfData(cached);
+        setName(cached.name || '');
+        setUsername(cached.username || '');
+        setBio(cached.bio || '');
+        setState('ready');
+        paintedFromCache = true;
+      }
+    } catch {
+      /* fall through to the live path */
+    }
+    if (!paintedFromCache) {
+      setState('loading');
+    }
     setLoadErr(null);
     try {
       const fb = await getFirebase();
@@ -138,11 +176,25 @@ function AccountContent({ user }: { user: CompatUser }) {
       setStoreName(raw.storeName || '');
       setStoreBio(raw.storeBio || '');
       setState('ready');
+      // 0.0.0.22 (Zak): save for instant paint on next boot.
+      try {
+        snapshotWrite('profile', user.uid, {
+          name: raw.name || '',
+          username: raw.username || '',
+          bio: raw.bio || '',
+          photoPath: raw.photoPath || '',
+        });
+      } catch {
+        /* best-effort */
+      }
     } catch (e) {
       console.error(e);
       if (!mounted.current) return;
-      setLoadErr(t('errorGeneric'));
-      setState('error');
+      // If snapshot was painted, keep it on error (silent refresh failed).
+      if (!paintedFromCache) {
+        setLoadErr(t('errorGeneric'));
+        setState('error');
+      }
     }
   }, [user.uid, t]);
 

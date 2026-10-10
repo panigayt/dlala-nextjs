@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang } from '@/lib/i18n';
+import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 
 const FOLLOW_SEEN_KEY = 'dlala_followseen_v1';
 const FOLLOWS_NEW_MS = 7 * 86400000;
@@ -62,6 +63,26 @@ function followHasNew(seenMs: number | undefined, newestMs: number | undefined, 
   if (!newestMs) return false;
   if (nowMs - newestMs > FOLLOWS_NEW_MS) return false;
   return newestMs > (seenMs || 0);
+}
+
+// 0.0.0.22 (Zak): instant paint — last follows render from localStorage,
+// before the SDKs/auth/network. The page then refreshes silently.
+function paintFollowsSnapshot(): { row: FollowRow; user: FollowedUser }[] | null {
+  const snap = snapshotRead<{ rows?: { storeId: string; createdAt?: number }[]; users?: Record<string, FollowedUser> }>('follows');
+  if (!snap || !snap.data || !Array.isArray(snap.data.rows) || !snap.data.rows.length)
+    return null;
+  try {
+    const users = snap.data.users || {};
+    const rows = snap.data.rows
+      .filter((r) => r && r.storeId)
+      .map((r) => ({
+        row: { storeId: String(r.storeId), createdAt: r.createdAt || 0 },
+        user: users[r.storeId] || {},
+      }));
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
 }
 
 function toMs(v: unknown): number {
@@ -193,6 +214,28 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
       );
       if (!mounted.current) return;
       setRows(followRows.map((row) => ({ row, user: users[row.storeId] || {} })));
+      // 0.0.0.22 (Zak): save for instant paint on next boot.
+      try {
+        snapshotWrite('follows', user.uid, {
+          rows: followRows.map((r) => ({ storeId: r.storeId, createdAt: snapMs(r.createdAt) })),
+          users: Object.fromEntries(
+            Object.entries(users).map(([k, u]) => [
+              k,
+              {
+                storeName: u.storeName || '',
+                name: u.name || '',
+                username: u.username || '',
+                followerCount: Number(u.followerCount) || 0,
+                rating: Number(u.rating) || 0,
+                ratingCount: Number(u.ratingCount) || 0,
+                storeTier: u.storeTier || '',
+              },
+            ])
+          ),
+        });
+      } catch {
+        /* best-effort */
+      }
       paintNewBadges(db, followRows.map((r) => r.storeId));
     } catch (e) {
       if (!mounted.current) return;
@@ -204,6 +247,14 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
   /* eslint-disable react-hooks/set-state-in-effect -- data fetch on mount, guarded by mounted ref */
   useEffect(() => {
     mounted.current = true;
+    // 0.0.0.22 (Zak): paint the last good render synchronously, before the
+    // SDKs/auth/network. load() then refreshes silently in the background.
+    try {
+      const cached = paintFollowsSnapshot();
+      if (cached) setRows(cached);
+    } catch {
+      /* fall through to the live path */
+    }
     load();
     return () => {
       mounted.current = false;

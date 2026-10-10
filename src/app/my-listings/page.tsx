@@ -19,6 +19,7 @@ import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
 import { deleteR2Objects } from '@/lib/r2-upload';
+import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 
 interface OwnListing {
   id: string;
@@ -50,6 +51,23 @@ function listingImg(l: OwnListing): string {
   if (Array.isArray(l.photoUrls) && l.photoUrls[0]) return l.photoUrls[0];
   if (Array.isArray(l.thumbUrls) && l.thumbUrls[0]) return l.thumbUrls[0];
   return '';
+}
+
+// 0.0.0.22 (Zak): instant paint — last my-listings render from localStorage,
+// before the SDKs/auth/network. The page then refreshes silently.
+// Projection matches exactly what the card render reads (js/my-listings.js).
+function paintMyAdsSnapshot(): OwnListing[] | null {
+  const snap = snapshotRead<{ docs?: Record<string, unknown>[] }>('mylistings');
+  if (!snap || !snap.data || !Array.isArray(snap.data.docs) || !snap.data.docs.length)
+    return null;
+  try {
+    const docs = snap.data.docs
+      .filter((d) => d && d.id)
+      .map((d) => ({ ...(d as object), id: String((d as { id: unknown }).id) }) as OwnListing);
+    return docs.length ? docs : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function MyListingsPage() {
@@ -88,7 +106,32 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         20000
       );
       if (!mounted.current) return;
-      setListings(snap.docs.map((d) => ({ ...(d.data() as OwnListing), id: d.id })));
+      const docs = snap.docs.map((d) => ({ ...(d.data() as OwnListing), id: d.id }));
+      setListings(docs);
+      // 0.0.0.22 (Zak): save for instant paint on next boot.
+      // Projection matches exactly what the card render reads.
+      try {
+        snapshotWrite('mylistings', user.uid, {
+          docs: docs.map((l) => ({
+            id: l.id,
+            title: l.title || '',
+            price: l.price || 0,
+            photoUrls: (l.photoUrls || []).slice(0, 2),
+            thumbUrls: ((l.photo_thumbs && l.photo_thumbs.length ? l.photo_thumbs : l.thumbUrls) || []).slice(0, 2),
+            status: l.status || '',
+            categoryId: l.categoryId || '',
+            wilayaCode: l.wilayaCode || 0,
+            createdAt: snapMs(l.createdAt),
+            previousPrice: l.previousPrice || 0,
+            priceReduced: !!l.priceReduced,
+            sellerId: l.sellerId || '',
+            isWholesale: !!l.isWholesale,
+            isWanted: !!l.isWanted,
+          })),
+        });
+      } catch {
+        /* best-effort */
+      }
     } catch (e) {
       if (!mounted.current) return;
       console.error(e);
@@ -99,6 +142,14 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   /* eslint-disable react-hooks/set-state-in-effect -- data fetch on mount, guarded by mounted ref */
   useEffect(() => {
     mounted.current = true;
+    // 0.0.0.22 (Zak): paint the last good render synchronously, before the
+    // SDKs/auth/network. load() then refreshes silently in the background.
+    try {
+      const cached = paintMyAdsSnapshot();
+      if (cached) setListings(cached);
+    } catch {
+      /* fall through to the live path */
+    }
     load();
     return () => {
       mounted.current = false;

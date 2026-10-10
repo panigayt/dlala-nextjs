@@ -19,6 +19,7 @@ import {
 } from '@/lib/firebase-client';
 import { formatPrice, timeAgo } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
+import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 
 // Verbatim from js/i18n.ar.js
 const STR = {
@@ -180,6 +181,39 @@ function matchesSavedSearch(l: FreshListing, s: SavedSearch): boolean {
   return true;
 }
 
+// 0.0.0.22 (Zak): instant paint — last alerts render from localStorage,
+// before the SDKs/auth/network. Silently refreshed by loadAll().
+// Returns { searches, matches, notifs } or null.
+function paintAlertsSnapshot(): {
+  searches: SavedSearch[];
+  matches: { search: SavedSearch; hits: FreshListing[] }[];
+  notifs: Notif[];
+} | null {
+  const snap = snapshotRead<{
+    searches?: SavedSearch[];
+    listings?: FreshListing[];
+    notifs?: Notif[];
+  }>('alerts');
+  if (!snap || !snap.data) return null;
+  try {
+    const searches = Array.isArray(snap.data.searches) ? snap.data.searches : [];
+    const listings = Array.isArray(snap.data.listings) ? snap.data.listings : [];
+    const notifs = Array.isArray(snap.data.notifs) ? snap.data.notifs : [];
+    if (!searches.length && !notifs.length) return null;
+    // Recompute matches from cached searches + listings (legacy
+    // buildMatchesHtml parity — matches are derived, not stored).
+    const active = searches.filter((s) => s && s.enabled);
+    const matches: { search: SavedSearch; hits: FreshListing[] }[] = [];
+    for (const s of active) {
+      const hits = listings.filter((l) => l && matchesSavedSearch(l, s)).slice(0, 6);
+      if (hits.length) matches.push({ search: s, hits });
+    }
+    return { searches, matches, notifs };
+  } catch {
+    return null;
+  }
+}
+
 interface Notif {
   id: string;
   type?: string;
@@ -326,6 +360,7 @@ export default function AlertsPage() {
         // Fresh listings for matching
         const active = docs.filter((s) => s.enabled);
         const matchGroups: { search: SavedSearch; hits: FreshListing[] }[] = [];
+        let freshForSnap: FreshListing[] = [];
         if (active.length) {
           const lSnap = await client.db
             .collection('listings')
@@ -340,6 +375,7 @@ export default function AlertsPage() {
           const fresh: FreshListing[] = lSnap.docs.map(
             (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as FreshListing
           );
+          freshForSnap = fresh;
           const seenKey = `dlala_seen_${user.uid}`;
           let seen: Record<string, number> = {};
           try {
@@ -382,6 +418,67 @@ export default function AlertsPage() {
           )
           .sort((a, b) => tsMs(b.createdAt) - tsMs(a.createdAt));
         setNotifs(nDocs);
+        // 0.0.0.22 (Zak): save for instant paint on next boot. Listing
+        // projection covers the match cards; notif projection covers the
+        // inbox render.
+        try {
+          snapshotWrite('alerts', user.uid, {
+            searches: docs.map((s) => ({
+              id: s.id,
+              query: s.query || '',
+              enabled: !!s.enabled,
+              categoryId: s.categoryId || '',
+              wilayaCode: s.wilayaCode,
+              minPrice: s.minPrice,
+              maxPrice: s.maxPrice,
+            })),
+            listings: freshForSnap.map((l) => {
+              const lr = l as FreshListing & Record<string, unknown>;
+              return {
+                id: l.id,
+                title: l.title || '',
+                price: l.price || 0,
+                photoUrls: (l.photoUrls || []).slice(0, 2),
+                thumbUrls: ((l.photo_thumbs && l.photo_thumbs.length ? l.photo_thumbs : l.thumbUrls) || []).slice(0, 2),
+                status: String(lr.status || ''),
+                categoryId: l.categoryId || '',
+                wilayaCode: l.wilayaCode || 0,
+                createdAt: snapMs(l.createdAt),
+                previousPrice: Number(lr.previousPrice || 0),
+                priceReduced: !!lr.priceReduced,
+                sellerId: String(lr.sellerId || ''),
+                isWholesale: !!lr.isWholesale,
+                isWanted: !!l.isWanted,
+              };
+            }),
+            notifs: nDocs.map((n) => {
+              const nd = (n.data || {}) as Record<string, unknown>;
+              return {
+                id: n.id,
+                type: n.type || '',
+                title: n.title || '',
+                body: n.body || '',
+                read: !!n.read,
+                createdAt: snapMs(n.createdAt),
+                data: {
+                  conversationId: String(nd.conversationId || ''),
+                  listingId: String(nd.listingId || ''),
+                  followerUid: String(nd.followerUid || ''),
+                  followerName: String(nd.followerName || ''),
+                  title: String(nd.title || ''),
+                  listingTitle: String(nd.listingTitle || nd.title || ''),
+                  senderName: String(nd.senderName || ''),
+                  price: Number(nd.price || 0),
+                  oldPrice: Number(nd.oldPrice || 0),
+                  newPrice: Number(nd.newPrice || 0),
+                  wilaya: String(nd.wilayaName || nd.wilaya || ''),
+                },
+              };
+            }),
+          });
+        } catch {
+          /* best-effort */
+        }
       } catch {
         setError(STR.errorGeneric);
       } finally {
@@ -395,10 +492,24 @@ export default function AlertsPage() {
     if (authState.status !== 'signed-in') return;
     clientRef.current = authState.client;
     userRef.current = authState.user;
+    /* eslint-disable react-hooks/set-state-in-effect -- 0.0.0.22 instant paint: synchronous snapshot paint on mount, guarded */
+    // 0.0.0.22 (Zak): paint the last good render synchronously, before the
+    // SDKs/network. loadAll() then refreshes silently in the background.
+    try {
+      const cached = paintAlertsSnapshot();
+      if (cached) {
+        setSearches(cached.searches);
+        setMatches(cached.matches);
+        setNotifs(cached.notifs);
+        setLoading(false);
+      }
+    } catch {
+      /* fall through to the live path */
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
     // Data-fetch effect: loadAll is async and only sets state in async
     // continuations (after await). No synchronous setState — the
     // cascading-render concern does not apply.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAll(authState.client, authState.user);
   }, [authState, loadAll]);
 
