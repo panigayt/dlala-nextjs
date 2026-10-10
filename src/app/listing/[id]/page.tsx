@@ -318,6 +318,23 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
       {photos[0] && (
         <link rel="preload" as="image" href={photos[0]} fetchPriority="high" />
       )}
+      {/* Round 159: preload the first strip thumbnails (thumbs[0..2]) with low
+          priority so they start fetching at HTML parse time — before React
+          hydration — instead of waiting for the client strip render. The hero
+          keeps high priority and always wins the bandwidth race. Only the
+          first 3 are preloaded: the rest load via the strip's eager imgs and
+          the LIS-10 idle prewarm. */}
+      {thumbs.slice(0, 3).map((t, i) =>
+        t ? (
+          <link
+            key={`thumb-preload-${i}`}
+            rel="preload"
+            as="image"
+            href={t}
+            fetchPriority="low"
+          />
+        ) : null
+      )}
       {/* Gallery — clickable thumbnails + fullscreen lightbox
           (client component; mirrors js/listing.js LIS-8 gallery,
           LIS-9 progressive hero, LIS-10 idle prewarm). */}
