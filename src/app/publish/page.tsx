@@ -944,6 +944,58 @@ function PublishForm({
             // non-fatal — the doc update already succeeded
           }
         }
+        // Price-drop notifications (js/publish.js 4 Oct 2026 parity):
+        // Firestore triggers are unreliable in this project, so the web
+        // client writes price_drop notifications directly to favoriters'
+        // inboxes. Best-effort — the price edit above already succeeded.
+        // Rules v110+ verify: writer is the listing's seller AND the
+        // recipient has a favorite doc for the listing.
+        if (priceDropped) {
+          try {
+            const favSnap = await client.db
+              .collection(`listingFavoriters/${editId}/users`)
+              .get();
+            const notifId = `drop_${editId}_${effPrice}`;
+            const sellerUid = user.uid;
+            const notifData = {
+              listingId: editId,
+              oldPrice,
+              newPrice: effPrice,
+              // Legacy reads ld.title (the {ar:...} object) into
+              // data.title, which renders as "[object Object]" in the
+              // read-time template — pass the plain string instead
+              // (root-cause fix).
+              title: title.trim(),
+              photo: mergedUrls[0] || null,
+            };
+            const targets = favSnap.docs
+              .map((d) => d.id)
+              .filter((favUid) => favUid && favUid !== sellerUid);
+            // Chunk at the Firestore 500-op batch limit (legacy Round 14).
+            for (let i = 0; i < targets.length; i += 500) {
+              const batch = client.db.batch();
+              for (const favUid of targets.slice(i, i + 500)) {
+                batch.set(
+                  client.db
+                    .collection(`users/${favUid}/notifications`)
+                    .doc(notifId),
+                  {
+                    type: 'price_drop',
+                    fromUid: sellerUid,
+                    title: '',
+                    body: '',
+                    data: notifData,
+                    read: false,
+                    createdAt: client.FieldValue.serverTimestamp(),
+                  }
+                );
+              }
+              await batch.commit();
+            }
+          } catch {
+            // best-effort — notification failed, price change kept
+          }
+        }
         try { localStorage.removeItem('dlala_publish_draft'); } catch { /* ignore */ }
         router.push(`/listing/${editId}`);
         return;

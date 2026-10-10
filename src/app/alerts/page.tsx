@@ -56,6 +56,10 @@ const STR = {
   errorGeneric: 'حدث خطأ — حاول مجدداً',
   retry: 'إعادة المحاولة',
   followedYou: '{name} بدأ بمتابعتك',
+  // Verbatim js/i18n.ar.js 'notif.price_drop' (read-time template — the
+  // writer stores title:'' and the sentence renders in the reader's
+  // language, per 0.0.0.31 D-2).
+  notifPriceDrop: 'انخفض سعر {title}: من {oldPrice} إلى {newPrice}',
 };
 
 // Verbatim from js/categories.js
@@ -189,6 +193,11 @@ interface Notif {
     listingId?: string;
     followerUid?: string;
     followerName?: string;
+    // price_drop payload (js/publish.js writer)
+    title?: string;
+    oldPrice?: number;
+    newPrice?: number;
+    photo?: string | null;
   };
 }
 
@@ -234,6 +243,19 @@ function notifTitle(n: Notif): string {
       '{name}',
       String((n.data && n.data.followerName) || '')
     );
+  }
+  // 0.0.0.31 D-2: price_drop renders from the i18n template at READ time
+  // (placeholders from n.data) — legacy's writer stores title:''.
+  if (n.type === 'price_drop') {
+    const d = n.data || {};
+    const str = (v: unknown) => String(v == null ? '' : v);
+    return STR.notifPriceDrop
+      .split('{title}')
+      .join(str(d.title))
+      .split('{oldPrice}')
+      .join(formatPrice(Number(d.oldPrice) || 0))
+      .split('{newPrice}')
+      .join(formatPrice(Number(d.newPrice) || 0));
   }
   return n.title || '';
 }
