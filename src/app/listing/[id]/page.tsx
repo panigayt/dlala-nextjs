@@ -40,6 +40,7 @@ import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import Gallery from './Gallery';
 import TasteViewRecorder from './TasteViewRecorder';
+import ViewRecorder from './ViewRecorder';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -283,6 +284,10 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           sellerId: l.sellerId,
         }}
       />
+      {/* Server-visible view counting (js/listing.js recordSignedInView /
+          recordAnonymousView): one listingViews doc per viewer per day.
+          Best-effort — never affects rendering. */}
+      {l.sellerId && <ViewRecorder listingId={id} sellerId={l.sellerId} />}
       {jsonLdScript && (
         <script
           type="application/ld+json"
