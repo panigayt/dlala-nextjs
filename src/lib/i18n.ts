@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 export type Lang = 'ar' | 'fr' | 'en';
 
@@ -258,20 +258,107 @@ export function t(key: string, lang: Lang): string {
   return STRINGS[lang][key] || STRINGS.ar[key] || key;
 }
 
-// React hook: current language + setter (persists to localStorage,
-// mirrors js/i18n.js setLang behavior).
-export function useLang(): { lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string } {
-  const [lang, setLangState] = useState<Lang>(() => getLang());
-  const setLang = useCallback((l: Lang) => {
-    setLangStorage(l);
-    setLangState(l);
+// ---------------------------------------------------------------------------
+// App-wide language store — ONE language for the whole app.
+//
+// Bug fixed (Round 106): useLang() used to keep per-component useState, so
+// the header's language switcher only re-rendered the header — page content
+// (conversations, settings, account, favorites, my-listings, my-follows,
+// feed strips, banners…) stayed stuck in its mount language, and pages with
+// FR/EN strings but no switcher of their own could never switch at all.
+// Legacy js/i18n.js setLang() re-renders the whole page via onLangChange();
+// this module-level store + useSyncExternalStore is the React equivalent:
+// every mounted useLang() consumer re-renders on every switch, with zero
+// call-site changes (all 16 consumers share the API below unchanged).
+// ---------------------------------------------------------------------------
+
+let appLang: Lang | null = null; // null = not initialized yet (SSR-safe)
+const langListeners = new Set<() => void>();
+
+function readStoredLang(): Lang {
+  if (typeof window === 'undefined') return 'ar';
+  try {
+    const l = window.localStorage.getItem('dlala_lang');
+    if (l === 'fr' || l === 'en' || l === 'ar') return l;
+  } catch {
+    // ignore — corrupted storage keeps the default
+  }
+  return 'ar';
+}
+
+function applyDocLang(l: Lang): void {
+  try {
+    document.documentElement.lang = l;
+    document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+  } catch {
+    // a lang/dir attribute must never break rendering
+  }
+}
+
+function ensureLangInit(): void {
+  if (appLang !== null) return;
+  appLang = readStoredLang();
+  if (typeof window !== 'undefined') {
     try {
-      document.documentElement.lang = l;
-      document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+      // Cross-tab sync: another tab switched language.
+      window.addEventListener('storage', (e: StorageEvent) => {
+        if (e.key !== 'dlala_lang') return;
+        const v = e.newValue;
+        if (v === 'ar' || v === 'fr' || v === 'en') setAppLang(v);
+      });
     } catch {
       // ignore
     }
-  }, []);
+  }
+  if (typeof document !== 'undefined') applyDocLang(appLang);
+}
+
+/** Current app-wide language (initializes from localStorage on first call). */
+export function getAppLang(): Lang {
+  ensureLangInit();
+  return appLang as Lang;
+}
+
+/** Switch the app-wide language: persists to localStorage, updates
+ *  <html lang/dir>, and notifies every mounted useLang() consumer
+ *  (legacy js/i18n.js onLangChange() re-render parity). */
+export function setAppLang(l: Lang): void {
+  ensureLangInit();
+  if (appLang === l) return;
+  appLang = l;
+  try {
+    window.localStorage.setItem('dlala_lang', l);
+  } catch {
+    // ignore — persistence is best-effort
+  }
+  applyDocLang(l);
+  langListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch {
+      // a listener must never break the switch
+    }
+  });
+}
+
+/** Subscribe to app-wide language changes. Returns an unsubscribe function. */
+export function subscribeLang(fn: () => void): () => void {
+  langListeners.add(fn);
+  return () => {
+    langListeners.delete(fn);
+  };
+}
+
+// React hook: app-wide language + setter (legacy js/i18n.js setLang parity).
+// All mounted consumers share one state — a switch in the header (or in
+// settings, or in the chat thread) re-renders every one of them.
+export function useLang(): { lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string } {
+  const lang = useSyncExternalStore<Lang>(
+    subscribeLang,
+    () => getAppLang(),
+    () => 'ar', // server snapshot — SSR always renders Arabic
+  );
+  const setLang = useCallback((l: Lang) => setAppLang(l), []);
   const tr = useCallback((k: string) => t(k, lang), [lang]);
   return { lang, setLang, t: tr };
 }
