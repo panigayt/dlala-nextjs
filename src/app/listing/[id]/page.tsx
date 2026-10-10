@@ -45,6 +45,7 @@ import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import FollowButton from '@/components/FollowButton';
 import ReportUserButton from '@/components/ReportUserButton';
+import RateCta from '@/components/RateCta';
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
 import MatchingOffers, { type MatchOfferDoc } from './MatchingOffers';
@@ -412,6 +413,24 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           <span>👁 {viewsText(l.views)}</span>
           <span>♥ {Number(l.favoriteCount) || 0} في المفضلة</span>
         </div>
+        {/* js/listing.js loadRateBox parity: the #rateBox sits directly under
+            the stat-row in the detail card — rating entry point shown when I
+            have a buyer-confirmed deal with this seller that I have not
+            rated yet (LIS-2: the dialog names the PERSON, falling back to
+            the ad title only when the name is unknown). Renders nothing for
+            guests/owners/no-deals, like legacy. */}
+        {l.sellerId && (
+          <div className="mt-3">
+            <RateCta
+              uid={l.sellerId}
+              rateeName={
+                profile?.name ||
+                (l as unknown as { sellerName?: string }).sellerName ||
+                title
+              }
+            />
+          </div>
+        )}
         {/* Favorite + contact seller (client component — needs auth state) */}
         {l.sellerId && (
           <ListingActions
