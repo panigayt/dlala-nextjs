@@ -24,6 +24,7 @@ import { CATEGORIES } from '@/lib/categories';
 import { brandLatinName } from '@/lib/seo';
 import { pubT } from '@/lib/publish-strings';
 import TimeAgo from '@/components/TimeAgo';
+import SaveSearchButton from './SaveSearchButton';
 
 async function getResults(f: SearchFilters): Promise<ListingCard[]> {
   'use cache';
@@ -405,6 +406,7 @@ async function SearchContent({
         {filters.q ? `نتائج البحث: "${filters.q}"` : 'البحث'}
       </h2>
       <FilterBar filters={filters} />
+      {hasFilter ? <SaveSearchButton filters={filters} /> : null}
       {hasFilter ? (
         <Results filters={filters} />
       ) : (
