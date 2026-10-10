@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang } from '@/lib/i18n';
+import { authLoginHref } from '@/lib/auth-return';
 
 interface AuthGateProps {
   children: (user: CompatUser) => ReactNode;
@@ -38,7 +39,7 @@ export default function AuthGate({ children }: AuthGateProps) {
             setUser(u);
           } else {
             // Not signed in — bounce to /auth (requireAuth behavior).
-            router.push('/auth');
+            router.push(authLoginHref(window.location.pathname, window.location.search));
           }
         });
         // Safety: if onAuthStateChanged never fires within 12s, show retry.

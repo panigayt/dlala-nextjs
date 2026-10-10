@@ -41,6 +41,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { getFirebase, withTimeout } from '@/lib/firebase-compat';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
+import { authLoginHref } from '@/lib/auth-return';
 import { tasteNoteFav } from '@/lib/taste';
 
 // Verbatim strings from js/i18n.ar.js
@@ -233,7 +234,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     (msg: string) => {
       showToast(setToast, msg, toastTimer);
       window.setTimeout(() => {
-        router.push('/auth');
+        router.push(authLoginHref(window.location.pathname, window.location.search));
       }, 1500);
     },
     [router]

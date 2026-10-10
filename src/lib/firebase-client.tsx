@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { tasteMirrorUid } from '@/lib/taste';
+import { authLoginHref } from '@/lib/auth-return';
 
 export const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M',
@@ -192,7 +193,7 @@ export function useRequireAuth(): AuthState {
           } else {
             tasteMirrorUid(null);
             setState({ status: 'signed-out' });
-            router.push('/auth');
+            router.push(authLoginHref(window.location.pathname, window.location.search));
           }
         });
       })

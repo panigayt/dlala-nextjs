@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { deleteR2Objects } from '@/lib/r2-upload';
+import { authLoginHref } from '@/lib/auth-return';
 import { useLang, type Lang } from '@/lib/i18n';
 
 const BLOCK_FN_URL = 'https://europe-west3-dlala-85cea.cloudfunctions.net/toggleBlock';
@@ -354,7 +355,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         const dc = (de as { code?: string })?.code || '';
         if (dc === 'auth/requires-recent-login') {
           window.alert(t('reauthNeeded'));
-          router.push('/auth');
+          router.push(authLoginHref(window.location.pathname, window.location.search));
           return;
         }
         throw de;

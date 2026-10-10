@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
+import { authLoginHref } from '@/lib/auth-return';
 
 // Verbatim strings from js/i18n.ar.js
 const STR = {
@@ -105,7 +106,10 @@ export default function FollowButton({ storeUid }: { storeUid: string }) {
       // Legacy parity (js/app.js onFollowBtnTap): guests get the login
       // nudge via toast, then login — never a silent bounce to /auth.
       showToast(STR.loginToFollow);
-      window.setTimeout(() => router.push('/auth'), 1500);
+      window.setTimeout(
+        () => router.push(authLoginHref(window.location.pathname, window.location.search)),
+        1500
+      );
       return;
     }
     if (user.uid === storeUid) return;

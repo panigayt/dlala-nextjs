@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
+import { authLoginHref } from '@/lib/auth-return';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 
 // Verbatim strings from js/i18n.ar.js
@@ -142,7 +143,7 @@ export default function ReportUserButton({
     (msg: string) => {
       showToast(msg);
       window.setTimeout(() => {
-        router.push('/auth');
+        router.push(authLoginHref(window.location.pathname, window.location.search));
       }, 1500);
     },
     [router, showToast]

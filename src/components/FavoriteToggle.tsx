@@ -31,6 +31,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
 import { tasteNoteFav } from '@/lib/taste';
+import { authLoginHref } from '@/lib/auth-return';
 
 // Verbatim strings from js/i18n.ar.js
 const STR = {
@@ -124,7 +125,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
       toastTimer.current = window.setTimeout(() => {
         if (mounted.current) setToast(null);
-        router.push('/auth');
+        router.push(authLoginHref(window.location.pathname, window.location.search));
       }, 1500);
     },
     [router]

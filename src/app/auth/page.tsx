@@ -27,6 +27,7 @@ import {
   type CompatUser,
   type FirebaseCompat,
 } from '../../lib/firebase-compat';
+import { authReturnTarget } from '../../lib/auth-return';
 
 // Arabic user-facing strings — verbatim from js/i18n.ar.js (production).
 const STR = {
@@ -163,7 +164,17 @@ const PENDING_KEY = 'dlala_pending_profile';
 
 export default function AuthPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>('login');
+  // js/auth.js boot parity: ?mode=signup starts guests on the signup form
+  // (lazy init — no setState-in-effect).
+  const [mode, setMode] = useState<Mode>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('mode') === 'signup'
+        ? 'signup'
+        : 'login';
+    } catch {
+      return 'login';
+    }
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -177,10 +188,20 @@ export default function AuthPage() {
   const mounted = useRef(true);
   const unsubRef = useRef<(() => void) | null>(null);
 
+  // js/auth.js authReturnTarget parity — sanitized ?return= continuation
+  // after sign-in / verification-continue (L2: /auth never a return target).
+  const returnTarget = useCallback((): string => {
+    try {
+      return authReturnTarget(new URLSearchParams(window.location.search).get('return'));
+    } catch {
+      return '/account';
+    }
+  }, []);
+
   useEffect(() => {
     mounted.current = true;
-    // Already signed in: verified users proceed, unverified users land on
-    // the verification gate — nobody proceeds to / unverified.
+    // Already signed in: verified users proceed to their return target,
+    // unverified users land on the verification gate.
     let cancelled = false;
     getFirebase()
       .then((fb) => {
@@ -188,7 +209,7 @@ export default function AuthPage() {
         unsubRef.current = fb.auth().onAuthStateChanged((u) => {
           if (!mounted.current || !u) return;
           if (u.emailVerified) {
-            router.push('/');
+            router.push(returnTarget());
           } else {
             setVerifyEmail(u.email || '');
             setVerifyDone(false);
@@ -205,7 +226,7 @@ export default function AuthPage() {
         unsubRef.current = null;
       }
     };
-  }, [router]);
+  }, [router, returnTarget]);
 
   const switchMode = useCallback((m: Mode) => {
     setMode(m);
@@ -282,7 +303,7 @@ export default function AuthPage() {
       if (!mounted.current) return;
       setLoading(false);
       if (verified) {
-        router.push('/');
+        router.push(returnTarget());
       } else {
         showVerifyGate(cred.user);
       }
@@ -477,7 +498,7 @@ export default function AuthPage() {
       const verified = !!u.emailVerified;
       setVerifyDone(verified);
       if (verified) {
-        router.push('/');
+        router.push(returnTarget());
       } else {
         // Still not verified — say so plainly, don't leave them guessing.
         setError(STR.verifyStillPending);
