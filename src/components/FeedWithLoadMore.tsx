@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ListingCardView from '@/components/ListingCardView';
 import VitrineShowcase from '@/components/VitrineShowcase';
-import { interleaveWanted, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
+import { interleaveWanted, resultsCountText, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
 import { useAuthState } from '@/lib/firebase-client';
 import { useLang } from '@/lib/i18n';
@@ -93,7 +93,7 @@ export default function FeedWithLoadMore({
   const followedRef = useRef<Set<string> | null>(null);
   // «جديد من متابَعيك» strip cards.
   const [stripCards, setStripCards] = useState<ListingCard[]>([]);
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const auth = useAuthState();
   const refreshedUid = useRef<string | null>(null);
 
@@ -312,6 +312,18 @@ export default function FeedWithLoadMore({
 
   return (
     <>
+      {/* 0.0.0.31 FIX-WEB-014: results counter — verbatim js/home.js
+          setResultsCount(shown.length) parity: counts the painted grid
+          cards (regular + interleaved wanted), not the follows strip or
+          vitrine showcases. role="status" + aria-live announces the
+          count to screen readers after every load-more, like legacy. */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="text-[13px] text-zinc-500 px-0.5 py-1.5 min-h-[1.2em]"
+      >
+        {resultsCountText(cards.length, lang)}
+      </div>
       {/* «جديد من متابَعيك» strip (js/home.js renderFollowsSection, Zak
           16 Sep 2026): latest listings from followed users — last 7 days,
           max 3 per user, newest first. Prepended to the default feed. */}

@@ -13,7 +13,7 @@
 
 import { cacheLife } from 'next/cache';
 import Link from 'next/link';
-import { fetchFeed, fetchWanted, interleaveWanted, type ListingCard } from '@/lib/firestore';
+import { fetchFeed, fetchWanted, interleaveWanted, resultsCountText, type ListingCard } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
@@ -219,9 +219,20 @@ export default async function Home() {
             تعذر تحميل الإعلانات ({error}). حاول مرة أخرى.
           </div>
         ) : cards.length === 0 ? (
-          <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
-            لا توجد إعلانات حاليا.
-          </div>
+          <>
+            {/* FIX-WEB-014 parity: legacy still paints resultsMeta with
+                "لا توجد نتائج" above the empty state. */}
+            <div
+              role="status"
+              aria-live="polite"
+              className="text-[13px] text-zinc-500 px-0.5 py-1.5 min-h-[1.2em]"
+            >
+              {resultsCountText(0)}
+            </div>
+            <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
+              لا توجد إعلانات حاليا.
+            </div>
+          </>
         ) : (
           feed && (
             <FeedWithLoadMore
