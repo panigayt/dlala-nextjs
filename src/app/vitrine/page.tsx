@@ -5,10 +5,12 @@
 //   - Active boost (vitrineBoostUntil in future) → remaining time + cancel.
 //   - Cooldown (activated <30d ago) → reactivation date.
 //   - Activatable → hint + product picker (checkboxes, max 8, MIN 5 to
-//     activate) + "تفعيل الواجهة" button.
+//     activate) + activate button.
 //   - Activation/cancel via the activateVitrine Cloud Function (client may
 //     NEVER write vitrineBoostUntil directly — rules deny it).
 //   - After every vitrineIds save: syncVitrineRegistry.
+// Trilingual AR/FR/EN (Round 117): all strings via useLang(), verbatim
+// legacy js/i18n.{ar,fr,en}.js.
 
 'use client';
 
@@ -21,31 +23,7 @@ import {
   type FirebaseClient,
   type CompatUser,
 } from '@/lib/firebase-client';
-
-const T = {
-  title: 'الواجهة',
-  loading: 'جارٍ التحميل...',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  retry: 'إعادة المحاولة',
-  proNotice: 'تاجر محترف — واجهة غير محدودة',
-  manageProducts: 'إدارة منتجات الواجهة',
-  proHint: 'اختر حتى 8 من منتجاتك لعرضها في بطاقة الواجهة على الصفحة الرئيسية.',
-  boostLeft: (n: number, unit: string) => `Vitrine — متبقي ${n} ${unit}`,
-  days: 'يوم',
-  hours: 'ساعة',
-  cancelVitrine: 'إلغاء الواجهة',
-  cancelConfirm: 'إلغاء تفعيل الواجهة؟',
-  cooldown: (d: string) => `يمكنك إعادة التفعيل ابتداءً من ${d}`,
-  activateHint: 'فعّل الواجهة لعرض منتجاتك المميزة لمدة 7 أيام.',
-  activate: 'تفعيل الواجهة',
-  chooseProducts: 'اختر منتجات للعرض في الواجهة',
-  needMinPicks: 'اختر 5 إعلانات على الأقل للواجهة لتتمكن من نشرها.',
-  needAds: 'انشر إعلاناً واحداً على الأقل أولاً لتفعيل الواجهة.',
-  needListings: 'تحتاج إلى حساب موثق أو 3 إعلانات نشطة على الأقل.',
-  pickerFull: 'يمكنك اختيار 8 منتجات كحد أقصى.',
-  vitrineInfo: 'نظم متجرك واعرض منتجاتك في صفحتك.',
-  login: 'تسجيل الدخول',
-};
+import { useLang, type Lang } from '@/lib/i18n';
 
 const ACTIVATE_FN_URL =
   'https://europe-west3-dlala-85cea.cloudfunctions.net/activateVitrine';
@@ -59,8 +37,10 @@ interface Listing {
   status?: string;
 }
 
-function titleOf(l: Listing): string {
-  return l.title?.ar || l.title?.fr || l.title?.en || '';
+// my-store.js parity: tt[lang] || tt.ar || tt.fr || tt.en
+function titleOf(l: Listing, lang: Lang): string {
+  const tt = l.title || {};
+  return tt[lang] || tt.ar || tt.fr || tt.en || '';
 }
 function thumbOf(l: Listing): string {
   if (Array.isArray(l.photo_thumbs) && l.photo_thumbs[0]) return l.photo_thumbs[0] as string;
@@ -80,8 +60,6 @@ function dateOf(v: unknown): Date | null {
 // collection in sync. The home feed discovers vitrine candidates from
 // this registry — NOT by scanning listings — so it works at any catalog
 // size. Called after every vitrineIds save and after activation success.
-// Eligibility mirrors the feed's check: pro stores are always in;
-// ordinary sellers need an active boost AND at least one pick.
 // Mirrors js/vitrine.js syncVitrineRegistry (0.0.0.43).
 async function syncVitrineRegistry(
   client: FirebaseClient,
@@ -123,22 +101,29 @@ type BoxState =
   | { kind: 'cooldown'; from: Date }
   | { kind: 'activatable' };
 
+// js/vitrine.js fmtCountdown parity: vitrineDaysLeft / vitrineHoursLeft.
 function BoostCountdown({ until }: { until: Date }) {
+  const { t } = useLang();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(t);
+    const tm = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(tm);
   }, []);
   const ms = until.getTime() - now;
   const days = Math.floor(ms / 86400000);
   const hours = Math.floor((ms % 86400000) / 3600000);
-  const label = days > 0 ? T.boostLeft(days, T.days) : T.boostLeft(Math.max(1, hours), T.hours);
+  const label =
+    days > 0
+      ? t('vitrineDaysLeft').replace('{n}', String(days))
+      : t('vitrineHoursLeft').replace('{n}', String(Math.max(1, hours)));
   return (
-    <p className="font-bold text-emerald-700 text-lg mb-4">✨ {label}</p>
+    <p className="font-bold text-emerald-700 text-lg mb-4">✨ Vitrine — {label}</p>
   );
 }
 
 function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
+  const { t, lang } = useLang();
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [box, setBox] = useState<BoxState>({ kind: 'loading' });
   const [ads, setAds] = useState<Listing[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
@@ -202,7 +187,7 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     setMsg(null);
     setPicked((p) => {
       if (p.includes(id)) return p.filter((x) => x !== id);
-      if (p.length >= 8) { setMsg(T.pickerFull); return p; }
+      if (p.length >= 8) { setMsg(t('vitrinePickerFull')); return p; }
       return [...p, id];
     });
   };
@@ -220,7 +205,7 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
   };
 
   const activate = async () => {
-    if (picked.length < 5) { setMsg(T.needMinPicks); return; }
+    if (picked.length < 5) { setMsg(t('vitrineNeedMinPicks')); return; }
     setBusy(true);
     setMsg(null);
     try {
@@ -238,8 +223,8 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
       if (!ok) {
         const code = String(body?.error?.status || '').toLowerCase();
         if (code.includes('already_active')) { await load(); return; }
-        if (code.includes('not_eligible')) { setMsg(T.needListings); return; }
-        setMsg(T.errorGeneric);
+        if (code.includes('not_eligible')) { setMsg(t('vitrineNeedListings')); return; }
+        setMsg(t('errorGeneric'));
         return;
       }
       // VITRINE REGISTRY (27 Sep 2026): activation succeeded — sync the
@@ -251,20 +236,20 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
       } catch (e) { console.error('[vitrine] registry sync failed', e); }
       await load();
     } catch {
-      setMsg(T.errorGeneric);
+      setMsg(t('errorGeneric'));
     } finally {
       setBusy(false);
     }
   };
 
   const cancel = async () => {
-    if (!window.confirm(T.cancelConfirm)) return;
+    if (!window.confirm(t('vitrineCancelConfirm'))) return;
     setBusy(true);
     try {
       await callFn('cancel');
       await load();
     } catch {
-      setMsg(T.errorGeneric);
+      setMsg(t('errorGeneric'));
     } finally {
       setBusy(false);
     }
@@ -273,25 +258,25 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
   if (box.kind === 'loading') return <LoadingSpinner />;
   if (box.kind === 'error') {
     return (
-      <div className="min-h-screen bg-zinc-50" dir="rtl">
+      <div className="min-h-screen bg-zinc-50" dir={dir}>
         <main className="max-w-2xl mx-auto px-4 py-16 text-center">
-          <p className="text-red-700 mb-4">{T.errorGeneric}</p>
-          <button onClick={load} className={btnSecondaryCls}>{T.retry}</button>
+          <p className="text-red-700 mb-4">{t('errorGeneric')}</p>
+          <button onClick={load} className={btnSecondaryCls}>{t('retry')}</button>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={dir}>
       <main className="max-w-2xl mx-auto px-4 py-6">
         <section className="rounded-2xl bg-white shadow-sm p-5">
           <h1 className="text-xl font-bold text-zinc-900 mb-4 flex items-center">
-            {T.title}
+            {t('vitrinePageTitle')}
             <button
               onClick={() => setShowInfo(true)}
               className="ms-2 w-6 h-6 rounded-full border border-zinc-300 text-zinc-500 text-sm"
-              aria-label={T.title}
+              aria-label={t('vitrinePageTitle')}
             >
               ⓘ
             </button>
@@ -305,11 +290,11 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
           {box.kind === 'pro' && (
             <div className="text-center py-6">
-              <p className="font-bold text-emerald-700 mb-4">★ {T.proNotice}</p>
+              <p className="font-bold text-emerald-700 mb-4">★ {t('proMerchant')} — {t('vitrineUnlimited')}</p>
               <a href="/my-store#settings" className={btnCls + ' inline-block w-auto px-6'}>
-                🖼️ {T.manageProducts}
+                {t('vitrineManageProducts')}
               </a>
-              <p className="text-sm text-zinc-500 mt-3">{T.proHint}</p>
+              <p className="text-sm text-zinc-500 mt-3">{t('vitrineProPickerHint')}</p>
             </div>
           )}
 
@@ -317,7 +302,7 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
             <div className="text-center py-6">
               <BoostCountdown until={box.until} />
               <button onClick={cancel} disabled={busy} className={btnSecondaryCls}>
-                {T.cancelVitrine}
+                {t('vitrineCancel')}
               </button>
             </div>
           )}
@@ -326,19 +311,19 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
             <div className="text-center py-6">
               <div className="text-4xl mb-3">⏳</div>
               <p className="text-zinc-700">
-                {T.cooldown(box.from.toLocaleDateString('ar-DZ'))}
+                {t('vitrineCooldown').replace('{date}', box.from.toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang))}
               </p>
             </div>
           )}
 
           {box.kind === 'activatable' && (
             <div>
-              <p className="text-sm text-zinc-600 mb-4">{T.activateHint}</p>
+              <p className="text-sm text-zinc-600 mb-4">{t('vitrineActivateHint')}</p>
               {ads.length === 0 ? (
-                <p className="text-sm text-zinc-500 text-center py-6">{T.needAds}</p>
+                <p className="text-sm text-zinc-500 text-center py-6">{t('vitrineNoListings')}</p>
               ) : (
                 <>
-                  <h2 className="font-bold text-zinc-900 mb-3">{T.chooseProducts}</h2>
+                  <h2 className="font-bold text-zinc-900 mb-3">{t('vitrineChooseProducts')}</h2>
                   <div className="space-y-2 mb-4">
                     {ads.map((a) => {
                       const on = picked.includes(a.id);
@@ -361,13 +346,13 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
                           ) : (
                             <div className="w-12 h-12 rounded-lg bg-zinc-200 flex items-center justify-center text-zinc-400">📷</div>
                           )}
-                          <span className="flex-1 text-sm truncate">{titleOf(a)}</span>
+                          <span className="flex-1 text-sm truncate">{titleOf(a, lang)}</span>
                         </label>
                       );
                     })}
                   </div>
                   <button onClick={activate} disabled={busy} className={btnCls}>
-                    {busy ? T.loading : `✨ ${T.activate}`}
+                    {busy ? t('loading') : `✨ ${t('vitrineActivate')}`}
                   </button>
                 </>
               )}
@@ -377,12 +362,12 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
       </main>
 
       {showInfo && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" dir="rtl">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" dir={dir}>
           <div className="bg-white rounded-2xl p-5 w-full max-w-md">
-            <h2 className="text-lg font-bold text-zinc-900 mb-3">{T.title}</h2>
-            <p className="text-sm text-zinc-700 mb-4">{T.vitrineInfo}</p>
+            <h2 className="text-lg font-bold text-zinc-900 mb-3">{t('vitrinePageTitle')}</h2>
+            <p className="text-sm text-zinc-700 mb-4">{t('vitrineInfo')}</p>
             <button onClick={() => setShowInfo(false)} className={btnSecondaryCls + ' w-full'}>
-              إغلاق
+              {t('close')}
             </button>
           </div>
         </div>
