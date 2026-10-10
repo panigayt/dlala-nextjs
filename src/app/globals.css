@@ -24,3 +24,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Speed 29 LQIP blur-up (js/app.js parity): cards paint the ~0.5KB w32
+   LQIP blurred, then unblur when the hi-res upgrade arrives. */
+.img-blurup { filter: blur(12px); clip-path: inset(0); }
+.img-blurup.hi { filter: blur(0); transition: filter .45s ease; }
+@media (prefers-reduced-motion: reduce) { .img-blurup.hi { transition: none; } }

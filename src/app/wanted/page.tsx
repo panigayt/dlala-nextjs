@@ -24,6 +24,7 @@ import {
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
 import TimeAgo from '@/components/TimeAgo';
+import BlurUpImage from '@/components/BlurUpImage';
 import WilayaSelect from './WilayaSelect';
 
 const WANTED_LIMIT = 60;
@@ -92,11 +93,10 @@ function WantedCard({ l }: { l: ListingCard }) {
     >
       <div className="relative aspect-[4/3] bg-zinc-100">
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
+          <BlurUpImage
+            listing={l}
+            img={img}
             alt={cardTitle(l)}
-            loading="lazy"
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (

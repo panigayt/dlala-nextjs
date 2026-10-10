@@ -11,6 +11,7 @@ import { catName } from '@/lib/categories';
 import { dzPriceWords } from '@/lib/dz-price';
 import TimeAgo from '@/components/TimeAgo';
 import FavoriteToggle from '@/components/FavoriteToggle';
+import BlurUpImage from '@/components/BlurUpImage';
 
 function wilayaName(code: number | undefined): string {
   if (!code) return '';
@@ -43,11 +44,10 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
     >
       <div className="relative aspect-[4/3] bg-zinc-100">
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
+          <BlurUpImage
+            listing={l}
+            img={img}
             alt={cardTitle(l)}
-            loading="lazy"
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (

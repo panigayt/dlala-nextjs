@@ -17,6 +17,7 @@ import {
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
+import BlurUpImage from '@/components/BlurUpImage';
 
 // Server-serializable card (createdAt as ISO string — Date is not
 // serializable across the server/client boundary).
@@ -47,11 +48,10 @@ function MatchOfferCard({ l }: { l: MatchOfferDoc }) {
     >
       <div className="relative aspect-[4/3] bg-zinc-100">
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
+          <BlurUpImage
+            listing={lc}
+            img={img}
             alt={cardTitle(lc)}
-            loading="lazy"
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (

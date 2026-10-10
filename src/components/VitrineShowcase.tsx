@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { cardTitle, cardImage, formatPrice, type ListingCard } from '@/lib/firestore';
 import { markVitrineInteracted, type VitrineShowcase as Showcase } from '@/lib/vitrine';
 import TimeAgo from '@/components/TimeAgo';
+import BlurUpImage from '@/components/BlurUpImage';
 
 function condLabel(cond: string | undefined): string {
   if (cond === 'new') return 'جديد';
@@ -28,12 +29,10 @@ function MiniProduct({ p }: { p: ListingCard }) {
       <Link href={`/listing/${p.id}`} className="vitrine-thumb relative block">
         <div className="relative aspect-square bg-zinc-100 rounded-lg overflow-hidden">
           {img ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={img}
+            <BlurUpImage
+              listing={p}
+              img={img}
               alt={cardTitle(p)}
-              loading="lazy"
-              decoding="async"
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
