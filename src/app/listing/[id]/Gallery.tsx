@@ -345,8 +345,8 @@ export default function Gallery({
             >
               {/* Round 158: all strip thumbs eager — they are visible above the
                   fold in the strip (small count), and lazy delayed 1+ thumbs
-                  on weak connections. fetchPriority stays low so the hero
-                  (fetchPriority="high") always wins the bandwidth race.
+                  on weak connections. fetchPriority="high" per LIS-10c
+                  (production parity — thumbnails are small and must paint fast).
                   src falls back to the full photo only when no dedicated
                   thumb exists (legacy/pre-0.0.0.1w listings). */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -354,7 +354,7 @@ export default function Gallery({
                 src={thumbs[i] || p}
                 alt=""
                 loading="eager"
-                fetchPriority="low"
+                fetchPriority="high"
                 decoding="async"
                 className="w-20 h-20 object-cover"
               />
