@@ -17,6 +17,7 @@ import {
   type SearchFilters,
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
+import { CATEGORIES } from '@/lib/categories';
 import TimeAgo from '@/components/TimeAgo';
 
 async function getResults(f: SearchFilters): Promise<ListingCard[]> {
@@ -29,6 +30,90 @@ function wilayaName(code: number | undefined): string {
   if (!code) return '';
   const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
   return w ? `${w.code} - ${w.ar}` : '';
+}
+
+// Filter bar — GET form mirroring the home page HomeFilters block
+// (~/workspace/dlala-040/index.html .filters). Backend already supports
+// cat/wilaya/min/max/sort via URL params; this is the UI for them.
+// Current values are pre-selected via defaultValue; the text query q
+// is preserved in a hidden input.
+function FilterBar({ filters }: { filters: SearchFilters }) {
+  const ctl =
+    'rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-base text-zinc-900';
+  const q = filters.q || '';
+  return (
+    <form action="/search" method="get" className="flex flex-wrap items-center gap-2 mb-4">
+      {q ? <input type="hidden" name="q" value={q} /> : null}
+      <label htmlFor="search-cat" className="sr-only">
+        الفئة
+      </label>
+      <select id="search-cat" name="cat" className={ctl} defaultValue={filters.cat || ''}>
+        <option value="">كل الفئات</option>
+        {CATEGORIES.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.ar}
+          </option>
+        ))}
+      </select>
+      <label htmlFor="search-wilaya" className="sr-only">
+        الولاية
+      </label>
+      <select id="search-wilaya" name="wilaya" className={ctl} defaultValue={filters.wilaya || ''}>
+        <option value="">كل الولايات</option>
+        {(WILAYAS as { code: number; ar: string }[]).map((w) => (
+          <option key={w.code} value={w.code}>
+            {w.code} - {w.ar}
+          </option>
+        ))}
+      </select>
+      <label htmlFor="search-min" className="sr-only">
+        السعر الأدنى
+      </label>
+      <input
+        id="search-min"
+        type="number"
+        name="min"
+        min="0"
+        inputMode="numeric"
+        placeholder="السعر الأدنى"
+        defaultValue={filters.min || ''}
+        className={`${ctl} w-32`}
+      />
+      <label htmlFor="search-max" className="sr-only">
+        السعر الأقصى
+      </label>
+      <input
+        id="search-max"
+        type="number"
+        name="max"
+        min="0"
+        inputMode="numeric"
+        placeholder="السعر الأقصى"
+        defaultValue={filters.max || ''}
+        className={`${ctl} w-32`}
+      />
+      <label htmlFor="search-sort" className="sr-only">
+        ترتيب
+      </label>
+      <select id="search-sort" name="sort" className={ctl} defaultValue={filters.sort || 'recent'}>
+        <option value="recent">الأحدث</option>
+        <option value="priceAsc">السعر: من الأقل</option>
+        <option value="priceDesc">السعر: من الأعلى</option>
+      </select>
+      <button
+        type="submit"
+        className="rounded-xl bg-emerald-700 px-5 py-2.5 text-base font-bold text-white hover:bg-emerald-800"
+      >
+        تطبيق
+      </button>
+      <Link
+        href={q ? `/search?q=${encodeURIComponent(q)}` : '/search'}
+        className="rounded-xl border border-zinc-300 bg-white px-5 py-2.5 text-base text-zinc-700 hover:border-emerald-600"
+      >
+        مسح
+      </Link>
+    </form>
+  );
 }
 
 function Header() {
@@ -163,6 +248,7 @@ async function SearchContent({
       <h2 className="text-lg font-semibold text-zinc-800 mb-4">
         {filters.q ? `نتائج البحث: "${filters.q}"` : 'البحث'}
       </h2>
+      <FilterBar filters={filters} />
       {hasFilter ? (
         <Results filters={filters} />
       ) : (
