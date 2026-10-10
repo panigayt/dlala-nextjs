@@ -17,12 +17,14 @@ import type { Metadata } from 'next';
 import {
   fetchListing,
   fetchSimilarListings,
+  fetchSeller,
   cardTitle,
   cardImage,
   formatPrice,
   viewsText,
   type ListingCard,
   type ListingDetail,
+  type SellerProfile,
 } from '@/lib/firestore';
 import { answerRows } from '@/lib/answers';
 import { WILAYAS } from '@/lib/wilayas';
@@ -40,6 +42,7 @@ import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import FollowButton from '@/components/FollowButton';
+import ReportUserButton from '@/components/ReportUserButton';
 import Gallery from './Gallery';
 import TasteViewRecorder from './TasteViewRecorder';
 import ViewRecorder from './ViewRecorder';
@@ -54,6 +57,35 @@ function wilayaName(code: number | undefined): string {
   if (!code) return '';
   const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
   return w ? `${w.code} - ${w.ar}` : '';
+}
+
+// js/listing.js loadSeller trust row (verbatim logic):
+// - verified pro stores show their STORE name, not their personal name
+//   (18 Sep 2026, Zak).
+// - rating text: "4.5 ★ (12)"; 0.0.0.31 (users_public split): ratingCount is
+//   not in the public mirror — show the rating alone when absent.
+// - 0.0.0.31 FIX-WEB-027: no orphan line — the row is hidden when there is
+//   neither a rating nor a verified badge.
+function sellerTrust(profile: SellerProfile | null): {
+  displayName: string | null;
+  isPro: boolean;
+  ratingRow: string | null;
+} {
+  if (!profile) return { displayName: null, isPro: false, ratingRow: null };
+  const isPro = profile.storeTier === 'verified';
+  const displayName =
+    (isPro && profile.storeName ? profile.storeName : profile.name) || null;
+  const ratingNum = Number(profile.rating);
+  const hasRating = isFinite(ratingNum) && ratingNum > 0;
+  const ratingTxt = hasRating ? ratingNum.toFixed(1) + ' ★' : '';
+  const rating = profile.ratingCount
+    ? `${ratingTxt} (${Number(profile.ratingCount) || 0})`
+    : ratingTxt;
+  const ratingRow =
+    ratingTxt || profile.verified === true
+      ? `${rating}${profile.verified === true ? ' ✓' : ''}`.trim()
+      : null;
+  return { displayName, isPro, ratingRow };
 }
 
 // Per-listing SEO — mirrors js/listing.js applyListingSeoHead() +
@@ -271,6 +303,17 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
       similar = null;
     }
   }
+  // js/listing.js loadSeller parity: fetch the full seller profile for the
+  // trust row (rating, verified badge, pro store name) — best-effort, never
+  // breaks the page (legacy's background fetchUserRest catch behavior).
+  let profile: SellerProfile | null = null;
+  if (l.sellerId) {
+    try {
+      profile = await fetchSeller(l.sellerId);
+    } catch {
+      profile = null;
+    }
+  }
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
@@ -357,7 +400,12 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Seller card — denormalized fast path (R11-RADICAL).
           Owners see a compact "✓ إعلانك" indicator instead (js/listing.js
-          parity, via OwnerSellerCard). */}
+          parity, via OwnerSellerCard).
+          Trust row (js/listing.js loadSeller full-card parity): verified
+          pro stores show their STORE name (18 Sep 2026, Zak) + ★ pro badge;
+          the rating row shows "4.5 ★ (12)" + ✓ for verified, hidden when
+          there is neither (0.0.0.31 FIX-WEB-027). Buttons row: view
+          store/profile link + report-user button. */}
       <OwnerSellerCard sellerId={l.sellerId}>
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold">البائع</h2>
@@ -365,38 +413,63 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             button next to the seller identity (legacy loadSeller full-card
             row: name left, .follow-btn right). OwnerSellerCard swaps the
             whole card for "✓ إعلانك" when the viewer owns the listing. */}
-        <div className="mt-2 flex items-center justify-between gap-3">
-          {(l as unknown as { sellerName?: string; sellerPhotoUrl?: string }).sellerName ? (
-            <div className="flex items-center gap-3 min-w-0">
-              {(l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={(l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl}
-                  alt=""
-                  className="w-12 h-12 rounded-full object-cover shrink-0"
-                />
+        {(() => {
+          const trust = sellerTrust(profile);
+          const denorm = l as unknown as { sellerName?: string; sellerPhotoUrl?: string };
+          const name = trust.displayName || denorm.sellerName || 'عرض صفحة البائع';
+          return (
+            <>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {denorm.sellerPhotoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={denorm.sellerPhotoUrl}
+                      alt=""
+                      className="w-12 h-12 rounded-full object-cover shrink-0"
+                    />
+                  )}
+                  <span className="font-bold truncate">
+                    <Link
+                      href={`/seller/${l.sellerId}`}
+                      className="text-emerald-700 hover:underline"
+                    >
+                      {name}
+                    </Link>
+                    {trust.isPro && (
+                      <span className="mr-2 inline-block rounded-full bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5">
+                        ★ تاجر محترف
+                      </span>
+                    )}
+                  </span>
+                </div>
+                {l.sellerId && (
+                  <div className="shrink-0 min-w-[120px]">
+                    <FollowButton storeUid={l.sellerId} />
+                  </div>
+                )}
+              </div>
+              {trust.ratingRow && (
+                <p className="mt-1 text-sm text-zinc-500">{trust.ratingRow}</p>
               )}
-              <Link
-                href={`/seller/${l.sellerId}`}
-                className="font-bold text-emerald-700 hover:underline truncate"
-              >
-                {(l as unknown as { sellerName?: string }).sellerName}
-              </Link>
-            </div>
-          ) : (
-              <Link
-                href={`/seller/${l.sellerId}`}
-                className="font-bold text-emerald-700 hover:underline truncate"
-              >
-                عرض صفحة البائع
-              </Link>
-          )}
-          {l.sellerId && (
-            <div className="shrink-0 min-w-[120px]">
-              <FollowButton storeUid={l.sellerId} />
-            </div>
-          )}
-        </div>
+              {l.sellerId && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href={`/seller/${l.sellerId}`}
+                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 font-bold text-zinc-700 hover:border-emerald-500"
+                  >
+                    {trust.isPro ? 'عرض المتجر' : 'عرض الصفحة'}
+                  </Link>
+                  <ReportUserButton
+                    uid={l.sellerId}
+                    targetTitle={trust.displayName || ''}
+                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 font-bold text-zinc-700 hover:border-red-300"
+                  />
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
       </OwnerSellerCard>
 
