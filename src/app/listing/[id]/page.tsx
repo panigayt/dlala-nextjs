@@ -40,6 +40,7 @@ import {
   fmtPriceText,
 } from '@/lib/seo';
 import TimeAgo from '@/components/TimeAgo';
+import BackLink from '@/components/BackLink';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import FollowButton from '@/components/FollowButton';
@@ -330,6 +331,11 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
+      {/* LIS-7 (16 Sep 2026, js/listing.js): the back link returns to the
+          previous page (feed with its filters/scroll intact) via
+          history.back() instead of dumping to home; href="/" is the
+          no-history fallback. */}
+      <BackLink />
       {/* js/taste.js tasteRecordView (via js/listing.js): every non-owner
           view is an on-device taste signal. Owner views are excluded
           inside tasteRecordView via the dlala_uid mirror. */}
