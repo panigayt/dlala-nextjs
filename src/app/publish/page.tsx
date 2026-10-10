@@ -28,7 +28,7 @@ import {
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES, dzPriceWords } from '@/lib/categories';
 import { pubT } from '@/lib/publish-strings';
-import { uploadToR2, r2KeyFor } from '@/lib/r2-upload';
+import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
 
 const t = (k: string) => pubT(k, 'ar');
@@ -912,6 +912,15 @@ function PublishForm({
           updateDoc.photoVariants = true;
         }
         await client.db.collection('listings').doc(editId).update(updateDoc);
+        // Delete R2 objects for photos removed in edit mode (best-effort).
+        // The server skips non-R2 values and enforces uid ownership.
+        if (removedExisting.length) {
+          try {
+            await deleteR2Objects(removedExisting, idToken);
+          } catch {
+            // non-fatal — the doc update already succeeded
+          }
+        }
         try { localStorage.removeItem('dlala_publish_draft'); } catch { /* ignore */ }
         window.location.href = `/listing/${editId}`;
         return;

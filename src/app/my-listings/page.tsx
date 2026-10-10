@@ -18,6 +18,7 @@ import AuthGate, { PageHeader } from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang, type Lang } from '@/lib/i18n';
 import { cardImage, cardTitle, formatPrice } from '@/lib/firestore';
+import { deleteR2Objects } from '@/lib/r2-upload';
 
 interface OwnListing {
   id: string;
@@ -188,15 +189,17 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           vitrineIds: w.firebase.firestore.FieldValue.arrayRemove(id),
         });
         await withTimeout(batch.commit(), 20000);
-        // Storage cleanup (best-effort).
+        // Photo cleanup (best-effort): legacy Firebase Storage URLs first,
+        // then R2 (the server skips non-R2 values and enforces uid ownership).
+        const urls: string[] = [
+          ...(Array.isArray(l.photoUrls) ? l.photoUrls : []),
+          ...(Array.isArray(l.thumbUrls) ? l.thumbUrls : []),
+          ...(Array.isArray(l.photo_thumbs) ? l.photo_thumbs : []),
+        ].filter((u): u is string => typeof u === 'string' && !!u);
         try {
           const storage = fb.storage() as unknown as {
             ref: (p: string) => { delete: () => Promise<void> };
           };
-          const urls: string[] = [
-            ...(Array.isArray(l.photoUrls) ? l.photoUrls : []),
-            ...(Array.isArray(l.thumbUrls) ? l.thumbUrls : []),
-          ];
           await Promise.all(
             urls.map(async (u) => {
               try {
@@ -206,6 +209,12 @@ function MyListingsContent({ user }: { user: CompatUser }) {
               }
             })
           );
+        } catch {
+          // non-fatal
+        }
+        try {
+          const idToken = await user.getIdToken();
+          await deleteR2Objects(urls, idToken);
         } catch {
           // non-fatal
         }

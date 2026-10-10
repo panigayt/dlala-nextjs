@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate, { PageHeader } from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
+import { deleteR2Objects } from '@/lib/r2-upload';
 import { useLang, type Lang } from '@/lib/i18n';
 
 const BLOCK_FN_URL = 'https://europe-west3-dlala-85cea.cloudfunctions.net/toggleBlock';
@@ -268,7 +269,11 @@ function SettingsContent({ user }: { user: CompatUser }) {
       const db = fb.firestore() as unknown as {
         collection: (p: string) => {
           where: (f: string, op: string, v: string) => {
-            limit: (n: number) => { get: () => Promise<{ docs: { id: string }[] }> };
+            limit: (n: number) => {
+              get: () => Promise<{
+                docs: { id: string; data: () => Record<string, unknown> }[];
+              }>;
+            };
           };
         };
         doc: (p: string) => {
@@ -289,6 +294,23 @@ function SettingsContent({ user }: { user: CompatUser }) {
         db.collection('listings').where('sellerId', '==', user.uid).limit(100).get(),
         20000
       );
+      // Collect R2 photo URLs before the docs are gone.
+      const r2Urls: string[] = [];
+      for (const d of snap.docs) {
+        try {
+          const data = d.data();
+          for (const k of ['photoUrls', 'photo_thumbs', 'thumbUrls'] as const) {
+            const arr = data[k];
+            if (Array.isArray(arr)) {
+              for (const u of arr) {
+                if (typeof u === 'string' && u) r2Urls.push(u);
+              }
+            }
+          }
+        } catch {
+          // best-effort
+        }
+      }
       const ids = snap.docs.map((d) => d.id);
       for (let i = 0; i < ids.length; i += 5) {
         await Promise.all(
@@ -300,6 +322,16 @@ function SettingsContent({ user }: { user: CompatUser }) {
             }
           })
         );
+      }
+      // R2 photo cleanup (best-effort) — the server skips non-R2 values and
+      // enforces uid ownership; unstored variants are derived server-side.
+      if (r2Urls.length) {
+        try {
+          const idToken = await withTimeout(user.getIdToken(), 15000);
+          await deleteR2Objects(r2Urls, idToken);
+        } catch {
+          // best-effort
+        }
       }
       // File the deletion request — the Cloud Function finishes the wipe.
       await withTimeout(

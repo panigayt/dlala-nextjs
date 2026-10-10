@@ -57,3 +57,44 @@ export function r2KeyFor(uid: string, listingId: string, filename: string): stri
   const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64);
   return `listings/${safe(uid)}/${safe(listingId)}/${safe(filename)}`;
 }
+
+export interface R2DeleteResult {
+  key: string;
+  status: 'deleted' | 'skipped' | 'error';
+  error?: string;
+}
+
+// Delete R2 objects via POST /api/r2-delete.
+// Accepts bare keys or full public URLs — the server normalizes each value,
+// enforces that every key lives in the caller's own uid namespace, and
+// derives+deletes unstored photo variants (w320/w640/w1024/w32).
+// Best-effort: per-key failures come back in the results array; this throws
+// only on transport/auth errors. The API caps keys per request; chunk here.
+export async function deleteR2Objects(
+  urlsOrKeys: string[],
+  idToken: string
+): Promise<R2DeleteResult[]> {
+  const keys = (urlsOrKeys || []).filter(
+    (k) => typeof k === 'string' && k.trim()
+  );
+  if (!keys.length || !idToken) return [];
+  const out: R2DeleteResult[] = [];
+  const CHUNK = 100;
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const res = await fetch('/api/r2-delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ keys: keys.slice(i, i + CHUNK) }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(`r2-delete-${res.status}-${data.error || 'unknown'}`);
+    }
+    const data = await res.json();
+    if (Array.isArray(data.results)) out.push(...data.results);
+  }
+  return out;
+}

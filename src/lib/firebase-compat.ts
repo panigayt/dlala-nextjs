@@ -50,6 +50,8 @@ export interface CompatUser {
   updateProfile: (p: { displayName?: string }) => Promise<void>;
   delete: () => Promise<void>;
   reauthenticateWithCredential: (cred: unknown) => Promise<void>;
+  // Present on the real Firebase User at runtime (used for R2 API calls).
+  getIdToken: (force?: boolean) => Promise<string>;
 }
 
 export interface CompatAuth {

@@ -24,7 +24,7 @@ import {
   type FirebaseClient,
   type CompatUser,
 } from '@/lib/firebase-client';
-import { uploadToR2, r2KeyFor } from '@/lib/r2-upload';
+import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
 
 const T = {
@@ -275,6 +275,20 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
         vitrineIds: client.FieldValue.arrayRemove(id),
       });
       await batch.commit();
+      // R2 photo cleanup (best-effort) — the server skips non-R2 values
+      // and enforces uid ownership; unstored variants are derived server-side.
+      try {
+        const urls = [
+          ...(Array.isArray(ad?.photoUrls) ? ad.photoUrls : []),
+          ...(Array.isArray(ad?.photo_thumbs) ? ad.photo_thumbs : []),
+        ].filter((u): u is string => typeof u === 'string' && !!u);
+        if (urls.length) {
+          const idToken = await user.getIdToken();
+          await deleteR2Objects(urls, idToken);
+        }
+      } catch {
+        // non-fatal
+      }
       await reload();
     } catch {
       setNotice(T.errorGeneric);
