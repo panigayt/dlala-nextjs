@@ -14,7 +14,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AuthGate, { PageHeader } from '@/components/AuthGate';
+import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -254,7 +254,6 @@ function MyListingsContent({ user }: { user: CompatUser }) {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
-      <PageHeader title={t('myAds')} />
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {showVerifyBanner && (

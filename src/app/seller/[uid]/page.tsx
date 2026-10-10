@@ -40,16 +40,6 @@ async function getSellerListings(uid: string): Promise<ListingCard[]> {
   return fetchSellerListings(uid, SELLER_LISTINGS_PAGE_SIZE);
 }
 
-function Header() {
-  return (
-    <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold">دلالة</Link>
-        <nav className="text-sm">سوق الجزائر للإعلانات المبوبة</nav>
-      </div>
-    </header>
-  );
-}
 
 function NotFoundView() {
   return (
@@ -407,7 +397,6 @@ export default function SellerPage({
 }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <Header />
       <Suspense fallback={<SellerSkeleton />}>
         <SellerContent params={params} />
       </Suspense>

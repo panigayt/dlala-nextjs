@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import {
   useRequireAuth,
   LoadingSpinner,
-  PageHeader,
   FirebaseClient,
   CompatUser,
   inputCls,
@@ -549,7 +548,6 @@ export default function AlertsPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <PageHeader title="دلالة" />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-5">
           🔔 {STR.alerts}

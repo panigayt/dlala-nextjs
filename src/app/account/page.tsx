@@ -18,7 +18,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AuthGate, { PageHeader } from '@/components/AuthGate';
+import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { stripExif } from '@/lib/stripExif';
 import { useLang } from '@/lib/i18n';
@@ -497,7 +497,6 @@ function AccountContent({ user }: { user: CompatUser }) {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
-      <PageHeader title={t('account')} />
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {showVerifyBanner && (

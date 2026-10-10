@@ -6,7 +6,6 @@
 // so every word is preserved. No app-only features.
 
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'سياسة الخصوصية — دلالة DLALA',
@@ -68,23 +67,10 @@ const PRIVACY: Record<'ar' | 'fr' | 'en', string> = {
 const LEGAL_PROSE =
   '[&_h2]:text-xl [&_h2]:font-bold [&_h2]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-6 [&_h3]:mb-2 [&_p]:mb-3 [&_p]:leading-7 [&_ul]:ps-6 [&_ul]:mb-3 [&_ul]:list-disc [&_li]:mb-1';
 
-function Header() {
-  return (
-    <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold">
-          دلالة
-        </Link>
-        <nav className="text-sm">سوق الجزائر للإعلانات المبوبة</nav>
-      </div>
-    </header>
-  );
-}
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <Header />
       <main className="mx-auto max-w-3xl px-4 py-6">
         <h1 className="sr-only">الخصوصية</h1>
         <div className="rounded-xl bg-white p-6 shadow-sm">

@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import AuthGate, { PageHeader } from '@/components/AuthGate';
+import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { deleteR2Objects } from '@/lib/r2-upload';
 import { useLang, type Lang } from '@/lib/i18n';
@@ -382,7 +382,6 @@ function SettingsContent({ user }: { user: CompatUser }) {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
-      <PageHeader title={t('settings')} />
 
       {toast && (
         <div className="fixed bottom-6 start-1/2 -translate-x-1/2 z-50 rounded-lg bg-zinc-900 text-white text-sm px-4 py-2.5 shadow-lg">

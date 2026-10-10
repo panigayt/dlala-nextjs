@@ -16,7 +16,6 @@ import { useSearchParams } from 'next/navigation';
 import {
   getFirebaseClient,
   LoadingSpinner,
-  PageHeader,
   CompatAuth,
   inputCls,
   btnCls,
@@ -162,7 +161,6 @@ function AuthActionInner() {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <PageHeader title="دلالة" />
       <main className="max-w-md mx-auto px-4 py-10">
         <div className="rounded-2xl bg-white shadow-sm p-6 text-center">
           {stage === 'working' && (

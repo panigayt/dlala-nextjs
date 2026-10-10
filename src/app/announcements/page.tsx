@@ -11,7 +11,6 @@
 
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import {
   fetchAnnouncements,
@@ -45,18 +44,6 @@ async function getAnnouncements(): Promise<Announcement[]> {
   return fetchAnnouncements(50);
 }
 
-function Header() {
-  return (
-    <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold">
-          دلالة
-        </Link>
-        <nav className="text-sm">سوق الجزائر للإعلانات المبوبة</nav>
-      </div>
-    </header>
-  );
-}
 
 function fmtDate(d: Date | undefined): { date: string; iso: string } {
   if (!d || !(d instanceof Date) || isNaN(d.getTime())) return { date: '', iso: '' };
@@ -137,7 +124,6 @@ function AnnSkeleton() {
 export default function AnnouncementsPage() {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <Header />
       <main className="mx-auto max-w-3xl px-4 py-6">
         <h1 lang="ar" dir="rtl" className="mb-1 text-xl font-bold text-zinc-900">
           {HEADING.ar}

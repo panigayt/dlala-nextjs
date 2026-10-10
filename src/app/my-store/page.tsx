@@ -16,7 +16,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   useRequireAuth,
-  PageHeader,
   LoadingSpinner,
   inputCls,
   btnCls,
@@ -420,7 +419,6 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <PageHeader title="دلالة" />
       <main className="max-w-6xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-4">{T.myStore}</h1>
 

@@ -17,7 +17,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import AuthGate, { PageHeader } from '@/components/AuthGate';
+import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang } from '@/lib/i18n';
 
@@ -272,7 +272,6 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
-      <PageHeader title={t('myFollows')} />
 
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-4">{t('myFollows')}</h1>

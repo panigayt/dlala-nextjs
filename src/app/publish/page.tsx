@@ -18,7 +18,6 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   useRequireAuth,
-  PageHeader,
   LoadingSpinner,
   inputCls,
   btnCls,
@@ -1097,7 +1096,6 @@ function PublishForm({
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <PageHeader title="دلالة" />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-4">{t('publish')}</h1>
 

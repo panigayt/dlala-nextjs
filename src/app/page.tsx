@@ -201,13 +201,6 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-xl font-bold">دلالة</h1>
-          <nav className="text-sm">سوق الجزائر للإعلانات المبوبة</nav>
-        </div>
-      </header>
-
       <main className="max-w-6xl mx-auto px-4 py-6">
         <SearchBar />
         <CategoryChips />

@@ -54,18 +54,6 @@ export async function generateMetadata({
   }
 }
 
-function Header() {
-  return (
-    <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold">
-          دلالة
-        </Link>
-        <nav className="text-sm">سوق الجزائر للإعلانات المبوبة</nav>
-      </div>
-    </header>
-  );
-}
 
 function NotFoundView() {
   return (
@@ -190,7 +178,6 @@ function DetailSkeleton() {
 export default function AnnouncementPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <Header />
       <main className="mx-auto max-w-3xl px-4 py-6">
         <Suspense fallback={<DetailSkeleton />}>
           <AnnDetail params={params} />

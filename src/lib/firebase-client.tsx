@@ -257,7 +257,6 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
 export function LoadingSpinner({ label }: { label?: string }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <PageHeader title="دلالة" />
       <main className="max-w-2xl mx-auto px-4 py-16 text-center">
         <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-700" />
         <p className="mt-4 text-zinc-600">{label || 'جارٍ التحميل...'}</p>

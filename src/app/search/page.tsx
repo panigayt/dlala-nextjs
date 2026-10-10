@@ -249,26 +249,6 @@ function FilterBar({ filters }: { filters: SearchFilters }) {
   );
 }
 
-function Header() {
-  return (
-    <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold">دلالة</Link>
-        <form action="/search" method="get" className="flex gap-2">
-          <input
-            type="search"
-            name="q"
-            placeholder="ابحث..."
-            className="rounded-lg px-3 py-1.5 text-sm text-zinc-900 w-40 sm:w-64"
-          />
-          <button type="submit" className="rounded-lg bg-emerald-900 px-4 py-1.5 text-sm font-medium">
-            بحث
-          </button>
-        </form>
-      </div>
-    </header>
-  );
-}
 
 function ResultsSkeleton() {
   return (
@@ -354,7 +334,6 @@ export default function SearchPage({
 }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <Header />
       <Suspense fallback={<ResultsSkeleton />}>
         <SearchContent searchParams={searchParams} />
       </Suspense>

@@ -71,6 +71,16 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     skipToContent: 'تخطَّ إلى المحتوى', appName: 'دلالة',
     tagline: 'إعلانات مرتبة، بائعون موثوقون', logout: 'تسجيل الخروج', login: 'تسجيل الدخول',
     condNew: 'جديد', condUsed: 'مستعمل',
+    // Site chrome (Group C) — verbatim from js/i18n.ar.js (js/app.js renderChrome parity).
+    menu: 'القائمة', close: 'إغلاق', home: 'الرئيسية', wanted: 'مطلوب',
+    announcements: 'إعلانات الفريق', messages: 'الرسائل', alerts: 'التنبيهات',
+    allRights: 'دلالة — سوق الجزائر الحر',
+    guidesTitle: 'أدلة الشراء', guideCar: 'دليل السيارات', guidePrices: 'دليل الأسعار',
+    guidePhone: 'دليل الهواتف', guideScam: 'دليل الحماية من الاحتيال',
+    signup: 'حساب جديد', navMain: 'أقسام رئيسية', navSpace: 'مساحتي', navHelp: 'المساعدة',
+    profileLoadError: 'تعذّر تحميل الملف الشخصي', unverifiedBadge: 'غير مفعّل',
+    vitrine: 'الواجهة', storeVerify: 'توثيق المتجر',
+    logoutFailed: 'تعذّر تسجيل الخروج — تحقق من الاتصال وحاول مجدداً.',
   },
   fr: {
     account: 'Mon compte', settings: 'Paramètres', myAds: 'Mes annonces', myFollows: 'Mes abonnements',
@@ -132,6 +142,16 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     skipToContent: 'Aller au contenu', appName: 'DLALA',
     tagline: 'Annonces claires, vendeurs vérifiés', logout: 'Déconnexion', login: 'Connexion',
     condNew: 'Neuf', condUsed: 'Occasion',
+    // Site chrome (Group C) — verbatim from js/i18n.fr.js (js/app.js renderChrome parity).
+    menu: 'Menu', close: 'Fermer', home: 'Accueil', wanted: 'Recherché',
+    announcements: "Annonces de l'équipe", messages: 'Messages', alerts: 'Alertes',
+    allRights: 'DLALA — le souk libre d’Algérie',
+    guidesTitle: 'Guides d’achat', guideCar: 'Guide voitures', guidePrices: 'Guide des prix',
+    guidePhone: 'Guide téléphones', guideScam: 'Guide anti-arnaques',
+    signup: 'Créer un compte', navMain: 'Principal', navSpace: 'Mon espace', navHelp: 'Aide',
+    profileLoadError: 'Impossible de charger le profil', unverifiedBadge: 'Non vérifié',
+    vitrine: 'Vitrine', storeVerify: 'Vérification boutique',
+    logoutFailed: 'Échec de la déconnexion — vérifiez votre connexion et réessayez.',
   },
   en: {
     account: 'My account', settings: 'Settings', myAds: 'My ads', myFollows: 'My follows',
@@ -193,6 +213,16 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     skipToContent: 'Skip to content', appName: 'DLALA',
     tagline: 'Clear ads, trusted sellers', logout: 'Sign out', login: 'Sign in',
     condNew: 'New', condUsed: 'Used',
+    // Site chrome (Group C) — verbatim from js/i18n.en.js (js/app.js renderChrome parity).
+    menu: 'Menu', close: 'Close', home: 'Home', wanted: 'Wanted',
+    announcements: 'Team announcements', messages: 'Messages', alerts: 'Alerts',
+    allRights: 'DLALA — Algeria’s free souk',
+    guidesTitle: 'Buying guides', guideCar: 'Car guide', guidePrices: 'Price guide',
+    guidePhone: 'Phone guide', guideScam: 'Scam protection guide',
+    signup: 'Sign up', navMain: 'Main', navSpace: 'My space', navHelp: 'Help',
+    profileLoadError: 'Couldn\'t load profile', unverifiedBadge: 'Unverified',
+    vitrine: 'Showcase', storeVerify: 'Store verification',
+    logoutFailed: 'Could not sign out — check your connection and try again.',
   },
 };
 

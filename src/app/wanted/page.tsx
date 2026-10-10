@@ -228,15 +228,6 @@ async function WantedContent({
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <header className="bg-emerald-700 text-white shadow">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold">
-            دلالة
-          </Link>
-          <span className="text-sm">سوق الجزائر للإعلانات المبوبة</span>
-        </div>
-      </header>
-
       <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-zinc-900">مطلوب</h1>

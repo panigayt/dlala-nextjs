@@ -15,7 +15,6 @@
 import { useEffect, useState } from 'react';
 import {
   useRequireAuth,
-  PageHeader,
   LoadingSpinner,
   btnCls,
   btnSecondaryCls,
@@ -275,7 +274,6 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
   if (box.kind === 'error') {
     return (
       <div className="min-h-screen bg-zinc-50" dir="rtl">
-        <PageHeader title="دلالة" />
         <main className="max-w-2xl mx-auto px-4 py-16 text-center">
           <p className="text-red-700 mb-4">{T.errorGeneric}</p>
           <button onClick={load} className={btnSecondaryCls}>{T.retry}</button>
@@ -286,7 +284,6 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <PageHeader title="دلالة" />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <section className="rounded-2xl bg-white shadow-sm p-5">
           <h1 className="text-xl font-bold text-zinc-900 mb-4 flex items-center">
