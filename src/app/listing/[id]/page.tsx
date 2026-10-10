@@ -17,6 +17,7 @@ import type { Metadata } from 'next';
 import {
   fetchListing,
   fetchSimilarListings,
+  fetchSimilarWindow,
   fetchSeller,
   cardTitle,
   cardImage,
@@ -44,6 +45,7 @@ import OwnerSellerCard from './OwnerSellerCard';
 import FollowButton from '@/components/FollowButton';
 import ReportUserButton from '@/components/ReportUserButton';
 import Gallery from './Gallery';
+import MatchingOffers, { type MatchOfferDoc } from './MatchingOffers';
 import TasteViewRecorder from './TasteViewRecorder';
 import ViewRecorder from './ViewRecorder';
 
@@ -283,14 +285,29 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   }
   // js/app.js renderAnswers parity: structured category Q&A.
   const rows = answerRows(l.answers);
-  // js/listing.js loadMatches parity: similar ads (same category, max 12).
+  // js/listing.js loadMatches parity:
+  // - regular ads: similar ads (same category, max 12).
+  // - wanted ads (مطلوب): reverse-matched offers via matchingOffers
+  //   (js/market.js) over the unfiltered 40-doc category window —
+  //   the title-word match runs client-side with the viewer's uid.
   // null = fetch failed -> render nothing (legacy catch behavior).
+  const isWanted = !!l.isWanted;
   let similar: ListingCard[] | null = null;
+  let similarWindow: ListingCard[] | null = null;
   if (l.categoryId) {
     try {
-      similar = await fetchSimilarListings(l.categoryId, Number(l.wilayaCode) || 0, id);
+      if (isWanted) {
+        similarWindow = await fetchSimilarWindow(l.categoryId);
+      } else {
+        similar = await fetchSimilarListings(
+          l.categoryId,
+          Number(l.wilayaCode) || 0,
+          id
+        );
+      }
     } catch {
       similar = null;
+      similarWindow = null;
     }
   }
   // js/listing.js loadSeller parity: fetch the full seller profile for the
@@ -486,20 +503,39 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
-      {/* Similar ads — same category, max 12 (js/listing.js loadMatches) */}
-      {similar !== null && (
-        <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
-          <h2 className="text-lg font-semibold mb-4">إعلانات مشابهة</h2>
-          {similar.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {similar.map((s) => (
-                <SimilarCard key={s.id} l={s} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-zinc-500">لا توجد إعلانات مشابهة حالياً</p>
-          )}
-        </div>
+      {/* Matches section — js/listing.js loadMatches parity:
+          wanted ads show reverse-matched offers («عروض مطابقة لطلبك»,
+          js/market.js matchingOffers); regular ads show similar ads. */}
+      {isWanted ? (
+        similarWindow !== null && (
+          <MatchingOffers
+            windowDocs={similarWindow.map(
+              (d): MatchOfferDoc => ({
+                ...d,
+                createdAt:
+                  d.createdAt instanceof Date
+                    ? d.createdAt.toISOString()
+                    : null,
+              })
+            )}
+            wanted={{ title: l.title, categoryId: l.categoryId }}
+          />
+        )
+      ) : (
+        similar !== null && (
+          <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
+            <h2 className="text-lg font-semibold mb-4">إعلانات مشابهة</h2>
+            {similar.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {similar.map((s) => (
+                  <SimilarCard key={s.id} l={s} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-zinc-500">لا توجد إعلانات مشابهة حالياً</p>
+            )}
+          </div>
+        )
       )}
 
     </main>

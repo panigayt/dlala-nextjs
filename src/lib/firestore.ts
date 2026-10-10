@@ -343,10 +343,15 @@ export async function fetchListing(id: string): Promise<ListingDetail | null> {
 // R11-ST31: both queries fire in parallel and merge (dedupe by id, wilaya
 // hits first). LIS-6: same category, not this ad, not wanted, not sold;
 // same wilaya first, then newest; max 12.
-export async function fetchSimilarListings(
+// Shared by fetchSimilarListings and fetchSimilarWindow (js/listing.js
+// fetchSimilarRest parity): the raw category/status card-projection query.
+// withWilaya adds the wilayaCode constraint (needs the composite index;
+// callers catch and fall back when it is missing).
+async function runSimilarQuery(
   categoryId: string,
+  withWilaya: boolean,
   wilayaCode: number,
-  excludeId: string
+  limit: number
 ): Promise<ListingCard[]> {
   const url =
     FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
@@ -370,41 +375,46 @@ export async function fetchSimilarListings(
       },
     },
   ];
-  const runQuery = async (withWilaya: boolean, limit: number): Promise<ListingCard[]> => {
-    const filters = withWilaya
-      ? baseFilters.concat([
-          {
-            fieldFilter: {
-              field: { fieldPath: 'wilayaCode' },
-              op: 'EQUAL',
-              value: { integerValue: String(Number(wilayaCode)) },
-            },
+  const filters = withWilaya
+    ? baseFilters.concat([
+        {
+          fieldFilter: {
+            field: { fieldPath: 'wilayaCode' },
+            op: 'EQUAL',
+            value: { integerValue: String(Number(wilayaCode)) },
           },
-        ])
-      : baseFilters.slice();
-    const structuredQuery = {
-      from: [{ collectionId: 'listings' }],
-      where: { compositeFilter: { op: 'AND', filters } },
-      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
-      select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
-      limit,
-    };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ structuredQuery }),
-      cache: 'no-store',
-    });
-    if (!res.ok) throw new Error(`similar-rest-${res.status}`);
-    const body = await res.json().catch(() => null);
-    const rawDocs = (Array.isArray(body) ? body : [])
-      .filter((r) => r.document)
-      .map((r) => r.document);
-    return rawDocs.map(restDocToObj);
+        },
+      ])
+    : baseFilters.slice();
+  const structuredQuery = {
+    from: [{ collectionId: 'listings' }],
+    where: { compositeFilter: { op: 'AND', filters } },
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
+    limit,
   };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`similar-rest-${res.status}`);
+  const body = await res.json().catch(() => null);
+  const rawDocs = (Array.isArray(body) ? body : [])
+    .filter((r) => r.document)
+    .map((r) => r.document);
+  return rawDocs.map(restDocToObj);
+}
+
+export async function fetchSimilarListings(
+  categoryId: string,
+  wilayaCode: number,
+  excludeId: string
+): Promise<ListingCard[]> {
   const w = Number(wilayaCode) || 0;
-  const wilayaP = w > 0 ? runQuery(true, 12).catch(() => [] as ListingCard[]) : Promise.resolve([] as ListingCard[]);
-  const windowP = runQuery(false, 40).catch(() => [] as ListingCard[]);
+  const wilayaP = w > 0 ? runSimilarQuery(categoryId, true, w, 12).catch(() => [] as ListingCard[]) : Promise.resolve([] as ListingCard[]);
+  const windowP = runSimilarQuery(categoryId, false, 0, 40).catch(() => [] as ListingCard[]);
   const [wilayaDocs, windowDocs] = await Promise.all([wilayaP, windowP]);
   const docs = wilayaDocs.slice();
   const seen = new Set(docs.map((d) => d.id));
@@ -427,6 +437,13 @@ export async function fetchSimilarListings(
         createdMs(b) - createdMs(a)
     )
     .slice(0, 12);
+}
+
+// js/listing.js loadMatches parity (wanted branch): the unfiltered 40-doc
+// category window — matchingOffers does its own title-word match on the
+// client (same category, available/negotiating, newest first).
+export async function fetchSimilarWindow(categoryId: string): Promise<ListingCard[]> {
+  return runSimilarQuery(categoryId, false, 0, 40);
 }
 
 // js/market.js — normSearchText (verbatim logic)
