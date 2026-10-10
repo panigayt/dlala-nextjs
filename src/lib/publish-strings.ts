@@ -150,6 +150,7 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   negotiable: { ar: "قابل للتفاوض", fr: "Négociable", en: "Negotiable" },
   photos: { ar: "الصور", fr: "Photos", en: "Photos" },
   photoMaxHint: { ar: "الحد الأقصى: 10 صور", fr: "Maximum 10 photos", en: "Maximum 10 photos" },
+  setAsCover: { ar: "تعيين كصورة غلاف", fr: "Définir comme couverture", en: "Set as cover" },
   allCategories: { ar: "كل الأقسام", fr: "Toutes catégories", en: "All categories" },
 };
 

@@ -40,14 +40,79 @@ const PUBLISH_FN_URL =
 interface ProcessedPhoto {
   file: File; // downscaled main (WebP)
   thumb: File | null; // W320 WebP
+  w640: File | null; // W640 WebP hero variant
+  w1024: File | null; // W1024 WebP hero variant
+  lqip: File | null; // W32 LQIP blur-up placeholder
+  hash: string; // perceptual aHash (16 hex chars)
   previewUrl: string; // blob URL for preview
+}
+
+// Perceptual aHash (8x8, 16 hex chars) — verbatim port of market.js ahashOfBitmap.
+// Computed from the already-decoded bitmap (same decode pass as the resize).
+function ahashOfBitmap(bmp: ImageBitmap): string {
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 8;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return '';
+  ctx.drawImage(bmp, 0, 0, 8, 8);
+  const d = ctx.getImageData(0, 0, 8, 8).data;
+  const gray: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < 64; i++) {
+    const g = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+    gray.push(g); sum += g;
+  }
+  const avg = sum / 64;
+  let bits = '';
+  for (const g of gray) bits += g >= avg ? '1' : '0';
+  let hex = '';
+  for (let i = 0; i < 64; i += 4) hex += parseInt(bits.substr(i, 4), 2).toString(16);
+  return hex;
+}
+
+function hammingHex(a: string, b: string): number {
+  if (!a || !b || a.length !== b.length) return Infinity;
+  let n = 0;
+  for (let i = 0; i < a.length; i++) {
+    let x = parseInt(a[i], 16) ^ parseInt(b[i], 16);
+    while (x) { n += x & 1; x >>= 1; }
+  }
+  return n;
+}
+
+// Same Hamming ≤ 5 threshold as the cross-listing guard (market.js arePhotosDuplicate).
+function arePhotosDuplicate(a: string, b: string): boolean {
+  return hammingHex(a, b) <= 5;
+}
+
+// Drop duplicate photos WITHIN one ad before upload — verbatim port of
+// publish.js dedupeWithinAd. Returns indices to keep.
+function dedupeWithinAd(newHashes: string[], existingHashes: string[]): number[] {
+  const seen: { h: string; idx: number }[] = [];
+  (existingHashes || []).forEach((h) => { if (h) seen.push({ h, idx: -1 }); });
+  const keep: number[] = [];
+  (newHashes || []).forEach((h, i) => {
+    let dupOf = -2;
+    if (h) {
+      for (const s of seen) {
+        let isDup = false;
+        try { isDup = arePhotosDuplicate(s.h, h); } catch { isDup = false; }
+        if (isDup) { dupOf = s.idx; break; }
+      }
+    }
+    if (dupOf !== -2) return; // duplicate — drop
+    if (h) seen.push({ h, idx: i });
+    keep.push(i);
+  });
+  return keep;
 }
 
 async function makeVariant(
   canvas: HTMLCanvasElement,
   baseName: string,
   width: number,
-  suffix: string
+  suffix: string,
+  quality?: number
 ): Promise<File | null> {
   const scale = width / canvas.width;
   if (scale >= 1) return null; // no upscale
@@ -57,8 +122,10 @@ async function makeVariant(
   const ctx = c.getContext('2d');
   if (!ctx) return null;
   ctx.drawImage(canvas, 0, 0, c.width, c.height);
+  // Per-width quality (legacy publish.js R11/Speed 29: 32px LQIP at 0.45)
+  const q = quality ?? (width <= 48 ? 0.45 : width <= 320 ? 0.62 : width <= 640 ? 0.72 : 0.78);
   const blob = await new Promise<Blob | null>((res) =>
-    c.toBlob(res, 'image/webp', 0.82)
+    c.toBlob(res, 'image/webp', q)
   );
   if (!blob) return null;
   return new File([blob], `${baseName}${suffix}.webp`, { type: 'image/webp' });
@@ -72,10 +139,16 @@ async function processPhoto(file: File): Promise<ProcessedPhoto> {
   canvas.height = Math.round(bitmap.height * scale);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  // aHash from the already-decoded bitmap (same decode pass — legacy perf opt)
+  let hash = '';
+  try { hash = ahashOfBitmap(bitmap); } catch { /* fail-open */ }
   if (bitmap.close) bitmap.close();
 
   const baseName = (file.name || 'photo').replace(/\.\w+$/, '').slice(0, 40);
   const thumb = await makeVariant(canvas, baseName, 320, '-thumb');
+  const w640 = await makeVariant(canvas, baseName, 640, '-w640');
+  const w1024 = await makeVariant(canvas, baseName, 1024, '-w1024');
+  const lqip = await makeVariant(canvas, baseName, 32, '-w32');
 
   const blob = await new Promise<Blob | null>((res) =>
     canvas.toBlob(res, 'image/webp', 0.82)
@@ -88,6 +161,10 @@ async function processPhoto(file: File): Promise<ProcessedPhoto> {
   return {
     file: main,
     thumb,
+    w640,
+    w1024,
+    lqip,
+    hash,
     previewUrl: URL.createObjectURL(main),
   };
 }
@@ -446,6 +523,10 @@ function PublishForm({
   const [desc, setDesc] = useState(() => readDraft()?.desc || '');
   const [answers, setAnswers] = useState<Record<string, string>>(() => readDraft()?.answers || {});
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
+  const [existingPhotos, setExistingPhotos] = useState<{ url: string; hash: string; thumb: string | null }[]>([]);
+  const [removedExisting, setRemovedExisting] = useState<string[]>([]);
+  const [existingDirty, setExistingDirty] = useState(false);
+  const [photoWarn, setPhotoWarn] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -498,6 +579,19 @@ function PublishForm({
         if (d.answers && typeof d.answers === 'object') {
           setAnswers(d.answers as Record<string, string>);
         }
+        // Fix 7: load existing photos with hashes + thumbs (legacy editListing.photoUrls)
+        const pUrls = Array.isArray(d.photoUrls) ? d.photoUrls : [];
+        const pHashes = Array.isArray(d.photoHashes) ? d.photoHashes : [];
+        const pThumbs = Array.isArray(d.photo_thumbs) ? d.photo_thumbs : [];
+        setExistingPhotos(
+          pUrls.map((u: string, i: number) => ({
+            url: u,
+            hash: pHashes[i] || '',
+            thumb: pThumbs[i] || null,
+          }))
+        );
+        setRemovedExisting([]);
+        setExistingDirty(false);
       } catch {
         setError(t('editLoadError'));
       }
@@ -506,25 +600,42 @@ function PublishForm({
 
   const onPickPhotos = async (files: FileList | null) => {
     if (!files) return;
-    const slots = MAX_PHOTOS - photos.length;
-    let picked = Array.from(files).slice(0, Math.max(0, slots));
+    setPhotoWarn(null);
+    const slots = MAX_PHOTOS - photos.length - existingPhotos.length;
+    const allPicked = Array.from(files);
+    // Fix 1: JS file type validation (in addition to accept="image/*")
+    const notImages = allPicked.filter((f) => !f.type || !f.type.startsWith('image/'));
+    let picked = allPicked.filter((f) => f.type && f.type.startsWith('image/'));
     // HEIC/HEIF rejected with dedicated message (not decodable by canvas)
     const heic = picked.filter((f) =>
       /heic|heif/i.test(f.type) || /\.heic?$/i.test(f.name)
     );
-    if (heic.length) {
-      fail(t('photoHeic'));
-      picked = picked.filter((f) => !heic.includes(f));
+    picked = picked.filter((f) => !heic.includes(f));
+    // Cap: files past MAX_PHOTOS are ignored (legacy: "files past the cap are never attempted")
+    const ignored = Math.max(0, picked.length - Math.max(0, slots));
+    picked = picked.slice(0, Math.max(0, slots));
+    // Fix 6: visible photoWarn feedback (legacy renderPhotoNotice)
+    const warnParts: string[] = [];
+    if (notImages.length) {
+      warnParts.push(t('photoSkipped').replace('{name}', notImages.map((f) => f.name || '?').join(', ')));
     }
+    if (heic.length) {
+      warnParts.push(t('photoHeic').replace('{name}', heic.map((f) => f.name || '?').join(', ')));
+    }
+    if (ignored > 0) {
+      warnParts.push(t('photoLimitReached').replace('{n}', String(ignored)));
+    }
+    if (warnParts.length) setPhotoWarn(warnParts.join(' '));
     if (!picked.length) return;
     setProgress(t('progPreparing').replace('{x}', '0').replace('{y}', String(picked.length)));
     const done: ProcessedPhoto[] = [];
+    const skippedNames: string[] = [];
     for (let i = 0; i < picked.length; i++) {
       try {
         const p = await processPhoto(picked[i]);
         done.push(p);
       } catch {
-        // skip failed photo
+        skippedNames.push(picked[i].name || '?');
       }
       setProgress(
         t('progPreparing')
@@ -532,7 +643,25 @@ function PublishForm({
           .replace('{y}', String(picked.length))
       );
     }
-    setPhotos((p) => [...p, ...done].slice(0, MAX_PHOTOS));
+    if (skippedNames.length) {
+      setPhotoWarn((prev) => {
+        const msg = t('photoSkipped').replace('{name}', skippedNames.join(', '));
+        return prev ? prev + ' ' + msg : msg;
+      });
+    }
+    // Fix 5: within-ad dedupe — drop perceptual duplicates (Hamming ≤ 5)
+    // against existing photos and each other (legacy dedupeWithinAd).
+    let final = done;
+    if (done.length) {
+      const keepIdx = dedupeWithinAd(
+        done.map((p) => p.hash),
+        [...existingPhotos.map((p) => p.hash), ...photos.map((p) => p.hash)]
+      );
+      const dropped = done.length - keepIdx.length;
+      final = keepIdx.map((ki) => done[ki]);
+      if (dropped > 0) console.log(`[pub] dropped ${dropped} duplicate photo(s) within ad`);
+    }
+    setPhotos((p) => [...p, ...final].slice(0, MAX_PHOTOS));
     setProgress(null);
   };
 
@@ -551,6 +680,49 @@ function PublishForm({
       const j = i + d;
       if (j < 0 || j >= pp.length) return p;
       [pp[i], pp[j]] = [pp[j], pp[i]];
+      return pp;
+    });
+  };
+
+  // Existing photo editor (edit mode) — legacy renderPhotoEditor parity:
+  // reorder, set-as-cover (photoUrls[0] is the cover), remove (confirm).
+  const moveExisting = (i: number, d: number) => {
+    setExistingDirty(true);
+    setExistingPhotos((p) => {
+      const pp = [...p];
+      const j = i + d;
+      if (j < 0 || j >= pp.length) return p;
+      [pp[i], pp[j]] = [pp[j], pp[i]];
+      return pp;
+    });
+  };
+
+  const setExistingCover = (i: number) => {
+    if (i <= 0) return;
+    setExistingDirty(true);
+    setExistingPhotos((p) => {
+      const pp = [...p];
+      const [it] = pp.splice(i, 1);
+      pp.unshift(it);
+      return pp;
+    });
+  };
+
+  const removeExisting = (i: number) => {
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (!window.confirm(t('removePhotoConfirm'))) return;
+    }
+    setExistingDirty(true);
+    setExistingPhotos((p) => {
+      const pp = [...p];
+      const [rm] = pp.splice(i, 1);
+      if (rm) {
+        setRemovedExisting((r) => {
+          const urls = [...r, rm.url];
+          if (rm.thumb) urls.push(rm.thumb);
+          return urls;
+        });
+      }
       return pp;
     });
   };
@@ -618,6 +790,56 @@ function PublishForm({
     return true;
   };
 
+  // Upload new photos to R2: main + w320/w640/w1024/w32 variants (best-effort).
+  // Returns { urls, hashes, thumbs } aligned 1:1 (legacy uploadPhotos parity).
+  const uploadNewPhotos = async (
+    list: ProcessedPhoto[],
+    uid: string,
+    listingId: string,
+    idToken: string
+  ): Promise<{ urls: string[]; hashes: string[]; thumbs: (string | null)[] }> => {
+    const urls: string[] = [];
+    const hashes: string[] = [];
+    const thumbs: (string | null)[] = [];
+    if (!list.length) return { urls, hashes, thumbs };
+    setProgress(t('progUploading').replace('{x}', '0').replace('{y}', String(list.length)));
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      const ts = Date.now();
+      const key = r2KeyFor(uid, listingId, `${ts}_${i}.webp`);
+      const { publicUrl } = await uploadToR2(p.file, key, idToken);
+      urls.push(publicUrl);
+      hashes.push(p.hash || '');
+      // Variants: w320 thumb (photo_thumbs content), w640/w1024 heroes, w32 LQIP.
+      // Best-effort — failures are swallowed, never fail publish.
+      const uploadVariant = async (vf: File | null, vprefix: string): Promise<void> => {
+        if (!vf) return;
+        try {
+          await uploadToR2(vf, r2KeyFor(uid, listingId, `${vprefix}_${ts}_${i}.webp`), idToken);
+        } catch { /* variant failed — progressive enhancement */ }
+      };
+      if (p.thumb) {
+        try {
+          const tr = await uploadToR2(p.thumb, r2KeyFor(uid, listingId, `w320_${ts}_${i}.webp`), idToken);
+          thumbs.push(tr.publicUrl);
+        } catch {
+          thumbs.push(null);
+        }
+      } else {
+        thumbs.push(null);
+      }
+      await uploadVariant(p.w640, 'w640');
+      await uploadVariant(p.w1024, 'w1024');
+      await uploadVariant(p.lqip, 'w32');
+      setProgress(
+        t('progUploading')
+          .replace('{x}', String(i + 1))
+          .replace('{y}', String(list.length))
+      );
+    }
+    return { urls, hashes, thumbs };
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -661,7 +883,13 @@ function PublishForm({
         const cur = curSnap.exists ? (curSnap.data() as Record<string, unknown>) : {};
         const oldPrice = Number(cur.price || 0);
         const priceDropped = effPrice < oldPrice;
-        await client.db.collection('listings').doc(editId).update({
+        // Upload any newly picked photos (with variants + hashes)
+        const up = await uploadNewPhotos(photos, user.uid, editId, idToken);
+        // Merge: existing kept photos first, then new uploads (legacy mergeEditPhotos)
+        const mergedUrls = existingPhotos.map((p) => p.url).concat(up.urls);
+        const mergedHashes = existingPhotos.map((p) => p.hash || '').concat(up.hashes);
+        const mergedThumbs = existingPhotos.map((p) => p.thumb).concat(up.thumbs);
+        const updateDoc: Record<string, unknown> = {
           title: { ar: title.trim() },
           description: { ar: desc.trim() },
           price: effPrice,
@@ -676,39 +904,25 @@ function PublishForm({
           previousPrice: priceDropped ? oldPrice : null,
           updatedAt: client.FieldValue.serverTimestamp(),
           ...(isSeeker ? { isWanted: true } : {}),
-        });
+        };
+        // Only touch photos when the user changed them (picked new or removed existing)
+        if (photos.length || existingDirty) {
+          updateDoc.photoUrls = mergedUrls;
+          updateDoc.photoHashes = mergedHashes.slice(0, mergedUrls.length);
+          updateDoc.photo_thumbs = mergedThumbs.slice(0, mergedUrls.length);
+          updateDoc.photoVariants = true;
+        }
+        await client.db.collection('listings').doc(editId).update(updateDoc);
         try { localStorage.removeItem('dlala_publish_draft'); } catch { /* ignore */ }
         window.location.href = `/listing/${editId}`;
         return;
       }
 
-      // Upload photos to R2
+      // Upload photos to R2 (main + w320/w640/w1024/w32 variants)
       const listingId = client.db.collection('listings').doc().id;
-      const urls: string[] = [];
-      const thumbs: (string | null)[] = [];
-      setProgress(t('progUploading').replace('{x}', '0').replace('{y}', String(photos.length)));
-      for (let i = 0; i < photos.length; i++) {
-        const p = photos[i];
-        const key = r2KeyFor(user.uid, listingId, `${Date.now()}_${i}.webp`);
-        const { publicUrl } = await uploadToR2(p.file, key, idToken);
-        urls.push(publicUrl);
-        if (p.thumb) {
-          const tkey = r2KeyFor(user.uid, listingId, `w320_${Date.now()}_${i}.webp`);
-          try {
-            const tr = await uploadToR2(p.thumb, tkey, idToken);
-            thumbs.push(tr.publicUrl);
-          } catch {
-            thumbs.push(null);
-          }
-        } else {
-          thumbs.push(null);
-        }
-        setProgress(
-          t('progUploading')
-            .replace('{x}', String(i + 1))
-            .replace('{y}', String(photos.length))
-        );
-      }
+      const up = await uploadNewPhotos(photos, user.uid, listingId, idToken);
+      const urls = up.urls;
+      const thumbs: (string | null)[] = up.thumbs;
 
       // Default images when no photo picked (app parity)
       if (!urls.length) {
@@ -740,7 +954,7 @@ function PublishForm({
         condition: cat === 'beauty' ? answers['qBeautyCond'] || '' : condition,
         answers,
         photoUrls: urls,
-        photoHashes: [],
+        photoHashes: up.hashes.slice(0, urls.length),
         photo_thumbs: urls.map((_, i) => thumbs[i] || null),
         photoVariants: true,
         quantity: saleQty,
@@ -982,6 +1196,72 @@ function PublishForm({
           {/* Photos */}
           <label className={lblCls}>{t('photos')}</label>
           <p className="text-xs text-zinc-500 mb-2">{t('photoMaxHint')}</p>
+          {/* Fix 6: visible skipped-photo feedback (legacy #photoWarn) */}
+          {photoWarn && (
+            <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800" role="alert">
+              {photoWarn}
+            </div>
+          )}
+          {/* Fix 7: existing photos editor (edit mode) — legacy renderPhotoEditor */}
+          {editId && existingPhotos.length > 0 && (
+            <div className="mb-3">
+              <h4 className="text-sm font-medium text-zinc-700 mb-2">{t('existingPhotos')}</h4>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                {existingPhotos.map((p, i) => (
+                  <div key={`ex-${i}`} className="relative rounded-lg overflow-hidden bg-zinc-100 aspect-square">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.thumb || p.url} alt="" className="w-full h-full object-cover" />
+                    {i === 0 && (
+                      <span className="absolute top-1 right-1 rounded bg-emerald-700 text-white text-[10px] px-1.5 py-0.5" title={t('coverPhoto')}>
+                        ★
+                      </span>
+                    )}
+                    <div className="absolute bottom-1 right-1 flex gap-1">
+                      {i > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => moveExisting(i, -1)}
+                          className="w-6 h-6 rounded-full bg-black/60 text-white text-xs"
+                          aria-label={t('prevPhoto')}
+                        >
+                          ←
+                        </button>
+                      )}
+                      {i < existingPhotos.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => moveExisting(i, 1)}
+                          className="w-6 h-6 rounded-full bg-black/60 text-white text-xs"
+                          aria-label={t('nextPhoto')}
+                        >
+                          →
+                        </button>
+                      )}
+                      {i > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExistingCover(i)}
+                          className="w-6 h-6 rounded-full bg-black/60 text-amber-300 text-xs"
+                          title={t('setAsCover')}
+                          aria-label={t('setAsCover')}
+                        >
+                          ★
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeExisting(i)}
+                        className="w-6 h-6 rounded-full bg-red-600 text-white text-xs"
+                        aria-label={t('deletePhoto')}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
             {photos.map((p, i) => (
               <div key={i} className="relative rounded-lg overflow-hidden bg-zinc-100 aspect-square">
