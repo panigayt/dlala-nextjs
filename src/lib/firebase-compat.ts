@@ -16,10 +16,12 @@ import 'firebase/compat/storage';
 const FIREBASE_CONFIG = {
   // Production key from dlala-040/js/config.js (0.0.0.39) — the previous key
   // was not valid for Identity Toolkit, breaking all Auth operations.
-  apiKey: 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe',
+  apiKey: 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg',
   authDomain: 'dlala-85cea.firebaseapp.com',
   projectId: 'dlala-85cea',
   storageBucket: 'dlala-85cea.firebasestorage.app',
+  messagingSenderId: '413798475439',
+  appId: '1:413798475439:web:df5afa1e001e1cceaa165a',
 };
 
 // getFirebase returns the bundled Firebase compat instance.

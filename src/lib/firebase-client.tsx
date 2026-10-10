@@ -21,7 +21,7 @@ import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang } from '@/lib/i18n';
 
 export const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe',
+  apiKey: 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg',
   authDomain: 'dlala-85cea.firebaseapp.com',
   projectId: 'dlala-85cea',
   storageBucket: 'dlala-85cea.firebasestorage.app',

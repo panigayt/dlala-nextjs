@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   // Email must be verified (project rule: verified email to publish/contact).
   // Public Firebase web key (also hardcoded in client files; public by design).
   // Falls back to the project key if env var is unset to avoid breaking uploads.
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe';
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
   try {
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,

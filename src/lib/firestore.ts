@@ -9,7 +9,7 @@
 
 import type { Lang } from './i18n';
 
-export const FIREBASE_API_KEY = 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe';
+export const FIREBASE_API_KEY = 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
 export const FIRESTORE_REST_BASE =
   'https://firestore.googleapis.com/v1/projects/dlala-85cea/databases/(default)/documents';
 

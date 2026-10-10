@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   const keyUid = key.split('/')[2];
 
   // Public Firebase web key (also hardcoded in client files; public by design).
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe';
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
   try {
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
