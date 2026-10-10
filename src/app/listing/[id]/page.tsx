@@ -22,6 +22,7 @@ import {
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
+import ListingActions from './ListingActions';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -170,6 +171,17 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
           )}
         </div>
+        {/* Favorite + contact seller (client component — needs auth state) */}
+        {l.sellerId && (
+          <ListingActions
+            listingId={id}
+            sellerId={l.sellerId}
+            title={title}
+            price={l.price || 0}
+            photoUrl={mainPhoto || ''}
+            sold={l.status === 'sold'}
+          />
+        )}
       </div>
 
       {/* Seller card — denormalized fast path (R11-RADICAL) */}

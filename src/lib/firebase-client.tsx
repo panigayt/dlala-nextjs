@@ -50,6 +50,8 @@ export interface CompatUser {
   emailVerified: boolean;
   displayName: string | null;
   getIdToken: (force?: boolean) => Promise<string>;
+  // Present on the real Firebase User at runtime (standard Auth API).
+  reload: () => Promise<void>;
 }
 
 export interface CompatAuth {
