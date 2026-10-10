@@ -407,6 +407,7 @@ export default function Gallery({
             src={all[lbIdx]}
             alt={`${title} — ${t('photo')} ${lbIdx + 1}/${all.length}`}
             className="max-w-full max-h-full object-contain"
+            decoding="async"
             // LBZ-1: double-click (desktop) toggles zoom at the pointer.
             onDoubleClick={(e) => {
               e.stopPropagation();

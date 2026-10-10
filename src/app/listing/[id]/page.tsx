@@ -308,6 +308,11 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           dangerouslySetInnerHTML={{ __html: jsonLdScript }}
         />
       )}
+      {/* Round 149: preload the hero image for faster LCP on weak connections.
+          The URL is known at SSR time; the browser starts fetching immediately. */}
+      {photos[0] && (
+        <link rel="preload" as="image" href={photos[0]} fetchPriority="high" />
+      )}
       {/* Gallery — clickable thumbnails + fullscreen lightbox
           (client component; mirrors js/listing.js LIS-8 gallery,
           LIS-9 progressive hero, LIS-10 idle prewarm). */}
