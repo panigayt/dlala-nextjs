@@ -17,19 +17,15 @@ import FollowButton from './FollowButton';
 import SellerActions from './SellerActions';
 import RatingsList from './RatingsList';
 import SellerTabs from './SellerTabs';
+import StoreListingsGrid from './StoreListingsGrid';
 import {
   fetchSeller,
   fetchSellerListings,
   fetchSellerRatings,
-  cardTitle,
-  cardImage,
-  formatPrice,
   type ListingCard,
   type SellerProfile,
   type SellerRating,
 } from '@/lib/firestore';
-import { WILAYAS } from '@/lib/wilayas';
-import TimeAgo from '@/components/TimeAgo';
 
 async function getSeller(uid: string): Promise<SellerProfile | null> {
   'use cache';
@@ -41,12 +37,6 @@ async function getSellerListings(uid: string): Promise<ListingCard[]> {
   'use cache';
   cacheLife({ revalidate: 60 });
   return fetchSellerListings(uid, 24);
-}
-
-function wilayaName(code: number | undefined): string {
-  if (!code) return '';
-  const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
-  return w ? `${w.code} - ${w.ar}` : '';
 }
 
 function Header() {
@@ -104,46 +94,6 @@ function SellerSkeleton() {
         ))}
       </div>
     </main>
-  );
-}
-
-function ListingCardView({ l }: { l: ListingCard }) {
-  const img = cardImage(l);
-  return (
-    <a
-      href={`/listing/${l.id}`}
-      className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-      dir="rtl"
-    >
-      <div className="relative aspect-[4/3] bg-zinc-100">
-        {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
-            alt={cardTitle(l)}
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-bold text-emerald-700 text-lg">{formatPrice(l.price || 0)}</p>
-        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          {wilayaName(l.wilayaCode)}
-          {l.createdAt ? (
-            <>
-              {' · '}
-              <TimeAgo iso={l.createdAt.toISOString()} />
-            </>
-          ) : (
-            ''
-          )}
-        </p>
-      </div>
-    </a>
   );
 }
 
@@ -435,19 +385,7 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
         uid={uid}
         isPro={seller.storeTier === 'verified'}
         listingsCount={listings.length}
-        listings={
-          listings.length === 0 ? (
-            <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
-              لا توجد إعلانات متاحة حاليا.
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {listings.map((l) => (
-                <ListingCardView key={l.id} l={l} />
-              ))}
-            </div>
-          )
-        }
+        listings={<StoreListingsGrid listings={listings} isPro={isPro} />}
         infos={
           <>
             <SellerInfosTab s={seller} />
