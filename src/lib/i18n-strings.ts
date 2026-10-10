@@ -133,6 +133,8 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Search page (Round 109) — verbatim js/i18n.ar.js unless noted.
     noResults: 'لا توجد إعلانات مطابقة',
     noResultsHint: 'جرّب كلمات أخرى أو وسّع الفلاتر',
+    noResultsPriceRange: 'لا توجد إعلانات بهذا النطاق السعري',
+    priceRangeHint: 'تلميح: السعر الأدنى يجب أن يكون أصغر من السعر الأقصى — صحّح القيمتين ثم أعد البحث',
     searchTitle: 'البحث', // port-added (search page heading)
     searchResultsFor: 'نتائج البحث', // port-added (heading with query)
     searchEmpty: 'اكتب كلمة للبحث في الإعلانات.', // port-added (no-filter state)
@@ -475,6 +477,8 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Search page (Round 109) — verbatim js/i18n.fr.js unless noted.
     noResults: 'Aucune annonce trouvée',
     noResultsHint: 'Essayez d’autres mots ou élargissez les filtres',
+    noResultsPriceRange: 'Aucune annonce dans cette fourchette de prix',
+    priceRangeHint: 'Astuce : le prix minimum doit être inférieur au prix maximum — corrigez les deux valeurs puis relancez la recherche',
     searchTitle: 'Recherche', // port-added (search page heading)
     searchResultsFor: 'Résultats de recherche', // port-added (heading with query)
     searchEmpty: 'Tapez un mot pour rechercher dans les annonces.', // port-added (no-filter state)
@@ -819,6 +823,8 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Search page (Round 109) — verbatim js/i18n.en.js unless noted.
     noResults: 'No matching ads',
     noResultsHint: 'Try other keywords or widen the filters',
+    noResultsPriceRange: 'No listings in this price range',
+    priceRangeHint: 'Tip: the minimum price must be lower than the maximum price — fix both values and search again',
     searchTitle: 'Search', // port-added (search page heading)
     searchResultsFor: 'Search results', // port-added (heading with query)
     searchEmpty: 'Type a word to search the ads.', // port-added (no-filter state)

@@ -73,12 +73,20 @@ function HomeFilteredGrid({
   state,
   onShowMore,
   loadingMore,
+  onReset,
 }: {
   state: FilteredState;
   onShowMore: () => void;
   loadingMore: boolean;
+  onReset: () => void;
 }) {
   const { t, lang } = useLang();
+  // FIX-WEB-009 parity (js/home.js:1555-1566): inverted price range gets a
+  // specific empty state with a hint and a reset-filters button, never a
+  // silent reinterpretation of the user's bounds.
+  const f = state.filters;
+  const priceRangeInvalid =
+    !!f.min && !!f.max && Number(f.min) > Number(f.max);
   return (
     <>
       <div
@@ -89,10 +97,27 @@ function HomeFilteredGrid({
         {resultsCountText(state.total, lang)}
       </div>
       {state.listings.length === 0 ? (
-        <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
-          {t('noResults')}
-          <p className="mt-2 text-sm">{t('noResultsHint')}</p>
-        </div>
+        priceRangeInvalid ? (
+          <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
+            <div className="text-4xl mb-3" aria-hidden="true">🔍</div>
+            <h3 className="text-lg font-bold text-zinc-800">
+              {t('noResultsPriceRange')}
+            </h3>
+            <p className="mt-2 text-sm">{t('priceRangeHint')}</p>
+            <button
+              type="button"
+              onClick={onReset}
+              className="mt-4 rounded-xl bg-emerald-700 px-6 py-2.5 font-bold text-white hover:bg-emerald-800"
+            >
+              {t('resetFilters')}
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
+            {t('noResults')}
+            <p className="mt-2 text-sm">{t('noResultsHint')}</p>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {state.listings.map((l) => (
@@ -258,6 +283,7 @@ export default function HomePage({
               state={filtered}
               onShowMore={showMoreFiltered}
               loadingMore={loadingMore}
+              onReset={() => applyFilters({})}
             />
           </div>
         ) : cards.length === 0 ? (
