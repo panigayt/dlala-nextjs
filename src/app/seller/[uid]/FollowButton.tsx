@@ -1,0 +1,209 @@
+'use client';
+
+// Follow/unfollow button for the public seller profile — mirrors
+// js/app.js (onFollowBtnTap / toggleFollow / paintFollowBtn) and the
+// seller.html follow-btn behavior:
+//
+// - Non-owner profiles get a Follow button; guests get the login nudge
+//   (toast, then /auth) — never a silent bounce.
+// - The button hides entirely for the owner (can't follow yourself).
+// - Optimistic toggle with server reconciliation on failure (never lies).
+// - Per-store in-flight guard (double-tap race, FIX-WEB-043 class).
+// - Follow doc id: follows/{followerUid}_{storeUid} (followDocId parity).
+// - On follow: best-effort in-app notification in the followed user's
+//   inbox (R84 H-2: AFTER the batch commits; never inside it). The
+//   notification is intentionally NOT deleted on unfollow (FIX-WEB-005).
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthState } from '@/lib/firebase-client';
+import { withTimeout } from '@/lib/firebase-compat';
+
+// Verbatim strings from js/i18n.ar.js
+const STR = {
+  follow: 'متابعة',
+  following: 'أتابع',
+  loginToFollow: 'سجّل الدخول للمتابعة',
+  errorGeneric: 'حدث خطأ — حاول مجدداً',
+};
+
+interface DocRefLike {
+  get: () => Promise<{ exists: boolean }>;
+  set: (data: Record<string, unknown>) => Promise<void>;
+}
+
+interface BatchLike {
+  set: (ref: unknown, data: Record<string, unknown>) => void;
+  delete: (ref: unknown) => void;
+  commit: () => Promise<void>;
+}
+
+interface FieldValueLike {
+  serverTimestamp: () => unknown;
+}
+
+export default function FollowButton({ storeUid }: { storeUid: string }) {
+  const router = useRouter();
+  const auth = useAuthState();
+  // null = checking (never a false +/✓)
+  const [following, setFollowing] = useState<boolean | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  const toastTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    };
+  }, []);
+
+  const signedIn = auth.status === 'signed-in';
+  const user = signedIn ? auth.user : null;
+  const client = signedIn ? auth.client : null;
+  const isOwn = !!(user && user.uid === storeUid);
+
+  // Initial follow-state check — mirrors js/listing.js refreshAuthDependent:
+  // async, settles on false while logged out (correct default).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (auth.status !== 'signed-in' || !client || !user || user.uid === storeUid) {
+        if (!cancelled && mounted.current) setFollowing(false);
+        return;
+      }
+      try {
+        const d = await withTimeout(
+          (client.db.doc(`follows/${user.uid}_${storeUid}`) as unknown as DocRefLike).get(),
+          15000
+        );
+        if (!cancelled && mounted.current) setFollowing(d.exists);
+      } catch {
+        if (!cancelled && mounted.current) setFollowing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.status, client, user, storeUid]);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => {
+      if (mounted.current) setToast(null);
+    }, 2600);
+  }, []);
+
+  const onTap = useCallback(async () => {
+    if (auth.status === 'loading') return;
+    if (!user || !client) {
+      // Legacy parity (js/app.js onFollowBtnTap): guests get the login
+      // nudge via toast, then login — never a silent bounce to /auth.
+      showToast(STR.loginToFollow);
+      window.setTimeout(() => router.push('/auth'), 1500);
+      return;
+    }
+    if (user.uid === storeUid) return;
+    if (inFlight.current) return; // double-tap race guard
+    inFlight.current = true;
+    const wasOn = !!following;
+    setFollowing(!wasOn); // optimistic flip (v101 pattern)
+    try {
+      const ref = client.db.doc(`follows/${user.uid}_${storeUid}`);
+      const snap = await withTimeout((ref as unknown as DocRefLike).get(), 15000);
+      const batch = client.db.batch() as unknown as BatchLike;
+      const isFollow = !snap.exists;
+      if (!isFollow) {
+        batch.delete(ref);
+        // FIX-WEB-005 (js/app.js): the follow notification in the followed
+        // user's inbox is intentionally NOT deleted here — rules allow
+        // notification delete only by the inbox owner.
+      } else {
+        // v116 (5 Oct 2026): the follow doc is the ONLY write. The
+        // onFollowWrite Cloud Function maintains followerCount server-side.
+        batch.set(ref, {
+          followerId: user.uid,
+          storeId: storeUid,
+          createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
+        });
+      }
+      await withTimeout(batch.commit(), 15000);
+      if (isFollow) {
+        // R84 H-2 (js/app.js): the follow notification is written in a
+        // SEPARATE best-effort write AFTER the follow batch commits.
+        try {
+          const followerName = user.displayName || '';
+          await withTimeout(
+            (
+              client.db.doc(
+                `users/${storeUid}/notifications/follow_${user.uid}`
+              ) as unknown as DocRefLike
+            ).set({
+              type: 'follow',
+              title: `${followerName} بدأ بمتابعتك`,
+              body: '',
+              createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
+              read: false,
+              fromUid: user.uid,
+              data: {
+                followerUid: user.uid,
+                followerName,
+                followedUid: storeUid,
+              },
+            }),
+            15000
+          );
+        } catch {
+          /* notification is best-effort; the follow already committed */
+        }
+      }
+      if (mounted.current) setFollowing(isFollow);
+    } catch (e) {
+      console.error(e);
+      // BUG-5 class (js/listing.js): never trust the in-memory state here.
+      // Ask the server for the truth so the UI self-corrects.
+      try {
+        const truth = await withTimeout(
+          (client.db.doc(`follows/${user.uid}_${storeUid}`) as unknown as DocRefLike).get(),
+          8000
+        );
+        if (mounted.current) setFollowing(truth.exists);
+      } catch {
+        if (mounted.current) setFollowing(wasOn);
+      }
+      showToast(STR.errorGeneric);
+    } finally {
+      inFlight.current = false;
+    }
+  }, [auth.status, user, client, following, storeUid, router, showToast]);
+
+  if (isOwn) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onTap}
+        aria-pressed={following ? 'true' : 'false'}
+        className={`w-full rounded-xl px-6 py-3 font-bold transition-colors ${
+          following
+            ? 'bg-white border border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+            : 'bg-emerald-700 text-white hover:bg-emerald-800'
+        }`}
+      >
+        {following ? `✓ ${STR.following}` : `+ ${STR.follow}`}
+      </button>
+      {toast && (
+        <div
+          role="status"
+          className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
+        >
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}

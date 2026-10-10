@@ -13,6 +13,8 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
+import FollowButton from './FollowButton';
+import SellerTabs from './SellerTabs';
 import {
   fetchSeller,
   fetchSellerListings,
@@ -152,6 +154,17 @@ function SellerProfileCard({ s }: { s: SellerProfile }) {
   const displayName =
     s.storeTier === 'verified' && s.storeName ? s.storeName : s.name || s.username || '';
   const photo = s.photoUrl || '';
+  // js/seller.js parity: legacy accepts verified===true OR emailVerified===true.
+  const isVerified = s.verified === true || s.emailVerified === true;
+  const followersCount = Number(s.followerCount) || 0;
+  const memberSince =
+    s.createdAt instanceof Date && !isNaN(s.createdAt.getTime())
+      ? s.createdAt.toLocaleDateString('ar-DZ', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : '';
 
   return (
     <div className="rounded-xl bg-white shadow-sm p-6" dir="rtl">
@@ -171,20 +184,76 @@ function SellerProfileCard({ s }: { s: SellerProfile }) {
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-zinc-900 truncate">
             {displayName}
-            {s.verified === true && (
+            {isVerified && (
               <span className="text-emerald-600 text-xl mr-1" title="موثّق">✓</span>
             )}
           </h1>
           {s.username && s.username !== displayName && (
             <p className="text-sm text-zinc-500" dir="ltr">@{s.username}</p>
           )}
-          {(rating || s.verified === true) && (
-            <p className="mt-1 text-sm text-zinc-600">
-              {rating} {s.verified === true && !rating ? '✓ موثّق' : ''}
-            </p>
-          )}
+          <p className="mt-1 text-sm text-zinc-600">
+            {rating && <span>{rating}</span>}
+            {rating && followersCount > 0 && <span> · </span>}
+            {followersCount > 0 && (
+              <span>👥 {followersCount} متابع</span>
+            )}
+            {memberSince && (
+              <span className="block text-xs text-zinc-500 mt-0.5">
+                عضو منذ {memberSince}
+              </span>
+            )}
+          </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SellerInfosTab({ s }: { s: SellerProfile }) {
+  // js/seller.js parity (QA 16 Sep 2026 #8): the Infos tab opens with an
+  // about block — bio plus a locale-correct member-since date.
+  const bio = String(s.bio || '');
+  const memberSince =
+    s.createdAt instanceof Date && !isNaN(s.createdAt.getTime())
+      ? s.createdAt.toLocaleDateString('ar-DZ', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : '';
+  const ratingNum = Number(s.rating);
+  const hasRating = isFinite(ratingNum) && ratingNum > 0;
+
+  return (
+    <div className="rounded-xl bg-white shadow-sm p-6" dir="rtl">
+      <h2 className="text-lg font-bold text-zinc-900 mb-4">المعلومات</h2>
+      {bio ? (
+        <p className="text-zinc-700 mb-4">{bio}</p>
+      ) : (
+        <p className="text-zinc-400 text-sm mb-4">لا توجد نبذة بعد.</p>
+      )}
+      <dl className="space-y-2 text-sm">
+        {memberSince && (
+          <div className="flex gap-2">
+            <dt className="text-zinc-500">عضو منذ:</dt>
+            <dd className="font-medium text-zinc-900">{memberSince}</dd>
+          </div>
+        )}
+        {hasRating && (
+          <div className="flex gap-2">
+            <dt className="text-zinc-500">التقييم:</dt>
+            <dd className="font-medium text-zinc-900">
+              {ratingNum.toFixed(1)} ★ ({Number(s.ratingCount) || 0})
+            </dd>
+          </div>
+        )}
+        {s.username && (
+          <div className="flex gap-2">
+            <dt className="text-zinc-500">اسم المستخدم:</dt>
+            <dd className="font-medium text-zinc-900" dir="ltr">@{s.username}</dd>
+          </div>
+        )}
+      </dl>
     </div>
   );
 }
@@ -211,22 +280,29 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
     <main className="max-w-6xl mx-auto px-4 py-6" dir="rtl">
       <SellerProfileCard s={seller} />
 
-      <h2 className="mt-8 mb-4 text-lg font-semibold text-zinc-800">
-        إعلانات البائع ({listings.length})
-      </h2>
+      <div className="mt-4">
+        <FollowButton storeUid={uid} />
+      </div>
 
-      {listings.length === 0 ? (
-        <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
-          لا توجد إعلانات متاحة حاليا.
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {listings.map((l) => (
-            <ListingCardView key={l.id} l={l} />
-          ))}
-        </div>
-      )}
-
+      <SellerTabs
+        uid={uid}
+        isPro={seller.storeTier === 'verified'}
+        listingsCount={listings.length}
+        listings={
+          listings.length === 0 ? (
+            <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
+              لا توجد إعلانات متاحة حاليا.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {listings.map((l) => (
+                <ListingCardView key={l.id} l={l} />
+              ))}
+            </div>
+          )
+        }
+        infos={<SellerInfosTab s={seller} />}
+      />
     </main>
   );
 }

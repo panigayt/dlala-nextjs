@@ -159,10 +159,13 @@ export interface SellerProfile {
   rating?: number;
   ratingCount?: number;
   verified?: boolean;
+  emailVerified?: boolean;
   photoUrl?: string;
   photoPath?: string;
   storeTier?: string;
   storeName?: string;
+  followerCount?: number;
+  bio?: string;
   createdAt?: Date;
 }
 
