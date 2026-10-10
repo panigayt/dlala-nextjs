@@ -49,3 +49,39 @@ body {
 }
 .badge-own { background: #0b6b4f; }
 .badge-own { inset-inline-start: auto; inset-inline-end: 8px; top: 34px; }
+
+/* Store analytics + recent followers (js/seller.js parity, 16 Sep 2026).
+   Verbatim legacy css/style.css rules; CSS vars resolved to their
+   :root values (#0b6b4f emerald, #6b7280 muted, #ffffff card,
+   #e5e7eb line, 12px radius, #e8f0ec emerald-light). */
+.analytics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+.analytics-card {
+  background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;
+  padding: 12px 8px; text-align: center;
+}
+.analytics-num { font-size: 22px; font-weight: 800; color: #0b6b4f; }
+.analytics-label { font-size: 12px; color: #6b7280; margin-top: 2px; }
+.analytics-top { display: flex; flex-direction: column; gap: 6px; }
+.analytics-top-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: #ffffff; border: 1px solid #e5e7eb;
+  border-radius: 8px; text-decoration: none; color: inherit; font-size: 13px;
+}
+.analytics-top-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+.analytics-top-views { color: #6b7280; white-space: nowrap; }
+/* v101 follow-notif (Zak, 16 Sep 2026): recent-followers list on the owner's
+   own profile page — avatar + name rows linking to each follower. */
+.recent-followers { display: flex; flex-direction: column; gap: 8px; }
+.rf-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: #ffffff; border: 1px solid #e5e7eb;
+  border-radius: 12px; text-decoration: none; color: inherit;
+}
+.rf-row .avatar {
+  width: 36px; height: 36px; font-size: 16px; flex: 0 0 auto;
+  border-radius: 50%; background: #e8f0ec; color: #0b6b4f;
+  display: flex; align-items: center; justify-content: center; object-fit: cover;
+}
+.rf-name { font-weight: 700; font-size: 14px; }
+.rf-name .uname { color: #6b7280; font-weight: 400; font-size: 12px; }
+.section-title { font-size: 16px; font-weight: 800; margin: 2px 2px 10px; }

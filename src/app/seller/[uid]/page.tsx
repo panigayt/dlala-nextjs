@@ -15,6 +15,8 @@ import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import FollowButton from '@/components/FollowButton';
 import RateCta from '@/components/RateCta';
+import StoreAnalytics from '@/components/StoreAnalytics';
+import RecentFollowers from '@/components/RecentFollowers';
 import SellerActions from './SellerActions';
 import RatingsList from './RatingsList';
 import SellerTabsSection from './SellerTabsSection';
@@ -372,6 +374,10 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
           <SellerActions uid={uid} storeName={shareName} />
         </div>
       )}
+      {/* js/seller.js v101 follow-notif parity: ordinary owners see their
+          latest followers below the profile card (pro owners get it in
+          the Infos tab instead). The component self-hides for non-owners. */}
+      {!isPro && <RecentFollowers uid={uid} />}
 
       <SellerTabsSection
         uid={uid}
@@ -381,6 +387,15 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
         infos={
           <>
             <SellerInfosTab s={seller} />
+            {/* js/seller.js renderSellerExtras (0.0.0.4) parity: for pro
+                stores the owner boxes (store analytics + recent followers)
+                live in the Infos tab. Both self-hide for non-owners. */}
+            {isPro && (
+              <>
+                <StoreAnalytics uid={uid} isPro={true} />
+                <RecentFollowers uid={uid} />
+              </>
+            )}
             {/* js/seller.js loadRateCta parity: the rate CTA box sits
                 directly above the ratings list. */}
             <RateCta
