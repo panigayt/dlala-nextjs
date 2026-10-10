@@ -21,6 +21,9 @@ import HomeHeader from '@/components/HomeHeader';
 import TipsTicker from '@/components/TipsTicker';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
 import ListingCardView from '@/components/ListingCardView';
+// Round 166 (0.0.0.39 parity, js/home.js 0.0.0.1m): verified-store gold cards
+// atop filtered results when the text query matches a storeName/@username.
+import StoreMatchCards from '@/app/search/StoreMatchCards';
 import {
   resultsCountText,
   SEARCH_PAGE_SIZE,
@@ -96,6 +99,11 @@ function HomeFilteredGrid({
       >
         {resultsCountText(state.total, lang)}
       </div>
+      {/* Round 166 (0.0.0.39 parity, js/home.js 0.0.0.1m insertStoreCards):
+          verified-store gold cards prepended atop the feed when the text
+          query matches a storeName/@username. Best-effort background fetch;
+          renders nothing when q is empty or no stores match. */}
+      <StoreMatchCards q={f.q || ''} />
       {state.listings.length === 0 ? (
         priceRangeInvalid ? (
           <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
