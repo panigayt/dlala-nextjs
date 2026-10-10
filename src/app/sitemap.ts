@@ -3,6 +3,11 @@ import { cacheLife } from 'next/cache';
 import { fetchFeed } from '@/lib/firestore';
 import { GUIDE_SLUGS } from '@/lib/guides';
 import { priceGuideSlug, priceGuideYear } from '@/lib/price-guide';
+import {
+  fetchAvailableCars,
+  qualifyingModelUrls,
+  MIN_LISTINGS,
+} from '@/lib/model-pages';
 
 const BASE = 'https://dlala-nextjs.vercel.app';
 
@@ -77,7 +82,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'daily' as const,
       priority: 0.9,
     }));
-    return [...staticRoutes, ...listingUrls];
+    // Round 132: car-model SEO landing pages (production sitemap parity —
+    // FIX-FN-018: /voitures/modeles/<slug> with >= MIN_LISTINGS live cars,
+    // emitted weekly/0.7 like the production buildSitemapXml landing URLs).
+    // Only the Arabic canonical path is advertised (production parity).
+    let modelUrls: MetadataRoute.Sitemap = [];
+    try {
+      const cars = await fetchAvailableCars();
+      modelUrls = qualifyingModelUrls(cars, MIN_LISTINGS).map((path) => ({
+        url: `${BASE}${path}`,
+        changeFrequency: 'weekly' as const,
+        priority: 0.7,
+      }));
+    } catch {
+      // Firestore unreachable for the model counts — skip them
+    }
+    return [...staticRoutes, ...listingUrls, ...modelUrls];
   } catch {
     // Firestore unreachable — return static routes only
     return staticRoutes;

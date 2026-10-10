@@ -1,0 +1,56 @@
+// Car-model SEO landing page — French version (/fr/voitures/modeles/<slug>).
+//
+// Production parity: the seoCategories function serves ?lang=fr (and the
+// /fr/ prefix) as a human convenience — French content with the SAME Arabic
+// canonical URL. Cached briefly so a stale FR render can't linger (verbatim
+// CF cache policy).
+
+import {
+  MODEL_BY_SLUG,
+  MIN_LISTINGS,
+  buildModelPage,
+  notFoundPage,
+  fetchAvailableCars,
+  filterModelItems,
+} from '@/lib/model-pages';
+
+const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  const { slug } = await params;
+  const model = MODEL_BY_SLUG[slug];
+  if (!model) {
+    return new Response(notFoundPage('cat'), {
+      status: 404,
+      headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
+    });
+  }
+  try {
+    const listings = await fetchAvailableCars();
+    const items = filterModelItems(listings, model);
+    if (items.length < MIN_LISTINGS) {
+      return new Response(notFoundPage('thin'), {
+        status: 404,
+        headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
+      });
+    }
+    const html = buildModelPage(model, items, 'fr');
+    return new Response(html, {
+      status: 200,
+      headers: {
+        ...HTML_HEADERS,
+        // CF parity: French is cached separately but briefly.
+        'Cache-Control': 'public, max-age=600, s-maxage=600',
+      },
+    });
+  } catch (e) {
+    console.error('model page failed:', e instanceof Error ? e.message : e);
+    return new Response('temporarily unavailable', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+}
