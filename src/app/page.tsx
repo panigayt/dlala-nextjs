@@ -15,7 +15,8 @@ import { cacheLife } from 'next/cache';
 import Link from 'next/link';
 import { fetchFeed, cardTitle, cardImage, formatPrice, type ListingCard } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES, catName } from '@/lib/categories';
+import { dzPriceWords } from '@/lib/dz-price';
 import TimeAgo from '@/components/TimeAgo';
 
 // Cached feed fetcher — ISR equivalent: revalidate every 60 seconds.
@@ -34,9 +35,20 @@ function wilayaName(code: number | undefined): string {
 
 function ListingCardView({ l }: { l: ListingCard }) {
   const img = cardImage(l);
+  const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
+  const jobType = (l.answers && typeof l.answers.jobType === 'string' && l.answers.jobType) || '';
+  const isSeeker = jobType === 'jobSeeker';
+  const isOffer = jobType === 'jobOffer';
+  const words = dzPriceWords(l.price || 0);
+  const favCount = Number(l.favoriteCount) || 0;
+  const cond =
+    l.condition === 'new' ? 'جديد' : l.condition === 'good' ? 'جيد' : l.condition === 'used' ? 'مستعمل' : '';
+  const cat = catName(l.categoryId || '');
+  const metaBits = [cond, cat, wilayaName(l.wilayaCode)].filter(Boolean).join(' · ');
   return (
     <a
       href={`/listing/${l.id}`}
+      data-sid={l.sellerId || ''}
       className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
       dir="rtl"
     >
@@ -52,20 +64,56 @@ function ListingCardView({ l }: { l: ListingCard }) {
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
         )}
+        {(l.status === 'sold' || l.isWholesale || reduced || isSeeker || isOffer) && (
+          <div className="absolute top-2 right-2 flex flex-col items-start gap-1">
+            {l.status === 'sold' && (
+              <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">مباع</span>
+            )}
+            {l.isWholesale && (
+              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">الجملة</span>
+            )}
+            {reduced && (
+              <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white">
+                ▼ انخفض السعر
+              </span>
+            )}
+            {isSeeker && (
+              <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-bold text-white">
+                باحث عن عمل
+              </span>
+            )}
+            {isOffer && (
+              <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-bold text-white">
+                عرض عمل
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div className="p-3">
-        <p className="font-bold text-emerald-700 text-lg">{formatPrice(l.price || 0)}</p>
-        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          {wilayaName(l.wilayaCode)}
-          {l.createdAt ? (
-            <>
-              {' · '}
-              <TimeAgo iso={l.createdAt.toISOString()} />
-            </>
-          ) : (
-            ''
+        <div className="flex items-center gap-2">
+          {/* fav pill — Zak 21 Sep option B: white pill with ♡ + count next to
+              the price, pill first (right in RTL). Display-only on this SSR
+              home page: the interactive toggle needs a client component with
+              auth (follow-up parity block). */}
+          {l.status !== 'sold' && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 shadow-sm"
+              aria-label={`المفضلة: ${favCount}`}
+            >
+              <span aria-hidden="true">♡</span>
+              <span>{favCount}</span>
+            </span>
           )}
+          <p className="font-bold text-emerald-700 text-lg">
+            <span dir="ltr">{formatPrice(l.price || 0)}</span>
+            {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
+          </p>
+        </div>
+        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
+        {metaBits && <p className="mt-1 text-xs text-zinc-600">{metaBits}</p>}
+        <p className="mt-1 text-xs text-zinc-500">
+          {l.createdAt ? <TimeAgo iso={l.createdAt.toISOString()} /> : ''}
         </p>
       </div>
     </a>
