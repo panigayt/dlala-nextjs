@@ -10,10 +10,22 @@
 //   control, focus enters on open and returns to the opener on close.
 // - Navigating inside the lightbox keeps the gallery selection in sync
 //   behind it (legacy show() -> setPhoto).
-// Note: LBZ-1 double-tap/dblclick 2.5x zoom + pan is NOT ported here
-// (follow-up block).
+// - LBZ-1 (16 Sep 2026): double-tap / double-click enlarges the photo
+//   (2.5x, centered on the tap point); dragging pans while zoomed;
+//   switching photos ALWAYS resets to the normal size. Zoom math lives
+//   in ./zoom.ts (verbatim port of the lbView helpers in js/listing.js).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  LB_SWIPE_MIN,
+  LB_TAP_MAX_DELAY,
+  LB_TAP_MAX_DIST,
+  LB_TAP_MAX_MOVE,
+  lbPanBy,
+  lbResetZoom,
+  lbZoomToggle,
+  type ZoomState,
+} from './zoom';
 
 const AR_CLOSE = 'إغلاق';
 const AR_PREV = 'الصورة السابقة';
@@ -35,7 +47,12 @@ export default function Gallery({
   const [lbIdx, setLbIdx] = useState(0);
   const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const touchRef = useRef<{ x: number; y: number } | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  // LBZ-1 zoom view state — mutable ref (no re-render needed; the style
+  // is applied straight to the <img>, like legacy's module-level lbView).
+  const zoomRef = useRef<ZoomState>({ z: 1, x: 0, y: 0 });
+
+  const zoomReset = useCallback(() => lbResetZoom(imgRef.current, zoomRef.current), []);
 
   const openLightbox = useCallback((idx: number) => {
     openerRef.current =
@@ -50,20 +67,22 @@ export default function Gallery({
 
   const lbShow = useCallback(
     (d: number) => {
+      zoomReset(); // LBZ-1: a new photo always starts at normal size
       setLbIdx((i) => {
         const n = (i + d + all.length) % all.length;
         setSel(n); // keep the gallery selection in sync behind the lightbox
         return n;
       });
     },
-    [all.length]
+    [all.length, zoomReset]
   );
 
-  // Focus return + scroll lock + keyboard nav while open.
+  // Focus return + scroll lock + keyboard nav + LBZ-1 touch zoom/pan while open.
   useEffect(() => {
     if (!lbOpen) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    zoomReset(); // LBZ-1: a fresh viewer always starts at normal size
     const closeBtn = dialogRef.current?.querySelector<HTMLButtonElement>('.lb-close');
     closeBtn?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -91,8 +110,71 @@ export default function Gallery({
       }
     };
     document.addEventListener('keydown', onKey);
+    // LBZ-1 touch handlers — verbatim legacy semantics from openLightbox:
+    // swipe support for touch; double-tap toggles zoom, drag pans when
+    // zoomed. Native listeners (not React props) so touchmove can be
+    // { passive: false } and preventDefault() during a pan.
+    const ov = dialogRef.current;
+    let sx: number | null = null,
+      sy: number | null = null,
+      lastTapT = 0,
+      lastTapX = 0,
+      lastTapY = 0,
+      panning = false,
+      px = 0,
+      py = 0;
+    const onTs = (e: TouchEvent) => {
+      const t = e.touches[0];
+      sx = t.clientX;
+      sy = t.clientY;
+      panning = zoomRef.current.z > 1 && e.touches.length === 1;
+      px = t.clientX;
+      py = t.clientY;
+    };
+    const onTm = (e: TouchEvent) => {
+      if (!panning || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      lbPanBy(imgRef.current, zoomRef.current, t.clientX - px, t.clientY - py);
+      px = t.clientX;
+      py = t.clientY;
+      if (e.cancelable) e.preventDefault();
+    };
+    const onTe = (e: TouchEvent) => {
+      const t = e.changedTouches[0];
+      // double-tap: toggle zoom (only when the tap didn't move much)
+      const now = Date.now();
+      const moved = sx == null || sy == null ? 99 : Math.hypot(t.clientX - sx, t.clientY - sy);
+      if (
+        moved < LB_TAP_MAX_MOVE &&
+        now - lastTapT < LB_TAP_MAX_DELAY &&
+        Math.hypot(t.clientX - lastTapX, t.clientY - lastTapY) < LB_TAP_MAX_DIST
+      ) {
+        lbZoomToggle(imgRef.current, zoomRef.current, t.clientX, t.clientY);
+        lastTapT = 0;
+        sx = null;
+        return;
+      }
+      if (moved < LB_TAP_MAX_MOVE) {
+        lastTapT = now;
+        lastTapX = t.clientX;
+        lastTapY = t.clientY;
+      }
+      // swipe switches photos only at normal size (when zoomed, drag pans)
+      if (sx != null && zoomRef.current.z <= 1) {
+        const dx = t.clientX - sx;
+        if (Math.abs(dx) > LB_SWIPE_MIN) lbShow(dx > 0 ? -1 : 1);
+      }
+      sx = null;
+      panning = false;
+    };
+    ov?.addEventListener('touchstart', onTs, { passive: true });
+    ov?.addEventListener('touchmove', onTm, { passive: false });
+    ov?.addEventListener('touchend', onTe, { passive: true });
     return () => {
       document.removeEventListener('keydown', onKey);
+      ov?.removeEventListener('touchstart', onTs);
+      ov?.removeEventListener('touchmove', onTm);
+      ov?.removeEventListener('touchend', onTe);
       document.body.style.overflow = prevOverflow;
       try {
         if (openerRef.current && document.contains(openerRef.current)) openerRef.current.focus();
@@ -100,23 +182,7 @@ export default function Gallery({
         /* focus return is best-effort */
       }
     };
-  }, [lbOpen, all.length, lbShow, closeLightbox]);
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    touchRef.current = { x: t.clientX, y: t.clientY };
-  };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    const s = touchRef.current;
-    touchRef.current = null;
-    if (!s) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - s.x;
-    const dy = t.clientY - s.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && all.length > 1) {
-      lbShow(dx > 0 ? -1 : 1);
-    }
-  };
+  }, [lbOpen, all.length, lbShow, closeLightbox, zoomReset]);
 
   if (!all.length) {
     return (
@@ -179,8 +245,6 @@ export default function Gallery({
           onClick={(e) => {
             if (e.target === e.currentTarget) closeLightbox();
           }}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
         >
           <button
             type="button"
@@ -218,9 +282,15 @@ export default function Gallery({
           )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={imgRef}
             src={all[lbIdx]}
             alt={`${title} — صورة ${lbIdx + 1}/${all.length}`}
             className="max-w-full max-h-full object-contain"
+            // LBZ-1: double-click (desktop) toggles zoom at the pointer.
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              lbZoomToggle(imgRef.current, zoomRef.current, e.clientX, e.clientY);
+            }}
           />
           {all.length > 1 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm bg-black/60 px-3 py-1 rounded-full">
