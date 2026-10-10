@@ -3,9 +3,10 @@
 // (2nd gen, nodejs22, europe-west3) that serves dzdlala.com/guides/*.
 //
 // Round 129 scope: the 3 static editorial guides × AR/FR + the guides index.
-// The dynamic price guide (prix-voitures-occasion-<year>, live Firestore
-// medians), the 22 model pages, category landing pages and category×wilaya
-// pages are Round 130 (they need the Firestore aggregation pipeline).
+// Round 130: the dynamic price guide (prix-voitures-occasion-<year>, live
+// Firestore medians) — pure functions in ./price-guide.ts, cached
+// aggregation in ./price-stats.ts. The 22 model pages, category landing
+// pages and category×wilaya pages are still open (seoCategories parity).
 //
 // Content markdown files are bundled verbatim under ./guides-content/.
 
