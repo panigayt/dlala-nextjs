@@ -79,8 +79,9 @@ function restDocToObj(doc: { name: string; fields?: Record<string, unknown> }): 
 // js/home.js — buildFeedRestQuery, DEFAULT branch only (no filters):
 // status IN [available, negotiating], orderBy createdAt DESC, limit 24,
 // select card fields. This is the guest home feed — the SSR fast path.
-function buildDefaultFeedQuery(limit: number) {
-  return {
+// offset is for the "load more" pagination (Round 39).
+function buildDefaultFeedQuery(limit: number, offset = 0) {
+  const q: Record<string, unknown> = {
     from: [{ collectionId: 'listings' }],
     where: {
       fieldFilter: {
@@ -97,15 +98,38 @@ function buildDefaultFeedQuery(limit: number) {
     select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
     limit,
   };
+  if (offset > 0) q.offset = offset;
+  return q;
 }
 
-export async function fetchFeed(limit = 24): Promise<ListingCard[]> {
+// js/market.js — interleaveWanted (verbatim logic, Round 39):
+// Wanted ads rotate fairly through the feed — never pinned at the top.
+// After every 4th regular card, insert the next wanted card. The first
+// wanted slot opens only after the 4th regular card. Leftover wanted
+// cards (when regular runs out) are appended at the end.
+export function interleaveWanted<T extends { isWanted?: boolean }>(
+  regular: T[],
+  wanted: T[]
+): T[] {
+  if (!wanted.length) return regular;
+  const out: T[] = [];
+  let wi = 0;
+  regular.forEach((r, i) => {
+    out.push(r);
+    // first wanted slot opens only after the 4th regular card
+    if ((i + 1) % 4 === 0 && wi < wanted.length) out.push(wanted[wi++]);
+  });
+  while (wi < wanted.length) out.push(wanted[wi++]);
+  return out;
+}
+
+export async function fetchFeed(limit = 24, offset = 0): Promise<ListingCard[]> {
   const url =
     FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ structuredQuery: buildDefaultFeedQuery(limit) }),
+    body: JSON.stringify({ structuredQuery: buildDefaultFeedQuery(limit, offset) }),
     // ISR handles caching at the route level; this fetch must always
     // hit the network when the route revalidates.
     cache: 'no-store',
