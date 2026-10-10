@@ -10,7 +10,9 @@
 'use client';
 
 const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M',
+  // Production key from dlala-040/js/config.js (0.0.0.39) — the previous key
+  // was not valid for Identity Toolkit, breaking all Auth operations.
+  apiKey: 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe',
   authDomain: 'dlala-85cea.firebaseapp.com',
   projectId: 'dlala-85cea',
   storageBucket: 'dlala-85cea.firebasestorage.app',

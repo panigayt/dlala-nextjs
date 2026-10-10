@@ -33,7 +33,7 @@ const MAX_KEYS = 100;
 async function verifyUid(idToken: string): Promise<string | null> {
   // Public Firebase web key (same as the upload routes; public by design).
   const apiKey =
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M';
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBnXvXw4XkL3mN2pQ8rS5tU7vW9yZ0aBcDe';
   try {
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
