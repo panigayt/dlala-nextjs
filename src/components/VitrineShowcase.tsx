@@ -18,6 +18,7 @@ import { markVitrineInteracted, type VitrineShowcase as Showcase } from '@/lib/v
 import TimeAgo from '@/components/TimeAgo';
 import BlurUpImage from '@/components/BlurUpImage';
 import FavoriteToggle from '@/components/FavoriteToggle';
+import VitrineFollowButton from '@/components/VitrineFollowButton';
 
 function condLabel(cond: string | undefined): string {
   if (cond === 'new') return 'جديد';
@@ -117,9 +118,9 @@ export default function VitrineShowcase({ showcase }: { showcase: Showcase }) {
             <span className="vitrine-sub">👥 {fCount} متابِع</span>
           </span>
         </Link>
-        <button type="button" className="follow-btn" data-follow={sid} aria-pressed="false">
-          + تابع
-        </button>
+        {/* Round 104: wired to the shared follow logic (js/app.js v101
+            armFollowButtons parity) — was a dead button with no handler. */}
+        <VitrineFollowButton storeUid={sid} />
       </div>
       <div className="vitrine-grid">
         {products.slice(0, 8).map((p) => (

@@ -73,6 +73,13 @@ a.vitrine-id { text-decoration: none; color: inherit; }
   min-height: 44px; /* A-16 (0.0.0.21): site touch-target standard */
 }
 .vitrine-card .follow-btn:hover { background: var(--emerald-dark); }
+/* Following state — verbatim legacy .follow-btn.on (css/style.css:1307),
+   scoped to the vitrine card. Required so the painted `on` class (legacy
+   paintFollowBtn parity) is visually distinguishable from the default state. */
+.vitrine-card .follow-btn.on {
+  background: #e7f2ec; color: var(--emerald);
+  border: 1px solid var(--emerald);
+}
 /* Likes badge on the mini thumbnail — verbatim legacy .badge base
    (css/style.css:237) + .badge-likes (css/style.css:1312), scoped to the
    vitrine card. NOTE: legacy positions it top-inline-start, overlapping the

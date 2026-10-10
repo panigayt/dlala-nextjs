@@ -24,7 +24,7 @@ import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 
 // Verbatim strings from js/i18n.ar.js
-const STR = {
+export const STR = {
   follow: 'متابعة',
   following: 'أتابع',
   loginToFollow: 'سجّل الدخول للمتابعة',
@@ -46,7 +46,21 @@ interface FieldValueLike {
   serverTimestamp: () => unknown;
 }
 
-export default function FollowButton({ storeUid }: { storeUid: string }) {
+// Shared follow toggle logic — mirrors js/app.js (onFollowBtnTap /
+// toggleFollow / paintFollowBtn) and the seller.html follow-btn behavior.
+// Extracted from FollowButton (Round 104) so the vitrine showcase header
+// button (button.follow-btn[data-follow], js/app.js armFollowButtons v101)
+// reuses the exact same behavior:
+// - Non-owner profiles get a Follow button; guests get the login nudge
+//   (toast, then /auth) — never a silent bounce.
+// - The button hides entirely for the owner (can't follow yourself).
+// - Optimistic toggle with server reconciliation on failure (never lies).
+// - Per-store in-flight guard (double-tap race, FIX-WEB-043 class).
+// - Follow doc id: follows/{followerUid}_{storeUid} (followDocId parity).
+// - On follow: best-effort in-app notification in the followed user's
+//   inbox (R84 H-2: AFTER the batch commits; never inside it). The
+//   notification is intentionally NOT deleted on unfollow (FIX-WEB-005).
+export function useFollowToggle(storeUid: string) {
   const router = useRouter();
   const auth = useAuthState();
   // null = checking (never a false +/✓)
@@ -188,6 +202,12 @@ export default function FollowButton({ storeUid }: { storeUid: string }) {
       inFlight.current = false;
     }
   }, [auth.status, user, client, following, storeUid, router, showToast]);
+
+  return { following, isOwn, toast, onTap };
+}
+
+export default function FollowButton({ storeUid }: { storeUid: string }) {
+  const { following, isOwn, toast, onTap } = useFollowToggle(storeUid);
 
   if (isOwn) return null;
 
