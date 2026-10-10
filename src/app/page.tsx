@@ -16,9 +16,19 @@
 // so the whole page follows the UI language via useLang()
 // (js/i18n.js onLangChange parity). The server only fetches data.
 
+import type { Metadata } from 'next';
 import { cacheLife } from 'next/cache';
 import { fetchFeed, fetchWanted, interleaveWanted, type ListingCard } from '@/lib/firestore';
+import { t } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import HomePage, { type HomeFeedData } from '@/components/HomePage';
+
+// Round 133: <title> follows the reader's language (dlala_lang cookie;
+// localStorage is client-only). The meta description is inherited from the
+// root layout's static metadata (title-only scope).
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: t('title_home', await getServerLang()) };
+}
 
 // Cached feed fetcher — ISR equivalent: revalidate every 60 seconds.
 // (Next.js 16 Cache Components model: 'use cache' + cacheLife.)

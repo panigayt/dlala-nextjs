@@ -7,27 +7,34 @@
 
 import type { Metadata } from 'next';
 
+import { t } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import TermsClient from './TermsClient';
 
-export const metadata: Metadata = {
-  title: 'شروط الاستخدام — دلالة DLALA',
-  description: 'شروط استخدام موقع وتطبيق دلالة',
-  openGraph: {
-    type: 'website',
-    siteName: 'DLALA',
-    locale: 'ar_DZ',
-    title: 'شروط الاستخدام — دلالة DLALA',
+// Round 133: <title> follows the reader's language (dlala_lang cookie;
+// localStorage is client-only). Description stays Arabic (title-only scope).
+export async function generateMetadata(): Promise<Metadata> {
+  const title = t('title_terms', await getServerLang());
+  return {
+    title,
     description: 'شروط استخدام موقع وتطبيق دلالة',
-    url: 'https://dzdlala.com/terms',
-    images: ['https://dzdlala.com/icon-512.png'],
-  },
-  twitter: {
-    card: 'summary',
-    title: 'شروط الاستخدام — دلالة DLALA',
-    description: 'شروط استخدام موقع وتطبيق دلالة',
-    images: ['https://dzdlala.com/icon-512.png'],
-  },
-};
+    openGraph: {
+      type: 'website',
+      siteName: 'DLALA',
+      locale: 'ar_DZ',
+      title,
+      description: 'شروط استخدام موقع وتطبيق دلالة',
+      url: 'https://dzdlala.com/terms',
+      images: ['https://dzdlala.com/icon-512.png'],
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description: 'شروط استخدام موقع وتطبيق دلالة',
+      images: ['https://dzdlala.com/icon-512.png'],
+    },
+  };
+}
 
 export default function TermsPage() {
   return <TermsClient />;

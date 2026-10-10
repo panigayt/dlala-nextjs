@@ -20,6 +20,8 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import { fetchAnnouncement, annLocalized, type Announcement } from '@/lib/firestore';
+import { t } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import AnnouncementDetail, { type AnnouncementDetailData } from './AnnouncementDetail';
 
 // Trilingual strings — verbatim from js/i18n.{ar,en,fr}.js (Round 120:
@@ -40,12 +42,16 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
+  // Round 133: localize the tab title to the reader's language
+  // (dlala_lang cookie; localStorage is client-only).
+  const lang = await getServerLang();
+  const suffix = lang === 'ar' ? 'دلالة' : 'Dlala';
   try {
     const a = await getAnnouncement(id);
-    const title = a ? annLocalized(a.title) : '';
-    return { title: title ? `${title} — دلالة` : 'إعلان — دلالة' };
+    const title = a ? annLocalized(a.title, lang) : '';
+    return { title: title ? `${title} — ${suffix}` : t('title_announcement', lang) };
   } catch {
-    return { title: 'إعلان — دلالة' };
+    return { title: t('title_announcement', lang) };
   }
 }
 

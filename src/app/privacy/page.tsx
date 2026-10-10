@@ -7,27 +7,34 @@
 
 import type { Metadata } from 'next';
 
+import { t } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import PrivacyClient from './PrivacyClient';
 
-export const metadata: Metadata = {
-  title: 'سياسة الخصوصية — دلالة DLALA',
-  description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-  openGraph: {
-    type: 'website',
-    siteName: 'DLALA',
-    locale: 'ar_DZ',
-    title: 'سياسة الخصوصية — دلالة DLALA',
+// Round 133: <title> follows the reader's language (dlala_lang cookie;
+// localStorage is client-only). Description stays Arabic (title-only scope).
+export async function generateMetadata(): Promise<Metadata> {
+  const title = t('title_privacy', await getServerLang());
+  return {
+    title,
     description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-    url: 'https://dzdlala.com/privacy',
-    images: ['https://dzdlala.com/icon-512.png'],
-  },
-  twitter: {
-    card: 'summary',
-    title: 'سياسة الخصوصية — دلالة DLALA',
-    description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-    images: ['https://dzdlala.com/icon-512.png'],
-  },
-};
+    openGraph: {
+      type: 'website',
+      siteName: 'DLALA',
+      locale: 'ar_DZ',
+      title,
+      description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
+      url: 'https://dzdlala.com/privacy',
+      images: ['https://dzdlala.com/icon-512.png'],
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
+      images: ['https://dzdlala.com/icon-512.png'],
+    },
+  };
+}
 
 export default function PrivacyPage() {
   return <PrivacyClient />;

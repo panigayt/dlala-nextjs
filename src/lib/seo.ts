@@ -23,6 +23,8 @@
 // (final domain is dzdlala.com; this preview deploys to vercel).
 export const SITE = 'https://dlala-nextjs.vercel.app';
 
+import { t, type Lang } from './i18n-strings';
+
 export const SITE_TAGLINE = 'دلالة — سوق الجزائر الحر للإعلانات المبوبة';
 
 // Brand keys (cb*/pb*) -> Latin proper-noun label. Copied verbatim from
@@ -108,13 +110,27 @@ export function condLabelAr(c: string | undefined): string {
   return c === 'new' ? 'جديد' : c === 'good' ? 'جيد' : 'مستعمل';
 }
 
+// Round 133: lang-aware condition label for localized SEO titles.
+// Same semantics as condLabelAr; labels from condNew/condGood/condUsed
+// (verbatim js/i18n.{ar,fr,en}.js).
+export function condLabel(c: string | undefined, lang: Lang = 'ar'): string {
+  return c === 'new'
+    ? t('condNew', lang)
+    : c === 'good'
+      ? t('condGood', lang)
+      : c === 'used'
+        ? t('condUsed', lang)
+        : '';
+}
+
 // Verbatim port of js/app.js fmtPriceText() — LTR-isolated plain-text price
 // (U+2066…U+2069) so the digit run never reorders in RTL meta text.
-export function fmtPriceText(n: number | undefined | null): string {
+// Round 133: lang-aware currency via t('priceDZD') (legacy used t() too).
+export function fmtPriceText(n: number | undefined | null, lang: Lang = 'ar'): string {
   if (n == null) return '';
   const v = Number(n);
   if (!isFinite(v) || v < 0) return '—';
-  return '⁦' + v.toLocaleString('en-US') + ' دج⁩';
+  return '⁦' + v.toLocaleString('en-US') + ' ' + t('priceDZD', lang) + '⁩';
 }
 
 export interface ListingSeoInput {

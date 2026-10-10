@@ -30,14 +30,15 @@ import { WILAYAS } from '@/lib/wilayas';
 import { dzPriceWords } from '@/lib/dz-price';
 import {
   SITE,
-  SITE_TAGLINE,
   listingSeoText,
   listingJsonLd,
   listingBrandName,
   isConditionExempt,
-  condLabelAr,
+  condLabel as condLabelText,
   fmtPriceText,
 } from '@/lib/seo';
+import { t, type Lang } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import BackLink from '@/components/BackLink';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
@@ -65,37 +66,49 @@ async function getListing(id: string): Promise<ListingDetail | null> {
   return fetchListing(id);
 }
 
-function wilayaName(code: number | undefined): string {
+function wilayaName(code: number | undefined, lang: Lang): string {
   if (!code) return '';
-  const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
-  return w ? `${w.code} - ${w.ar}` : '';
+  const w = (WILAYAS as { code: number; ar: string; fr: string; en: string }[]).find(
+    (x) => x.code === Number(code)
+  );
+  if (!w) return '';
+  // 0.0.0.21 (I-08): English UI uses the English transliterations.
+  return lang === 'ar'
+    ? `${w.code} - ${w.ar}`
+    : lang === 'en' && w.en
+      ? `${w.code} - ${w.en}`
+      : `${w.code} - ${w.fr}`;
 }
 
 // Per-listing SEO — mirrors js/listing.js applyListingSeoHead() +
 // js/seo.js applyListingSeo(): dynamic title, meta description, OG tags,
 // Twitter cards (via generateMetadata) and JSON-LD (script tag in the page).
 // SEO must never break the page: any failure falls back to a bare title.
+// Round 133: UI-language-aware via the dlala_lang cookie (server) —
+// price/wilaya/condition/tagline follow the reader's language
+// (legacy applied t() to the same parts in applyListingSeoHead).
 function seoForListing(
   l: ListingDetail,
-  id: string
+  id: string,
+  lang: Lang
 ): { metadata: Metadata; jsonLd: Record<string, unknown> } {
-  const title = cardTitle(l).trim();
+  const title = cardTitle(l, lang).trim();
   // js/listing.js applyListingSeoHead: priceLabel + negotiable suffix,
   // wilayaLabel (allWilayas fallback), condLabel unless condition-exempt
   // (C-R24-1 — the label must not leak into meta for exempt categories).
   const priceLabel =
-    fmtPriceText(l.price) + (l.negotiable ? ' · قابل للتفاوض' : '');
-  const wilayaLabel = l.wilayaCode ? wilayaName(l.wilayaCode) : 'كل الولايات';
+    fmtPriceText(l.price, lang) + (l.negotiable ? ' · ' + t('negotiable', lang) : '');
+  const wilayaLabel = l.wilayaCode ? wilayaName(l.wilayaCode, lang) : t('allWilayas', lang);
   const condLabel =
     l.condition && !isConditionExempt(l.categoryId, l.answers)
-      ? condLabelAr(l.condition)
+      ? condLabelText(l.condition, lang)
       : '';
   const seo = listingSeoText({
     title,
     priceLabel,
     wilayaLabel,
     condLabel,
-    siteTagline: SITE_TAGLINE,
+    siteTagline: t('seoTagline', lang),
   });
   const url = `${SITE}/listing/${encodeURIComponent(id)}`;
   const image = cardImage(l) || `${SITE}/icon-512.png`;
@@ -113,9 +126,12 @@ function seoForListing(
     title: seo.title,
     description: seo.description,
     openGraph: {
-      // 'product' is not in Next.js's Metadata OpenGraph type union, but the
-      // runtime renders og:type verbatim — the cast keeps the legacy value.
-      type: 'product' as 'website',
+      // Round 133: 'product' was the legacy og:type, but Next 16's metadata
+      // renderer throws `Invalid OpenGraph type: product` (exhaustive switch
+      // with no 'product' case) — the throw silently drops the ENTIRE <head>
+      // metadata (title, description, all OG/Twitter tags). Verified live:
+      // listing pages rendered with no <title> at all. 'website' renders.
+      type: 'website',
       siteName: 'DLALA',
       title: seo.title,
       description: seo.description,
@@ -141,7 +157,9 @@ export async function generateMetadata({
     const { id } = await params;
     const listing = await getListing(id);
     if (!listing) return { title: 'DLALA' };
-    return seoForListing(listing, id).metadata;
+    // Round 133: localize the tab title to the reader's language
+    // (dlala_lang cookie; localStorage is client-only).
+    return seoForListing(listing, id, await getServerLang()).metadata;
   } catch {
     return { title: 'DLALA' };
   }
@@ -216,7 +234,8 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   // escaped (\u003c) so user content can never break out of the script.
   let jsonLdScript = '';
   try {
-    jsonLdScript = JSON.stringify(seoForListing(l, id).jsonLd).replace(
+    // Round 133: same cookie language as generateMetadata above.
+    jsonLdScript = JSON.stringify(seoForListing(l, id, await getServerLang()).jsonLd).replace(
       /</g,
       '\\u003c'
     );

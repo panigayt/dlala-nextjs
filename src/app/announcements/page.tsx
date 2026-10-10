@@ -18,13 +18,19 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import { fetchAnnouncements, type Announcement } from '@/lib/firestore';
+import { t } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import AnnouncementsClient, { AnnSkeleton } from './AnnouncementsClient';
 import type { AnnListItem } from './AnnList';
 
-export const metadata: Metadata = {
-  title: 'إعلانات الفريق — دلالة',
-  description: 'الإعلانات الرسمية من فريق دلالة',
-};
+// Round 133: <title> follows the reader's language (dlala_lang cookie;
+// localStorage is client-only). Description stays Arabic (title-only scope).
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: t('title_announcements', await getServerLang()),
+    description: 'الإعلانات الرسمية من فريق دلالة',
+  };
+}
 
 async function getAnnouncements(): Promise<Announcement[]> {
   'use cache';

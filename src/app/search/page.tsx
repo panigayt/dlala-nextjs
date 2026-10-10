@@ -12,6 +12,7 @@
 // useLang() (js/i18n.js onLangChange parity; same pattern as the home page,
 // Round 107).
 
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import {
@@ -21,7 +22,16 @@ import {
   type SearchFilters,
 } from '@/lib/firestore';
 import { parseSearchFilters, filtersToQuery } from './filters';
+import { t } from '@/lib/i18n-strings';
+import { getServerLang } from '@/lib/server-lang';
 import SearchPage from '@/components/SearchPage';
+
+// Round 133: <title> follows the reader's language (dlala_lang cookie;
+// localStorage is client-only). Legacy js/app.js PAGE_TITLES has no search
+// key — pageTitleKey() falls back to title_home, mirrored here.
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: t('title_home', await getServerLang()) };
+}
 
 async function getResults(f: SearchFilters): Promise<SearchResult> {
   'use cache';
