@@ -25,6 +25,7 @@ import {
   type CompatUser,
 } from '@/lib/firebase-client';
 import { uploadToR2, r2KeyFor } from '@/lib/r2-upload';
+import { encodePhoto } from '@/lib/stripExif';
 
 const T = {
   myStore: 'متجري',
@@ -283,8 +284,9 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
   // ---- settings save (R2 uploads) ----
   const uploadImage = async (file: File, kind: 'cover' | 'logo'): Promise<string> => {
     const idToken = await user.getIdToken();
-    const key = r2KeyFor(user.uid, 'profile', `${kind}_${Date.now()}.webp`);
-    // Downscale
+    // Downscale + re-encode through canvas: canvas encoding never carries
+    // EXIF (incl. GPS) — store images are public. WebP first, JPEG fallback
+    // via canvas (mirrors js/publish.js encodePhoto); never the original file.
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
@@ -292,8 +294,9 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
     canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     if (bitmap.close) bitmap.close();
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', 0.85));
-    const f = new File([blob || file], `${kind}.webp`, { type: 'image/webp' });
+    const enc = await encodePhoto(canvas, 0.85);
+    const f = new File([enc.blob], `${kind}${enc.ext}`, { type: enc.type });
+    const key = r2KeyFor(user.uid, 'profile', `${kind}_${Date.now()}${enc.ext}`);
     const { publicUrl } = await uploadToR2(f, key, idToken);
     return publicUrl;
   };

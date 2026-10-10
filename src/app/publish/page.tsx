@@ -29,6 +29,7 @@ import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES, dzPriceWords } from '@/lib/categories';
 import { pubT } from '@/lib/publish-strings';
 import { uploadToR2, r2KeyFor } from '@/lib/r2-upload';
+import { encodePhoto } from '@/lib/stripExif';
 
 const t = (k: string) => pubT(k, 'ar');
 const MAX_PHOTOS = 10;
@@ -150,14 +151,12 @@ async function processPhoto(file: File): Promise<ProcessedPhoto> {
   const w1024 = await makeVariant(canvas, baseName, 1024, '-w1024');
   const lqip = await makeVariant(canvas, baseName, 32, '-w32');
 
-  const blob = await new Promise<Blob | null>((res) =>
-    canvas.toBlob(res, 'image/webp', 0.82)
-  );
-  const main = new File(
-    [blob || file],
-    baseName + '.webp',
-    { type: 'image/webp' }
-  );
+  // Encode main photo: WebP first, JPEG via canvas if WebP fails —
+  // canvas re-encoding never carries EXIF. NEVER fall back to the original
+  // file (that would leak EXIF/GPS into the upload). Mirrors
+  // js/publish.js encodePhoto (0.0.0.1l FIX 19).
+  const enc = await encodePhoto(canvas, 0.82);
+  const main = new File([enc.blob], baseName + enc.ext, { type: enc.type });
   return {
     file: main,
     thumb,

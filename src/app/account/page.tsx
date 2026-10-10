@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate, { PageHeader } from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
+import { stripExif } from '@/lib/stripExif';
 import { useLang } from '@/lib/i18n';
 
 interface ProfileData {
@@ -262,8 +263,19 @@ function AccountContent({ user }: { user: CompatUser }) {
           setProfBusy(false);
           return;
         }
+        // Strip EXIF (incl. GPS) before upload — avatars are public.
+        let safePhoto: File;
+        try {
+          safePhoto = await withTimeout(stripExif(newPhotoFile), 30000);
+        } catch {
+          // A processing failure is not a size problem — do not tell the
+          // user "photo too big" when it isn't.
+          setProfErr(t('errorPhoto'));
+          setProfBusy(false);
+          return;
+        }
         const path = `profiles/${user.uid}/avatar_${Date.now()}.jpg`;
-        const snap = await withTimeout(storage.ref(path).put(newPhotoFile), 30000);
+        const snap = await withTimeout(storage.ref(path).put(safePhoto), 30000);
         photoPath = await withTimeout(snap.ref.getDownloadURL(), 15000);
       }
 
@@ -322,10 +334,17 @@ function AccountContent({ user }: { user: CompatUser }) {
   const uploadStoreImage = useCallback(
     async (file: File, kind: string): Promise<string> => {
       if (file.size > 5 * 1024 * 1024) throw new Error('photoTooBig');
+      // Strip EXIF (incl. GPS) — store images are public.
+      let safe: File;
+      try {
+        safe = await withTimeout(stripExif(file), 30000);
+      } catch {
+        throw new Error('errorPhoto');
+      }
       const fb = await getFirebase();
       const storage = fb.storage() as unknown as StorageLike;
       const path = `profiles/${user.uid}/store-${kind}_${Date.now()}.jpg`;
-      const snap = await withTimeout(storage.ref(path).put(file), 30000);
+      const snap = await withTimeout(storage.ref(path).put(safe), 30000);
       return withTimeout(snap.ref.getDownloadURL(), 15000);
     },
     [user.uid]
