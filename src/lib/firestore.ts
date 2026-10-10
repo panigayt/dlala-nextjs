@@ -493,6 +493,133 @@ export interface SearchFilters {
   min?: string;
   max?: string;
   sort?: string; // 'recent' | 'priceAsc' | 'priceDesc' (legacy home.js fSort)
+  // Category facets (js/home.js F.f*): phones OS+brand, cars brand+fuel+gear+year+mileage
+  fOs?: string;
+  fBrand?: string;
+  fCarBrand?: string;
+  fFuel?: string;
+  fGear?: string;
+  fYearMin?: string;
+  fYearMax?: string;
+  fMilMin?: string;
+  fMilMax?: string;
+}
+
+// --- Category facet filters (phones: OS+brand; cars: brand+fuel+gear+year+mileage) ---
+// Verbatim port of js/home.js facet logic (0.0.0.43).
+
+export const FACET_PHONE_BRANDS = [
+  'pbApple', 'pbSamsung', 'pbHonor', 'pbHuawei', 'pbXiaomi',
+  'pbOppo', 'pbRealme', 'pbInfinix', 'pbTecno', 'pbOther',
+];
+
+export const FACET_CAR_BRANDS = [
+  'cbRenault', 'cbDacia', 'cbPeugeot', 'cbCitroen', 'cbFiat',
+  'cbVolkswagen', 'cbHyundai', 'cbKia', 'cbToyota', 'cbNissan',
+  'cbSkoda', 'cbSeat', 'cbOpel', 'cbSuzuki', 'cbAudi', 'cbBmw',
+  'cbMercedes', 'cbChery', 'cbGeely', 'cbByd', 'cbOther',
+];
+
+// 0.0.0.1l (Zak): brand options follow the selected OS.
+export function facetPhoneBrandsForOs(os: string): string[] {
+  if (os === 'osIos') return ['pbApple'];
+  if (os === 'osAndroid') return FACET_PHONE_BRANDS.filter((b) => b !== 'pbApple');
+  return FACET_PHONE_BRANDS;
+}
+
+// Maps a canonical cb* brand key to the legacy free-text spellings measured
+// in production (24 Sep 2026). The server brand filter is
+// answers.brand IN [cbKey, ...legacySpellings] (case-sensitive).
+const CB_TO_LEGACY_BRAND: Record<string, string[]> = {
+  cbRenault: ['Renault'], cbDacia: ['Dacia'], cbPeugeot: ['Peugeot'],
+  cbCitroen: ['Citroen'], cbFiat: ['Fiat'], cbVolkswagen: ['Volkswagen'],
+  cbHyundai: ['Hyundai'], cbKia: ['Kia'], cbToyota: ['Toyota'], cbNissan: ['Nissan'],
+  cbSkoda: ['Skoda'], cbSeat: ['Seat'], cbOpel: ['Opel'], cbSuzuki: ['Suzuki'],
+  cbAudi: ['Audi'], cbBmw: ['Bmw', 'BMW'], cbMercedes: ['Mercedes'],
+  cbChery: ['Chery'], cbGeely: ['Geely'], cbByd: ['Byd', 'BYD'],
+};
+
+// 0.0.0.1z: legacy free-text car brands → cb keys. READ-ONLY normalization:
+// unknown values return '' (no guessing) so a brand-filtered search simply
+// skips listings it cannot classify instead of showing wrong results.
+const LEGACY_CAR_BRAND_MAP: Record<string, string> = {
+  renault: 'cbRenault', dacia: 'cbDacia', peugeot: 'cbPeugeot',
+  citroen: 'cbCitroen', fiat: 'cbFiat', volkswagen: 'cbVolkswagen', vw: 'cbVolkswagen',
+  hyundai: 'cbHyundai', kia: 'cbKia', toyota: 'cbToyota', nissan: 'cbNissan',
+  skoda: 'cbSkoda', seat: 'cbSeat', opel: 'cbOpel', suzuki: 'cbSuzuki',
+  audi: 'cbAudi', bmw: 'cbBmw', mercedes: 'cbMercedes', mercedesbenz: 'cbMercedes',
+  chery: 'cbChery', geely: 'cbGeely', byd: 'cbByd',
+  'رونو': 'cbRenault', 'رينو': 'cbRenault',
+  'داسيا': 'cbDacia', 'داشيا': 'cbDacia',
+  'بيجو': 'cbPeugeot', 'بوجو': 'cbPeugeot',
+  'سيتروين': 'cbCitroen', 'ستروين': 'cbCitroen',
+  'فيات': 'cbFiat',
+  'فولكسفاغن': 'cbVolkswagen', 'فولكسفاجن': 'cbVolkswagen', 'فولكسواجن': 'cbVolkswagen',
+  'هيونداي': 'cbHyundai', 'هونداي': 'cbHyundai',
+  'كيا': 'cbKia',
+  'تويوتا': 'cbToyota', 'طويوطا': 'cbToyota',
+  'نيسان': 'cbNissan',
+  'سكودا': 'cbSkoda', 'شكودا': 'cbSkoda',
+  'سيات': 'cbSeat',
+  'اوبل': 'cbOpel',
+  'سوزوكي': 'cbSuzuki',
+  'اودي': 'cbAudi',
+  'بيامدبليو': 'cbBmw',
+  'مرسيدس': 'cbMercedes', 'مرسيدسبنز': 'cbMercedes',
+  'شيري': 'cbChery',
+  'جيلي': 'cbGeely',
+  'بيوايدي': 'cbByd',
+};
+
+export function normalizeCarBrand(v: unknown): string {
+  if (v == null) return '';
+  const s = String(v).trim();
+  if (!s) return '';
+  if (s.startsWith('cb')) return FACET_CAR_BRANDS.includes(s) ? s : '';
+  const latin = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (latin && LEGACY_CAR_BRAND_MAP[latin]) return LEGACY_CAR_BRAND_MAP[latin];
+  const ar = s.replace(/[ً-ٖ]/g, '').replace(/ـ/g, '')
+    .replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/\s+/g, '');
+  if (ar && LEGACY_CAR_BRAND_MAP[ar]) return LEGACY_CAR_BRAND_MAP[ar];
+  return '';
+}
+
+export function hasFacetFilter(f: SearchFilters): boolean {
+  return !!(
+    f.fOs || f.fBrand || f.fCarBrand || f.fFuel || f.fGear ||
+    (f.fYearMin !== undefined && f.fYearMin !== '') ||
+    (f.fYearMax !== undefined && f.fYearMax !== '') ||
+    (f.fMilMin !== undefined && f.fMilMin !== '') ||
+    (f.fMilMax !== undefined && f.fMilMax !== '')
+  );
+}
+
+// Verbatim port of js/home.js matchFacets() — the client-side correctness
+// layer under the server facet plan. F-13 (0.0.0.21): min/max are ordered
+// independently so unswapped ranges can never filter everything out.
+export function matchFacets(d: ListingCard, f: SearchFilters): boolean {
+  const a = (d.answers || {}) as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const yMin = f.fYearMin || '', yMax = f.fYearMax || '';
+  const mMin = f.fMilMin || '', mMax = f.fMilMax || '';
+  if (f.cat === 'phones') {
+    if (f.fOs && str(a.os) !== f.fOs) return false;
+    if (f.fBrand && str(a.brand) !== f.fBrand) return false;
+  } else if (f.cat === 'cars') {
+    if (f.fCarBrand && normalizeCarBrand(a.brand) !== f.fCarBrand) return false;
+    if (f.fFuel && str(a.fuel) !== f.fFuel) return false;
+    if (f.fGear && str(a.gear) !== f.fGear) return false;
+    const year = Number(a.year);
+    const yLo = yMin !== '' && yMax !== '' ? Math.min(Number(yMin), Number(yMax)) : (yMin !== '' ? Number(yMin) : -Infinity);
+    const yHi = yMin !== '' && yMax !== '' ? Math.max(Number(yMin), Number(yMax)) : (yMax !== '' ? Number(yMax) : Infinity);
+    if ((yMin !== '' || yMax !== '') && !(year >= yLo && year <= yHi)) return false;
+    const mil = Number(a.mileage);
+    const mLo = mMin !== '' && mMax !== '' ? Math.min(Number(mMin), Number(mMax)) : (mMin !== '' ? Number(mMin) : -Infinity);
+    const mHi = mMin !== '' && mMax !== '' ? Math.max(Number(mMin), Number(mMax)) : (mMax !== '' ? Number(mMax) : Infinity);
+    if ((mMin !== '' || mMax !== '') && !(mil >= mLo && mil <= mHi)) return false;
+  }
+  return true;
 }
 
 // Server-side search: structured Firestore filters + client-side text match
@@ -538,6 +665,63 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
     });
   }
 
+  // Category facets — server plan (js/home.js facetServerPlan). Eq predicates
+  // run on the server when the query shape stays index-friendly (recent sort,
+  // no price range — mirrors the legacy eligibility bail); the missing-index
+  // fallback below reverts to client-side matching via matchFacets().
+  const usePriceRange = (f.min !== undefined && f.min !== '') || (f.max !== undefined && f.max !== '');
+  const facetServerEligible = (!f.sort || f.sort === 'recent') && !usePriceRange;
+  if (facetServerEligible) {
+    if (f.cat === 'phones') {
+      if (f.fOs) {
+        filters.push({
+          fieldFilter: {
+            field: { fieldPath: 'answers.os' }, op: 'EQUAL',
+            value: { stringValue: f.fOs },
+          },
+        });
+      }
+      if (f.fBrand) {
+        filters.push({
+          fieldFilter: {
+            field: { fieldPath: 'answers.brand' }, op: 'EQUAL',
+            value: { stringValue: f.fBrand },
+          },
+        });
+      }
+    } else if (f.cat === 'cars') {
+      if (f.fCarBrand) {
+        const legacySpellings = CB_TO_LEGACY_BRAND[f.fCarBrand] || [];
+        filters.push({
+          fieldFilter: {
+            field: { fieldPath: 'answers.brand' }, op: 'IN',
+            value: {
+              arrayValue: {
+                values: [{ stringValue: f.fCarBrand }, ...legacySpellings.map((s) => ({ stringValue: s }))],
+              },
+            },
+          },
+        });
+      }
+      if (f.fFuel) {
+        filters.push({
+          fieldFilter: {
+            field: { fieldPath: 'answers.fuel' }, op: 'EQUAL',
+            value: { stringValue: f.fFuel },
+          },
+        });
+      }
+      if (f.fGear) {
+        filters.push({
+          fieldFilter: {
+            field: { fieldPath: 'answers.gear' }, op: 'EQUAL',
+            value: { stringValue: f.fGear },
+          },
+        });
+      }
+    }
+  }
+
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   // Sort: legacy fSort (الأحدث / السعر من الأقل / السعر من الأعلى).
   // A price orderBy with other filters may need a composite index — the
@@ -559,7 +743,9 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
             : useFilters[0],
           orderBy,
           select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
-          limit: f.q ? 100 : limit, // text query needs a pool to scan
+          // Text query and facet refinements need a pool to scan
+          // (js/home.js DEEP_POOL pattern).
+          limit: f.q || hasFacetFilter(f) ? 100 : limit,
         },
       }),
       cache: 'no-store',
@@ -602,6 +788,15 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
     }
   }
 
+  // Facet refinement (js/home.js matchFacets, verbatim): the client-side
+  // correctness layer under the server plan. Always runs when facets are
+  // active — it is a no-op for facets the server already applied exactly,
+  // and it covers year/mileage ranges plus the server-ineligible shapes
+  // (price sort, price range, missing index fallback).
+  if (hasFacetFilter(f)) {
+    docs = docs.filter((d) => matchFacets(d, f));
+  }
+
   // Text query: normalized substring match on title/description
   // (js/home.js renderFeed R-9 branch, verbatim logic).
   if (f.q && f.q.trim()) {
@@ -618,6 +813,8 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
       if (title.includes(q) || desc.includes(q)) matched.push(d);
     }
     docs = matched.slice(0, limit);
+  } else if (hasFacetFilter(f)) {
+    docs = docs.slice(0, limit);
   }
   return docs;
 }

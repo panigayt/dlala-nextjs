@@ -13,11 +13,16 @@ import {
   cardTitle,
   cardImage,
   formatPrice,
+  hasFacetFilter,
+  facetPhoneBrandsForOs,
+  FACET_CAR_BRANDS,
   type ListingCard,
   type SearchFilters,
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
+import { brandLatinName } from '@/lib/seo';
+import { pubT } from '@/lib/publish-strings';
 import TimeAgo from '@/components/TimeAgo';
 
 async function getResults(f: SearchFilters): Promise<ListingCard[]> {
@@ -30,6 +35,140 @@ function wilayaName(code: number | undefined): string {
   if (!code) return '';
   const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
   return w ? `${w.code} - ${w.ar}` : '';
+}
+
+// Category facet row — mirrors js/home.js renderFacets() (0.0.0.43).
+// Phones: OS + brand (brand list narrowed by OS at render time, like the
+// legacy phoneBrandsForOs(F.fOs) call). Cars: brand + fuel + gearbox +
+// year range + mileage range. Rendered only for phones/cars; every facet
+// has an "All" option (Zak, 12 Sep 2026). Labels verbatim from
+// js/i18n.ar.js (facetOs/facetBrand/facetFuel/facetGear/yearFrom/yearTo/
+// mileageFrom/mileageTo). Lives inside the FilterBar GET form so facets
+// submit as URL params alongside the other filters.
+function FacetBar({ filters }: { filters: SearchFilters }) {
+  const ctl =
+    'rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-base text-zinc-900';
+  const t = (k: string) => pubT(k, 'ar');
+  if (filters.cat === 'phones') {
+    return (
+      <>
+        <label htmlFor="search-fOs" className="sr-only">
+          نظام التشغيل
+        </label>
+        <select id="search-fOs" name="fOs" className={ctl} defaultValue={filters.fOs || ''}>
+          <option value="">نظام التشغيل</option>
+          <option value="osAndroid">{t('osAndroid')}</option>
+          <option value="osIos">{t('osIos')}</option>
+        </select>
+        <label htmlFor="search-fBrand" className="sr-only">
+          الماركة
+        </label>
+        <select id="search-fBrand" name="fBrand" className={ctl} defaultValue={filters.fBrand || ''}>
+          <option value="">الماركة</option>
+          {facetPhoneBrandsForOs(filters.fOs || '').map((b) => (
+            <option key={b} value={b}>
+              {brandLatinName(b)}
+            </option>
+          ))}
+        </select>
+      </>
+    );
+  }
+  if (filters.cat === 'cars') {
+    return (
+      <>
+        <label htmlFor="search-fCarBrand" className="sr-only">
+          الماركة
+        </label>
+        <select
+          id="search-fCarBrand"
+          name="fCarBrand"
+          className={ctl}
+          defaultValue={filters.fCarBrand || ''}
+        >
+          <option value="">الماركة</option>
+          {FACET_CAR_BRANDS.map((b) => (
+            <option key={b} value={b}>
+              {brandLatinName(b)}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="search-fFuel" className="sr-only">
+          الوقود
+        </label>
+        <select id="search-fFuel" name="fFuel" className={ctl} defaultValue={filters.fFuel || ''}>
+          <option value="">الوقود</option>
+          <option value="fuelPetrol">{t('fuelPetrol')}</option>
+          <option value="fuelDiesel">{t('fuelDiesel')}</option>
+          <option value="fuelGas">{t('fuelGas')}</option>
+          <option value="fuelElectric">{t('fuelElectric')}</option>
+        </select>
+        <label htmlFor="search-fGear" className="sr-only">
+          ناقل الحركة
+        </label>
+        <select id="search-fGear" name="fGear" className={ctl} defaultValue={filters.fGear || ''}>
+          <option value="">ناقل الحركة</option>
+          <option value="gearManual">{t('gearManual')}</option>
+          <option value="gearAuto">{t('gearAuto')}</option>
+        </select>
+        <label htmlFor="search-fYearMin" className="sr-only">
+          السنة من
+        </label>
+        <input
+          id="search-fYearMin"
+          type="number"
+          name="fYearMin"
+          min="1950"
+          max="2030"
+          inputMode="numeric"
+          placeholder="السنة من"
+          defaultValue={filters.fYearMin || ''}
+          className={`${ctl} w-28`}
+        />
+        <label htmlFor="search-fYearMax" className="sr-only">
+          إلى
+        </label>
+        <input
+          id="search-fYearMax"
+          type="number"
+          name="fYearMax"
+          min="1950"
+          max="2030"
+          inputMode="numeric"
+          placeholder="إلى"
+          defaultValue={filters.fYearMax || ''}
+          className={`${ctl} w-24`}
+        />
+        <label htmlFor="search-fMilMin" className="sr-only">
+          الكيلومترات من
+        </label>
+        <input
+          id="search-fMilMin"
+          type="number"
+          name="fMilMin"
+          min="0"
+          inputMode="numeric"
+          placeholder="الكيلومترات من"
+          defaultValue={filters.fMilMin || ''}
+          className={`${ctl} w-36`}
+        />
+        <label htmlFor="search-fMilMax" className="sr-only">
+          إلى
+        </label>
+        <input
+          id="search-fMilMax"
+          type="number"
+          name="fMilMax"
+          min="0"
+          inputMode="numeric"
+          placeholder="إلى"
+          defaultValue={filters.fMilMax || ''}
+          className={`${ctl} w-24`}
+        />
+      </>
+    );
+  }
+  return null;
 }
 
 // Filter bar — GET form mirroring the home page HomeFilters block
@@ -100,6 +239,7 @@ function FilterBar({ filters }: { filters: SearchFilters }) {
         <option value="priceAsc">السعر: من الأقل</option>
         <option value="priceDesc">السعر: من الأعلى</option>
       </select>
+      <FacetBar filters={filters} />
       <button
         type="submit"
         className="rounded-xl bg-emerald-700 px-5 py-2.5 text-base font-bold text-white hover:bg-emerald-800"
@@ -240,8 +380,24 @@ async function SearchContent({
     min: get('min') || undefined,
     max: get('max') || undefined,
     sort: get('sort') || undefined,
+    fOs: get('fOs') || undefined,
+    fBrand: get('fBrand') || undefined,
+    fCarBrand: get('fCarBrand') || undefined,
+    fFuel: get('fFuel') || undefined,
+    fGear: get('fGear') || undefined,
+    fYearMin: get('fYearMin') || undefined,
+    fYearMax: get('fYearMax') || undefined,
+    fMilMin: get('fMilMin') || undefined,
+    fMilMax: get('fMilMax') || undefined,
   };
-  const hasFilter = filters.q || filters.cat || filters.wilaya || filters.min || filters.max || filters.sort;
+  const hasFilter =
+    filters.q ||
+    filters.cat ||
+    filters.wilaya ||
+    filters.min ||
+    filters.max ||
+    filters.sort ||
+    hasFacetFilter(filters);
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6">

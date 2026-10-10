@@ -61,6 +61,13 @@ const BRAND_LATIN: Record<string, string> = {
   cbByd: 'BYD',
 };
 
+// Brand key (pb*/cb*) -> Latin proper-noun label for facet option lists.
+// Keys ending in "Other" read as Arabic "أخرى" in i18n (0.0.0.43).
+export function brandLatinName(key: string): string {
+  if (/Other$/.test(key)) return 'أخرى';
+  return BRAND_LATIN[key] || key;
+}
+
 // Verbatim port of js/listing.js listingBrandName().
 export function listingBrandName(
   answers: Record<string, unknown> | undefined
