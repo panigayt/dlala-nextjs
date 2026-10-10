@@ -46,13 +46,13 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
     <a
       href={`/listing/${l.id}`}
       data-sid={l.sellerId || ''}
-      className="block relative rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+      className="block relative rounded-xl bg-white border border-[#e5e7eb] overflow-hidden hover:shadow-md transition-shadow"
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       {/* HOM-4 parity (js/app.js markOwnCards): "yours" badge, positioned
           against the card (absolute vs this relative anchor). */}
       <OwnBadge sellerId={l.sellerId || ''} />
-      <div className="relative aspect-[4/3] bg-zinc-100">
+      <div className="relative aspect-[4/3] bg-[#e8f0ec]">
         {img ? (
           <BlurUpImage
             listing={l}
@@ -66,26 +66,26 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
         {(showWantedBadge || l.status === 'sold' || l.isWholesale || reduced || isSeeker || isOffer) && (
           <div className="absolute top-2 right-2 flex flex-col items-start gap-1">
             {showWantedBadge && (
-              <span className="rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wantedBadge')}</span>
+              <span className="rounded-md bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wantedBadge')}</span>
             )}
             {l.status === 'sold' && (
-              <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">{t('sold')}</span>
+              <span className="rounded-md bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">{t('sold')}</span>
             )}
             {l.isWholesale && (
-              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wholesale')}</span>
+              <span className="rounded-md bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wholesale')}</span>
             )}
             {reduced && (
-              <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white">
+              <span className="rounded-md bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white">
                 ▼ {t('priceReduced')}
               </span>
             )}
             {isSeeker && (
-              <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-bold text-white">
+              <span className="rounded-md bg-blue-600 px-2.5 py-0.5 text-xs font-bold text-white">
                 {t('seekerBadge')}
               </span>
             )}
             {isOffer && (
-              <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-bold text-white">
+              <span className="rounded-md bg-emerald-700 px-2.5 py-0.5 text-xs font-bold text-white">
                 {t('offerBadge')}
               </span>
             )}
@@ -108,12 +108,12 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
               photoUrl={img}
             />
           )}
-          <p className="font-bold text-emerald-700 text-lg">
+          <p className="font-extrabold text-[#0b6b4f] text-base">
             <span dir="ltr">{formatPrice(l.price || 0)}</span>
             {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
           </p>
         </div>
-        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
+        <h3 className="mt-1 text-sm text-zinc-900 whitespace-nowrap overflow-hidden text-ellipsis" style={{unicodeBidi: 'plaintext'}}>
           {cardTitle(l)}
           {/* 16 Sep 2026 parity (js/app.js markProCards): gold pro badge
               appended inside the card title for verified pro merchants. */}
