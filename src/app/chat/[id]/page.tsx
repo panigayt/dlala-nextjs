@@ -128,6 +128,7 @@ interface Msg {
   imageUrl?: string;
   proposal?: { amount: number; status: string };
   readAt?: unknown;
+  _sending?: boolean;
 }
 
 interface ConvData {
@@ -342,6 +343,9 @@ function ChatInner() {
     mid: string;
   } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // "New messages" pill: shows when messages arrive while the user is
+  // scrolled up reading history (legacy js/chat.js parity).
+  const [showPill, setShowPill] = useState(false);
 
   const clientRef = useRef<FirebaseClient | null>(null);
   const userRef = useRef<CompatUser | null>(null);
@@ -376,6 +380,15 @@ function ChatInner() {
   function scrollBottom() {
     const sc = scrollerRef.current;
     if (sc) sc.scrollTop = sc.scrollHeight;
+  }
+
+  // Legacy js/chat.js nearBottomNow(): auto-scroll only when the user is
+  // already near the bottom — never yank them away from history.
+  function nearBottomNow() {
+    const sc = scrollerRef.current;
+    return sc
+      ? sc.scrollHeight - sc.scrollTop - sc.clientHeight < 140
+      : true;
   }
 
   // ---------- bootstrap ----------
@@ -649,9 +662,20 @@ function ChatInner() {
               const list: Msg[] = snap2.docs.map(
                 (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
               );
+              const prevIds = new Set(msgsRef.current.map((m) => m.id));
+              const hasNew = list.some((m) => !prevIds.has(m.id));
               msgsRef.current = list;
               setMsgs(list);
-              scrollBottom();
+              // Legacy applyMsgScroll parity: auto-scroll only when the user
+              // is already near the bottom (or first paint); otherwise show
+              // the "new messages" pill so history reading isn't yanked.
+              if (!hasNew) return;
+              if (nearBottomNow()) {
+                scrollBottom();
+                setShowPill(false);
+              } else {
+                setShowPill(true);
+              }
             },
             () => {}
           )
@@ -710,6 +734,20 @@ function ChatInner() {
     };
   }, [authState, convId, openThread, router]);
 
+  // Hide the "new messages" pill once the user scrolls back near the
+  // bottom (legacy js/chat.js parity, 140px threshold).
+  useEffect(() => {
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    const onScroll = () => {
+      if (sc.scrollHeight - sc.scrollTop - sc.clientHeight < 140) {
+        setShowPill(false);
+      }
+    };
+    sc.addEventListener('scroll', onScroll, { passive: true });
+    return () => sc.removeEventListener('scroll', onScroll);
+  }, []);
+
   // ---------- send paths ----------
 
   function blockedSendGuard(): boolean {
@@ -759,6 +797,30 @@ function ChatInner() {
     if (opts.proposal != null)
       msg.proposal = { amount: Number(opts.proposal), status: 'pending' };
     sendInFlightRef.current = true;
+    // 18 Sep 2026 (Zak): optimistic UI — show the message IMMEDIATELY
+    // instead of waiting for the server round-trip. The onSnapshot echo
+    // dedupes by msgId when the real message arrives (same doc id, full
+    // list replace). Non-fatal — the snapshot renders it anyway.
+    try {
+      const optimistic: Msg = {
+        id: msgId,
+        senderId: user.uid,
+        text: t || (opts.imageUrl ? '📷' : ''),
+        at: Date.now(),
+        isSystem: false,
+        _sending: true,
+      };
+      if (opts.imageUrl) optimistic.imageUrl = opts.imageUrl;
+      if (opts.proposal != null)
+        optimistic.proposal = { amount: Number(opts.proposal), status: 'pending' };
+      const next = [...msgsRef.current, optimistic];
+      msgsRef.current = next;
+      setMsgs(next);
+      if (nearBottomNow()) scrollBottom();
+      else setShowPill(true);
+    } catch {
+      /* non-fatal — server snapshot will render it */
+    }
     try {
       const batch = client.db.batch();
       batch.set(
@@ -807,6 +869,12 @@ function ChatInner() {
           /* real failure below */
         }
       }
+      // Send failed and the doc provably does not exist (the
+      // permission-denied retry-after-commit above already returned if it
+      // does) — drop the optimistic message so it doesn't linger.
+      const cur = msgsRef.current.filter((m) => m.id !== msgId);
+      msgsRef.current = cur;
+      setMsgs(cur);
       setFailedSend({
         text: opts.text,
         imageUrl: opts.imageUrl,
@@ -1619,14 +1687,28 @@ function ChatInner() {
       {renderDealPanel()}
 
       {/* messages */}
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-2">
-        {msgs.length === 0 ? (
-          <div className="text-center py-10 text-zinc-500">
-            <div className="text-4xl mb-2">👋</div>
-            <p className="text-sm">{STR.sayHello}</p>
-          </div>
-        ) : (
-          msgNodes
+      <div className="relative flex-1 flex flex-col min-h-0">
+        <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-2">
+          {msgs.length === 0 ? (
+            <div className="text-center py-10 text-zinc-500">
+              <div className="text-4xl mb-2">👋</div>
+              <p className="text-sm">{STR.sayHello}</p>
+            </div>
+          ) : (
+            msgNodes
+          )}
+        </div>
+        {showPill && (
+          <button
+            type="button"
+            onClick={() => {
+              scrollBottom();
+              setShowPill(false);
+            }}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 rounded-full bg-emerald-700 px-4 py-2 text-[13px] font-bold text-white shadow-lg active:scale-95"
+          >
+            {STR2.newMessages}
+          </button>
         )}
       </div>
 
