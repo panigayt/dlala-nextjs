@@ -25,6 +25,7 @@ import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
+import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 import { tasteNoteFav } from '@/lib/taste';
 
 const FAV_PAGE = 60;
@@ -46,14 +47,78 @@ interface LiveListing {
   isWanted?: boolean;
   exists: boolean;
   // Carried at runtime via the ...data spread in hydratePage; declared here
-  // so the taste favorites snapshot (js/snapshot.js parity) can project
-  // them with types instead of casts.
+  // so the favorites instant-paint snapshot (js/snapshot.js + js/favorites.js
+  // favCardSnapshot parity) can project them with types instead of casts.
   categoryId?: string;
   category?: string;
   wilayaCode?: number;
+  previousPrice?: number;
+  priceReduced?: boolean;
+  sellerId?: string;
+  isWholesale?: boolean;
+  createdAt?: unknown;
 }
 
 type CardStatus = 'ok' | 'deleted' | 'failed';
+
+// Projection of a hydrated favorite for the instant-paint snapshot —
+// verbatim port of js/favorites.js favCardSnapshot: everything
+// favCardHtml/listingCard reads, nothing more. Also the projection
+// tasteReadFavs (@/lib/taste) reads for personalization signals (it reads
+// a subset of these fields).
+function favCardSnapshot(live: LiveListing, fav: FavItem) {
+  return {
+    live: {
+      id: String(live.id || ''),
+      title: live.title || '',
+      price: Number(live.price) || 0,
+      photoUrls: (live.photoUrls || []).slice(0, 2),
+      thumbUrls: (
+        (live.photo_thumbs && live.photo_thumbs.length
+          ? live.photo_thumbs
+          : live.thumbUrls) || []
+      ).slice(0, 2),
+      status: String(live.status || ''),
+      categoryId: String(live.categoryId || live.category || ''),
+      wilayaCode: Number(live.wilayaCode) || 0,
+      createdAt: snapMs(live.createdAt),
+      previousPrice: Number(live.previousPrice) || 0,
+      priceReduced: !!live.priceReduced,
+      sellerId: String(live.sellerId || ''),
+      isWholesale: !!live.isWholesale,
+      isWanted: !!live.isWanted,
+    },
+    fav: {
+      listingId: String(fav.listingId || live.id || ''),
+      price: Number(fav.price || 0),
+    },
+  };
+}
+
+// 0.0.0.22 (Zak): instant paint — last favorites from localStorage, before
+// the SDKs/auth/network. The page then refreshes silently in the background.
+function paintFavSnapshot(): FavCard[] | null {
+  const snap = snapshotRead<{ cards?: { live?: Record<string, unknown>; fav?: Record<string, unknown> }[] }>(
+    'favorites'
+  );
+  if (!snap || !snap.data || !Array.isArray(snap.data.cards) || !snap.data.cards.length)
+    return null;
+  try {
+    const cards: FavCard[] = snap.data.cards
+      .filter((c) => c && c.live && c.fav)
+      .map((c) => ({
+        fav: {
+          listingId: String(c.fav!.listingId || ''),
+          price: Number(c.fav!.price || 0),
+        },
+        live: { ...(c.live as Record<string, unknown>), exists: true } as LiveListing,
+        status: 'ok' as const,
+      }));
+    return cards.length ? cards : null;
+  } catch {
+    return null;
+  }
+}
 
 interface FavCard {
   fav: FavItem;
@@ -114,6 +179,9 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   const [retrying, setRetrying] = useState<string | null>(null);
   const cursorRef = useRef<unknown>(null);
   const mounted = useRef(true);
+  // 0.0.0.22 (Zak): instant paint — a snapshot already painted stays and
+  // the live load refreshes silently (no spinner flash).
+  const paintedFromCacheRef = useRef(false);
 
   const hydratePage = useCallback(
     async (db: DbLike, colQuery: unknown): Promise<{ cards: FavCard[]; lastDoc: unknown; full: boolean }> => {
@@ -176,29 +244,17 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       cursorRef.current = lastDoc;
       setCards(page);
       // js/favorites.js 0.0.0.22 + js/snapshot.js: save the first page so
-      // the taste personalization (tasteReadFavs in @/lib/taste) sees the
-      // favorites' category/price/wilaya signals. Same key, envelope
-      // ({v:1, ts, data}) and 10-minute TTL contract as legacy.
+      // the next boot paints instantly (instant paint), and so the taste
+      // personalization (tasteReadFavs in @/lib/taste) sees the favorites'
+      // category/price/wilaya signals. One key, one write, both consumers —
+      // the taste projection is a subset of this render projection (same
+      // key, envelope {v:1, ts, data} and 10-minute TTL contract as legacy).
       try {
-        const pairs = page
+        const snapPairs = page
           .filter((c) => c.status === 'ok' && c.live)
-          .map((c) => ({
-            live: {
-              id: String(c.live!.id || ''),
-              categoryId: String(
-                c.live!.categoryId || c.live!.category || ''
-              ),
-              price: Number(c.live!.price) || 0,
-              wilayaCode: Number(c.live!.wilayaCode) || 0,
-            },
-            fav: { listingId: c.fav.listingId },
-          }))
-          .filter((p) => p.live.categoryId);
-        if (pairs.length) {
-          localStorage.setItem(
-            'dlala_snap_favorites_' + user.uid,
-            JSON.stringify({ v: 1, ts: Date.now(), data: { cards: pairs } })
-          );
+          .map((c) => favCardSnapshot(c.live!, c.fav));
+        if (snapPairs.length) {
+          snapshotWrite('favorites', user.uid, { cards: snapPairs });
         }
       } catch {
         /* best-effort — the live path still works */
@@ -247,6 +303,17 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   /* eslint-disable react-hooks/set-state-in-effect -- data fetch on mount, guarded by mounted ref */
   useEffect(() => {
     mounted.current = true;
+    // 0.0.0.22 (Zak): paint the last good render synchronously, before the
+    // SDKs/auth/network. load() then refreshes silently in the background.
+    try {
+      const cached = paintFavSnapshot();
+      if (cached) {
+        setCards(cached);
+        paintedFromCacheRef.current = true;
+      }
+    } catch {
+      /* fall through to the live path */
+    }
     load();
     return () => {
       mounted.current = false;
