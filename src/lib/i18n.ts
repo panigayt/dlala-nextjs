@@ -13,6 +13,7 @@ export type Lang = 'ar' | 'fr' | 'en';
 const STRINGS: Record<Lang, Record<string, string>> = {
   ar: {
     account: 'حسابي', settings: 'الإعدادات', myAds: 'إعلاناتي', myFollows: 'متابعاتي',
+    newFromFollows: 'جديد من متابَعيك',
     favorites: 'المفضلة', editProfile: 'تعديل الملف الشخصي', saveProfile: 'حفظ الملف',
     profileSaved: 'تم حفظ الملف الشخصي', loading: 'جارٍ التحميل...', retry: 'إعادة المحاولة',
     createProfile: 'إنشاء الملف الشخصي',
@@ -73,6 +74,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
   },
   fr: {
     account: 'Mon compte', settings: 'Paramètres', myAds: 'Mes annonces', myFollows: 'Mes abonnements',
+    newFromFollows: 'Nouveautés de vos abonnements',
     favorites: 'Favoris', editProfile: 'Modifier le profil', saveProfile: 'Enregistrer',
     profileSaved: 'Profil enregistré', loading: 'Chargement...', retry: 'Réessayer',
     createProfile: 'Créer le profil',
@@ -133,6 +135,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
   },
   en: {
     account: 'My account', settings: 'Settings', myAds: 'My ads', myFollows: 'My follows',
+    newFromFollows: 'New from your follows',
     favorites: 'Favorites', editProfile: 'Edit profile', saveProfile: 'Save profile',
     profileSaved: 'Profile saved', loading: 'Loading...', retry: 'Try again',
     createProfile: 'Create profile',

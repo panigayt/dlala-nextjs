@@ -16,6 +16,16 @@ import ListingCardView from '@/components/ListingCardView';
 import VitrineShowcase from '@/components/VitrineShowcase';
 import { interleaveWanted, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
+import { useAuthState } from '@/lib/firebase-client';
+import { useLang } from '@/lib/i18n';
+import { withTimeout } from '@/lib/firebase-compat';
+import {
+  applyFollowBoost,
+  newFromFollows,
+  loadFollowedCache,
+  saveFollowedCache,
+  setsEqual,
+} from '@/lib/followBoost';
 import {
   selectVitrineShowcases,
   recordVitrineShown,
@@ -32,6 +42,15 @@ interface FeedPage {
   regular: ListingCard[];
   hasMore: boolean;
 }
+
+// Minimal shape for the follows query (mirrors my-follows/page.tsx DbLike).
+type FollowsDbLike = {
+  collection: (p: string) => {
+    where: (f: string, op: string, v: string) => {
+      limit: (n: number) => { get: () => Promise<{ docs: { data: () => Record<string, unknown> }[] }> };
+    };
+  };
+};
 
 export default function FeedWithLoadMore({
   initialCards,
@@ -62,6 +81,21 @@ export default function FeedWithLoadMore({
   // (js/taste.js: the append call receives old+new; only fresh docs are
   // ranked and appended — visible order is never reshuffled).
   const regularRef = useRef<ListingCard[] | null>(null);
+  // Raw (pre-taste) regular pool — the «جديد من متابَعيك» strip renders
+  // from the same default/recent pool the main feed uses (js/home.js
+  // renderFollowsSection parity: no extra queries).
+  const rawRegularRef = useRef<ListingCard[] | null>(null);
+  // First-page wanted cards, kept for the follow-refresh recompute.
+  const wantedRef = useRef<ListingCard[] | null>(null);
+  // Followed seller set: seeded synchronously from the localStorage
+  // cache at first paint, refreshed once auth settles (js/home.js
+  // followedSet() pattern). null = not seeded yet.
+  const followedRef = useRef<Set<string> | null>(null);
+  // «جديد من متابَعيك» strip cards.
+  const [stripCards, setStripCards] = useState<ListingCard[]>([]);
+  const { t } = useLang();
+  const auth = useAuthState();
+  const refreshedUid = useRef<string | null>(null);
 
   // Taste personalization (js/taste.js, Zak 18 Sep 2026): invisible
   // on-device ranking of the default feed — 25% taste / 75% exploration.
@@ -74,14 +108,70 @@ export default function FeedWithLoadMore({
     try {
       const regular = initialCards.filter((c) => !c.isWanted);
       const wanted = initialCards.filter((c) => c.isWanted);
+      rawRegularRef.current = regular;
+      wantedRef.current = wanted;
       const ranked = tasteRankDefault(regular, { bump: true });
       regularRef.current = ranked;
-      setCards(interleaveWanted(ranked, wanted));
+      // Follow boost (js/home.js v101, Zak 16 Sep 2026): AFTER the taste
+      // ranking — 1 followed slot per 4, recency leads inside each group.
+      // The followed set is seeded synchronously from the localStorage
+      // cache ('dlala_followed_v1', shared with the legacy SPA) and
+      // refreshed below once auth settles (legacy followedSet() pattern).
+      const seeded = loadFollowedCache();
+      followedRef.current = seeded;
+      setCards(interleaveWanted(applyFollowBoost(ranked, seeded), wanted));
     } catch {
-      /* taste must never break the feed */
+      /* taste/follow must never break the feed */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Followed-set refresh once auth settles (legacy refreshFollowedSet).
+  // Recomputes the first-page composition and the «جديد من متابَعيك»
+  // strip with the server-authoritative set. Guests get an empty set
+  // (no boost, no strip — js/home.js renderFollowsSection parity).
+  useEffect(() => {
+    if (auth.status === 'loading') return;
+    if (auth.status === 'signed-out') {
+      followedRef.current = new Set();
+      setStripCards([]);
+      refreshedUid.current = null;
+      return;
+    }
+    const { user, client } = auth;
+    if (refreshedUid.current === user.uid) return;
+    refreshedUid.current = user.uid;
+    (async () => {
+      try {
+        const db = client.db as unknown as FollowsDbLike;
+        const snap = await withTimeout(
+          db.collection('follows').where('followerId', '==', user.uid).limit(200).get(),
+          20000
+        );
+        const fresh = new Set<string>();
+        for (const d of snap.docs) {
+          const sid = d.data()?.storeId;
+          if (sid) fresh.add(String(sid));
+        }
+        if (setsEqual(followedRef.current, fresh)) return; // no pointless reshuffle
+        followedRef.current = fresh;
+        saveFollowedCache(fresh);
+        // Recompute the visible first-page composition with the fresh set
+        // (legacy feed re-render on follow refresh).
+        const ranked = regularRef.current;
+        const wanted = wantedRef.current;
+        if (ranked && wanted) {
+          setCards(interleaveWanted(applyFollowBoost(ranked, fresh), wanted));
+        }
+        const rawRegular = rawRegularRef.current;
+        if (rawRegular) {
+          setStripCards(newFromFollows(rawRegular, fresh));
+        }
+      } catch {
+        /* follow refresh must never break the feed */
+      }
+    })();
+  }, [auth]);
 
   // Vitrine showcase insertion (js/home.js insertVitrineCards, R17 model).
   // Async + best-effort: the feed is already painted when this runs.
@@ -185,9 +275,12 @@ export default function FeedWithLoadMore({
       }
       regularRef.current = ranked;
       const freshRanked = ranked.slice(prevRegular.length);
+      // Follow boost on the fresh batch only (js/home.js v101): the
+      // visible order is never reshuffled — "show more" appends only.
+      const boostedFresh = applyFollowBoost(freshRanked, followedRef.current || new Set());
       // Interleave the new regular batch with the remaining wanted pool,
       // continuing the rotation from where the previous page left off.
-      const newCards = interleaveWanted(freshRanked, wantedPool.slice(wantedOffset));
+      const newCards = interleaveWanted(boostedFresh, wantedPool.slice(wantedOffset));
       const wantedUsed = newCards.filter((c) => c.isWanted).length;
       setCards((prev) => [...prev, ...newCards]);
       setRegularOffset((prev) => prev + PAGE_SIZE);
@@ -219,6 +312,23 @@ export default function FeedWithLoadMore({
 
   return (
     <>
+      {/* «جديد من متابَعيك» strip (js/home.js renderFollowsSection, Zak
+          16 Sep 2026): latest listings from followed users — last 7 days,
+          max 3 per user, newest first. Prepended to the default feed. */}
+      {stripCards.length > 0 && (
+        <section aria-label={t('newFromFollows')} className="mb-6">
+          <h2 className="text-lg font-semibold text-zinc-800 mb-3">
+            ✦ {t('newFromFollows')}
+          </h2>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {stripCards.map((c) => (
+              <div key={c.id} className="w-44 shrink-0">
+                <ListingCardView l={c} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {renderItems.map((item, idx) =>
           item.type === 'card' ? (
