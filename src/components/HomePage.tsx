@@ -11,6 +11,7 @@
 
 import HomeHeader from '@/components/HomeHeader';
 import TipsTicker from '@/components/TipsTicker';
+import HomeSaveSearch from '@/components/HomeSaveSearch';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
 import { resultsCountText, type ListingCard } from '@/lib/firestore';
 import { useLang } from '@/lib/i18n';
@@ -36,9 +37,16 @@ export default function HomePage({
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {/* Round 152: visible tagline above tips — 0.0.0.39 index.html parity. */}
+        <h1 className="sr-only">{t('tagline')}</h1>
+        <p className="tagline" style={{ color: 'var(--muted, #6b7280)', marginBottom: '12px' }}>
+          {t('tagline')}
+        </p>
         {/* Round 122: tips ticker above the search bar — legacy index.html order. */}
         <TipsTicker />
         <HomeHeader />
+        {/* Round 152: save-this-search action row — 0.0.0.39 HOM-6 parity. */}
+        <HomeSaveSearch />
         <h2 className="text-lg font-semibold text-zinc-800 mb-4">{t('latestAds')}</h2>
 
         {error ? (

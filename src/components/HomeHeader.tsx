@@ -126,18 +126,21 @@ function HomeFilters() {
         <option value="priceAsc">{t('sortPriceAsc')}</option>
         <option value="priceDesc">{t('sortPriceDesc')}</option>
       </select>
-      <button
-        type="submit"
-        className="rounded-xl bg-emerald-700 px-5 py-3 text-base font-bold text-white hover:bg-emerald-800"
-      >
-        {t('applyFilters')}
-      </button>
-      <button
-        type="reset"
-        className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-base text-zinc-700 hover:border-emerald-600"
-      >
-        {t('resetFilters')}
-      </button>
+      {/* Round 152: buttons stay together as a unit — 0.0.0.39 parity. */}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          className="rounded-xl bg-emerald-700 px-5 py-3 text-base font-bold text-white hover:bg-emerald-800 whitespace-nowrap"
+        >
+          {t('applyFilters')}
+        </button>
+        <button
+          type="reset"
+          className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-base text-zinc-700 hover:border-emerald-600 whitespace-nowrap"
+        >
+          {t('resetFilters')}
+        </button>
+      </div>
     </form>
   );
 }
