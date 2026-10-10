@@ -1,0 +1,96 @@
+/* Vitrine showcase card — home feed.
+   Verbatim port of the legacy 0.0.0.39 block (~/workspace/dlala-040/css/style.css
+   lines ~1090-1140 "Vitrine — Minimal Editorial (Design 3, chosen by Zak
+   16 Sep 2026)" + lines ~1297-1335 (vitrine-id link, follow-btn, minis).
+   Round 103: exact visual parity with 0.0.0.39.
+   CSS vars (--emerald, --emerald-dark, --muted) come from chrome.css :root. */
+
+.vitrine-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 18px;
+  padding: 12px;
+  margin: 4px 0;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, .07);
+  /* Full-width horizontal (16 Sep 2026): spans the entire feed grid */
+  grid-column: 1 / -1;
+}
+.vitrine-head {
+  display: flex; align-items: center; gap: 8px;
+  text-decoration: none; color: inherit;
+}
+.vitrine-id { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+a.vitrine-id { text-decoration: none; color: inherit; }
+.vitrine-name {
+  font-weight: 800; font-size: 20px; color: #111; letter-spacing: -.4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vitrine-name em { font-style: normal; color: #0a5c3e; }
+.vitrine-name .vbadge { color: #0a5c3e; font-size: 14px; }
+.vitrine-meta { display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
+.vitrine-card .pro-badge {
+  color: #fff; background: #111; border: none;
+  border-radius: 20px; padding: 3px 12px; margin-inline-start: 0;
+}
+.vitrine-sub { color: #888; font-size: 11px; }
+.vitrine-tag { display: none; }
+.vitrine-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  margin-top: 10px;
+}
+.vitrine-thumb {
+  display: block; border-radius: 12px; overflow: hidden;
+  aspect-ratio: 1; background: #f4f5f7;
+  transition: transform .15s;
+  position: relative;
+}
+.vitrine-thumb:hover { transform: scale(1.04); }
+.vitrine-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* No-photo placeholder (port behavior — legacy renders the thumb empty). */
+.vitrine-thumb-empty {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; font-size: 24px; color: #c9ced6;
+}
+.vitrine-cta {
+  margin-top: 10px; display: flex; align-items: center; justify-content: space-between;
+  padding-top: 10px; border-top: 1px solid #f0f0f0;
+  text-decoration: none; color: inherit;
+}
+.vitrine-cta span:first-child { font-size: 13px; font-weight: 700; color: #111; }
+.vitrine-arrow {
+  width: 34px; height: 34px; border-radius: 50%; background: #111; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: none;
+}
+/* Follow button inside the vitrine header — verbatim legacy .follow-btn
+   (css/style.css:1298), scoped so the shared FollowButton component used on
+   seller/listing pages is untouched. */
+.vitrine-card .follow-btn {
+  flex: 0 0 auto; margin-inline-start: auto;
+  background: var(--emerald); color: #fff; border: none;
+  padding: 8px 14px; border-radius: 20px;
+  font-weight: 700; font-size: 13px; cursor: pointer;
+  white-space: nowrap;
+  min-height: 44px; /* A-16 (0.0.0.21): site touch-target standard */
+}
+.vitrine-card .follow-btn:hover { background: var(--emerald-dark); }
+/* Likes badge on the mini thumbnail — verbatim legacy .badge base
+   (css/style.css:237) + .badge-likes (css/style.css:1312), scoped to the
+   vitrine card. NOTE: legacy positions it top-inline-start, overlapping the
+   mini heart's corner — reproduced verbatim from 0.0.0.39. */
+.vitrine-card .badge {
+  position: absolute; top: 8px; inset-inline-start: 8px;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff;
+}
+.vitrine-card .badge-likes { background: rgba(0, 0, 0, .55); }
+/* Vitrine minis (css/style.css:1313-1326 verbatim). */
+.vitrine-mini { flex: 0 0 120px; width: 120px; }
+.vitrine-mini .vitrine-thumb { flex: none; width: 100%; }
+.vitrine-mini-info {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 6px; font-size: 12px; line-height: 1.3;
+}
+.vitrine-mini-price { font-weight: 800; color: #111; }
+.vitrine-mini-price .price-num { font-weight: 800; }
+.vitrine-mini-cond { color: var(--muted); }
+.vitrine-mini-meta { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.vitrine-mini-date { color: var(--muted); font-size: 11px; }
