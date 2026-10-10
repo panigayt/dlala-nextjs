@@ -6,6 +6,11 @@
 //   parity with js/app.js toggleFavorite).
 // - Contact seller button (guest nudge → /auth, verified-email gate,
 //   double-tap guard, find-or-create conversation → /chat/[id]).
+// - Propose price button (js/listing.js onProposePrice): guest nudge → /auth,
+//   verified-email gate, dialog with amount input; on submit the
+//   conversation opens with ?offer=<amt> (URL param + sessionStorage
+//   fallback — the chat page pre-fills the proposal, never auto-sends).
+//   Buyer-only (hidden for owner); disabled on sold listings (LIS-1).
 // - Share button (verbatim js/market.js shareListing): canonical
 //   dzdlala.com/listing.html?id= URL (works in browsers, the Android app's
 //   deep-link routing, and iOS Safari). navigator.share when available,
@@ -71,6 +76,14 @@ const STR = {
   copyLink: 'نسخ الرابط',
   linkCopied: 'تم نسخ الرابط.',
   close: 'إغلاق',
+  // Propose price (js/listing.js onProposePrice — verbatim js/i18n.ar.js keys).
+  proposePrice: 'اقتراح سعر',
+  yourOffer: 'عرضك (دج)',
+  offerHint: 'اكتب السعر الذي تقترحه، ثم افتح المحادثة لإرساله للبائع.',
+  openChatFirst: 'افتح المحادثة',
+  loginToOffer: 'سجّل الدخول لاقتراح سعر',
+  loading: 'جارٍ التحميل...',
+  offerInvalid: 'أدخل سعراً أكبر من صفر',
 };
 
 // Verbatim REPORT_REASONS order from js/market.js.
@@ -164,6 +177,11 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   const [repPhoto, setRepPhoto] = useState<File | null>(null);
   const [repError, setRepError] = useState<string | null>(null);
   const [repSending, setRepSending] = useState(false);
+  // Propose price dialog (js/listing.js onProposePrice).
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerAmt, setOfferAmt] = useState('');
+  const [offerSending, setOfferSending] = useState(false);
+  const offerInputRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<number | null>(null);
   const favInFlight = useRef(false);
   const contactInFlight = useRef(false);
@@ -421,10 +439,14 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     }
   }, [auth.status, user, client, fav, listingId, sellerId, title, price, photoUrl, guestNudgeThenLogin]);
 
-  const onContact = useCallback(async () => {
+  // Shared find-or-create conversation logic (js/listing.js onContact).
+  // offerAmt rides into the chat URL as ?offer= (OF-1: bulletproof) and is
+  // also stashed in sessionStorage (fallback for older flows). The chat
+  // page pre-fills the proposal amount — never auto-sends.
+  const openConversation = useCallback(async (offerAmt: number | null) => {
     if (auth.status === 'loading' || contacting) return;
     if (!user || !client) {
-      guestNudgeThenLogin(STR.loginToContact);
+      guestNudgeThenLogin(offerAmt !== null ? STR.loginToOffer : STR.loginToContact);
       return;
     }
     if (user.uid === sellerId) return; // cannot message yourself
@@ -444,6 +466,20 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         showToast(setToast, STR.verifyToContact, toastTimer);
         return;
       }
+      // OF-1: carry the entered amount into the chat two ways — the ?offer=
+      // URL param and sessionStorage (fallback). Done up-front so a nav
+      // race can't lose it.
+      const offerQ =
+        offerAmt !== null && Number(offerAmt) > 0
+          ? `?offer=${encodeURIComponent(String(offerAmt))}`
+          : '';
+      if (offerAmt !== null && Number(offerAmt) > 0) {
+        try {
+          window.sessionStorage.setItem(`dlala_offer_${listingId}`, String(offerAmt));
+        } catch {
+          /* storage unavailable — URL param is the bulletproof path */
+        }
+      }
       // Find an existing thread: participants query only (rules deny
       // buyerId/listingId queries — T24), then filter client-side.
       const snap = await withTimeout(
@@ -456,7 +492,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         if (!found && dd && dd.listingId === listingId) found = d.id;
       });
       if (found) {
-        router.push(`/chat/${encodeURIComponent(found)}`);
+        router.push(`/chat/${encodeURIComponent(found)}${offerQ}`);
         return;
       }
       // Create with the exact conversationCreateOk payload (legacy parity).
@@ -488,7 +524,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         }),
         15000
       );
-      router.push(`/chat/${encodeURIComponent(ref.id)}`);
+      router.push(`/chat/${encodeURIComponent(ref.id)}${offerQ}`);
     } catch (e) {
       console.error(e);
       showToast(setToast, STR.errorGeneric, toastTimer);
@@ -497,6 +533,50 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       if (mounted.current) setContacting(false);
     }
   }, [auth.status, contacting, user, client, sellerId, sold, listingId, router, guestNudgeThenLogin]);
+
+  const onContact = useCallback(() => {
+    void openConversation(null);
+  }, [openConversation]);
+
+  // Propose price — js/listing.js onProposePrice: guest nudge, verified
+  // gate, then a dialog (title + label + number input + hint). The action
+  // button validates the amount, disables itself with a loading label,
+  // closes the dialog, and opens the conversation with the offer attached.
+  const onProposeClick = useCallback(async () => {
+    if (auth.status === 'loading' || offerSending) return;
+    if (!user || !client) {
+      guestNudgeThenLogin(STR.loginToOffer);
+      return;
+    }
+    if (user.uid === sellerId || sold) return;
+    // requireVerified (legacy parity — same reload pattern as contact).
+    try {
+      await user.reload();
+    } catch {
+      /* offline — use cached */
+    }
+    if (!user.emailVerified) {
+      showToast(setToast, STR.verifyToContact, toastTimer);
+      return;
+    }
+    setOfferAmt('');
+    setOfferOpen(true);
+  }, [auth.status, offerSending, user, client, sellerId, sold, guestNudgeThenLogin]);
+
+  const onOfferGo = useCallback(() => {
+    const amt = Number(offerAmt);
+    if (!(amt > 0)) {
+      showToast(setToast, STR.offerInvalid, toastTimer);
+      offerInputRef.current?.focus();
+      return;
+    }
+    // OF-1: prevent double-taps while the conversation lookup runs.
+    setOfferSending(true);
+    setOfferOpen(false);
+    void openConversation(amt).finally(() => {
+      if (mounted.current) setOfferSending(false);
+    });
+  }, [offerAmt, openConversation]);
 
   // Owner actions — js/listing.js: editBtn → publish.html?edit=<id>;
   // deleteOwnListing: confirm → deletedAds audit + listing delete in one
@@ -582,7 +662,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   }, [auth.status, deleting, user, client, sellerId, listingId, router]);
 
   // Owner viewing their own listing: hide buyer actions (favorite/contact/
-  // report make no sense on your own ad) but KEEP share — js/listing.js
+  // offer/report make no sense on your own ad) but KEEP share — js/listing.js
   // parity (owner actions are Edit, Delete, Share).
   const showBuyerActions = !(auth.status === 'signed-in' && isOwn);
 
@@ -618,6 +698,22 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           }
         >
           {contacting ? STR.contacting : STR.contactSeller}
+        </button>
+      )}
+      {showBuyerActions && (
+        <button
+          type="button"
+          onClick={onProposeClick}
+          disabled={sold || offerSending}
+          title={sold ? STR.soldNotice : undefined}
+          className={
+            'rounded-lg px-5 py-2.5 font-bold border bg-white transition ' +
+            (sold || offerSending
+              ? 'border-zinc-300 text-zinc-400 opacity-50 cursor-not-allowed'
+              : 'border-amber-400 text-amber-700 hover:border-amber-500')
+          }
+        >
+          {offerSending ? STR.loading : `💰 ${STR.proposePrice}`}
         </button>
       )}
       <button
@@ -733,6 +829,33 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             className="mt-4 w-full rounded-lg bg-red-600 text-white font-bold px-5 py-2.5 disabled:opacity-50"
           >
             {STR.sendReport}
+          </button>
+        </Modal>
+      )}
+      {offerOpen && (
+        <Modal title={STR.proposePrice} onClose={() => !offerSending && setOfferOpen(false)}>
+          <label className="block text-sm font-medium">{STR.yourOffer}</label>
+          <input
+            ref={offerInputRef}
+            type="number"
+            min={1}
+            dir="ltr"
+            value={offerAmt}
+            onChange={(e) => setOfferAmt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onOfferGo();
+            }}
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-left"
+            inputMode="numeric"
+          />
+          <p className="mt-2 text-[13px] text-zinc-500">{STR.offerHint}</p>
+          <button
+            type="button"
+            onClick={onOfferGo}
+            disabled={offerSending}
+            className="mt-4 w-full rounded-lg bg-emerald-700 text-white font-bold px-5 py-2.5 disabled:opacity-50"
+          >
+            {offerSending ? STR.loading : STR.openChatFirst}
           </button>
         </Modal>
       )}
