@@ -1,8 +1,12 @@
 /* Vitrine showcase card — home feed.
    Verbatim port of the legacy 0.0.0.39 block (~/workspace/dlala-040/css/style.css
    lines ~1090-1140 "Vitrine — Minimal Editorial (Design 3, chosen by Zak
-   16 Sep 2026)" + lines ~1297-1335 (vitrine-id link, follow-btn, minis).
+   16 Sep 2026)" + lines ~1279-1335 (final .vitrine-grid/.vitrine-thumb
+   cascade winners, vitrine-id link, follow-btn, minis).
    Round 103: exact visual parity with 0.0.0.39.
+   Round 112: corrected .vitrine-grid/.vitrine-thumb to the FINAL cascade
+   rules (the 1279 block supersedes the 1118 block — horizontal scroll
+   strip, 8px thumbs, #eef3f0, 1px var(--line) border).
    CSS vars (--emerald, --emerald-dark, --muted) come from chrome.css :root. */
 
 .vitrine-card {
@@ -34,13 +38,22 @@ a.vitrine-id { text-decoration: none; color: inherit; }
 }
 .vitrine-sub { color: #888; font-size: 11px; }
 .vitrine-tag { display: none; }
+/* FINAL effective rules (css/style.css:1279-1291): the later unconditional
+   block wins the cascade in 0.0.0.39 — the minis are a HORIZONTAL SCROLL
+   STRIP of 120px cards (not a 4-column grid), thumbs are 8px/#eef3f0 with a
+   1px var(--line) border. Round 103 had copied the superseded 1118/1122
+   rules; Round 112 corrects to what production actually paints. */
 .vitrine-grid {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-  margin-top: 10px;
+  display: flex; gap: 8px; overflow-x: auto; margin-top: 10px;
+  padding-bottom: 4px; scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
+.vitrine-grid::-webkit-scrollbar { height: 4px; }
+.vitrine-grid::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
 .vitrine-thumb {
-  display: block; border-radius: 12px; overflow: hidden;
-  aspect-ratio: 1; background: #f4f5f7;
+  display: block; flex: 0 0 120px; width: 120px; aspect-ratio: 1;
+  border-radius: 8px; overflow: hidden; scroll-snap-align: start;
+  background: #eef3f0; border: 1px solid var(--line);
   transition: transform .15s;
   position: relative;
 }
