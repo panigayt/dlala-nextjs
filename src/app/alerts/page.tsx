@@ -152,6 +152,7 @@ interface FreshListing {
   price?: number;
   categoryId?: string;
   wilayaCode?: number;
+  isWanted?: boolean;
   createdAt?: unknown;
   photoUrls?: string[];
   photo_thumbs?: (string | null)[];
@@ -159,6 +160,9 @@ interface FreshListing {
 }
 
 function matchesSavedSearch(l: FreshListing, s: SavedSearch): boolean {
+  // Verbatim from js/market.js (line 143): wanted ads never match a
+  // regular saved search — they have their own /wanted page.
+  if (l.isWanted) return false;
   if (s.categoryId && l.categoryId !== s.categoryId) return false;
   if (s.wilayaCode != null && l.wilayaCode !== s.wilayaCode) return false;
   if (s.minPrice != null && (l.price || 0) < s.minPrice) return false;

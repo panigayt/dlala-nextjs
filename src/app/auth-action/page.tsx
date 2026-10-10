@@ -46,7 +46,7 @@ interface ActionAuth extends CompatAuth {
   confirmPasswordReset: (code: string, newPassword: string) => Promise<void>;
 }
 
-type Stage = 'working' | 'invalid' | 'verifyDone' | 'resetForm' | 'resetDone';
+type Stage = 'working' | 'invalid' | 'error' | 'verifyDone' | 'resetForm' | 'resetDone';
 
 // Only same-origin (or the production host over https) may receive the
 // post-action redirect. Firebase continue URLs are attacker-influenced
@@ -118,8 +118,11 @@ function AuthActionInner() {
           setStage('invalid');
         }
       } catch (e) {
+        // A non-code error (network, etc.) means the LINK may be fine —
+        // never show the "invalid link" screen for it (legacy auth-action.js
+        // shows a generic error alert in this case).
         if (isInvalidCodeError(e)) setStage('invalid');
-        else setStage('invalid');
+        else setStage('error');
       }
     })();
     // All setState calls above are in async continuations (after await) —
@@ -178,6 +181,22 @@ function AuthActionInner() {
               <a href="/auth" className={btnCls + ' inline-block no-underline'}>
                 {STR.login}
               </a>
+            </div>
+          )}
+
+          {stage === 'error' && (
+            <div>
+              <div className="text-5xl mb-4">⚠️</div>
+              <h1 className="text-xl font-bold text-zinc-900 mb-4">
+                {STR.errorGeneric}
+              </h1>
+              <button
+                type="button"
+                className={btnCls}
+                onClick={() => window.location.reload()}
+              >
+                إعادة المحاولة
+              </button>
             </div>
           )}
 
