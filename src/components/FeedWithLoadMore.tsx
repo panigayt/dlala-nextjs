@@ -250,6 +250,21 @@ export default function FeedWithLoadMore({
       );
       if (!res.ok) throw new Error(`feed-${res.status}`);
       const page: FeedPage = await res.json();
+      // Root-cause fix (Round 139): /api/feed returns plain JSON, so
+      // createdAt arrives as an ISO *string*, breaking the
+      // ListingCard.createdAt?: Date contract. The card render calls
+      // l.createdAt.toISOString(), which throws on a string and trips
+      // the page error boundary ("This page couldn't load"). Revive
+      // Dates here at the boundary. (First-page cards are unaffected:
+      // React Flight serialization preserves Date objects.)
+      const freshRegular: ListingCard[] = (page.regular || []).map((c) => {
+        const ca = (c as { createdAt?: unknown }).createdAt;
+        if (ca && !(ca instanceof Date)) {
+          const d = new Date(String(ca));
+          return { ...c, createdAt: isNaN(d.getTime()) ? undefined : d };
+        }
+        return c;
+      });
       // Taste append path (js/taste.js tasteRankDefault append): the FULL
       // regular pool (displayed + newly fetched) goes in; the frozen
       // arrangement is preserved and only the fresh docs are ranked and
@@ -266,7 +281,7 @@ export default function FeedWithLoadMore({
         }
       }
       const prevRegular = regularRef.current;
-      const fullRegular = [...prevRegular, ...page.regular];
+      const fullRegular = [...prevRegular, ...freshRegular];
       let ranked: ListingCard[];
       try {
         ranked = tasteRankDefault(fullRegular, { append: true });

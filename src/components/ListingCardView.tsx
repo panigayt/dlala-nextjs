@@ -122,7 +122,16 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
         </h3>
         {metaBits && <p className="mt-1 text-xs text-zinc-600">{metaBits}</p>}
         <p className="mt-1 text-xs text-zinc-500">
-          {l.createdAt ? <TimeAgo iso={l.createdAt.toISOString()} lang={lang} /> : ''}
+          {/* Round 139: createdAt may be a JSON-round-tripped ISO string
+              (e.g. cards appended from /api/feed) — never assume Date. */}
+          {l.createdAt ? (
+            <TimeAgo
+              iso={l.createdAt instanceof Date ? l.createdAt.toISOString() : String(l.createdAt)}
+              lang={lang}
+            />
+          ) : (
+            ''
+          )}
         </p>
       </div>
     </a>
