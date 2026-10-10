@@ -1035,6 +1035,40 @@ function PublishForm({
       // Build payload
       const isSeeker = cat === 'jobs' && answers['jobType'] === 'jobSeeker';
       const saleQty = isWanted ? 1 : Math.max(1, Number(qty) || 1);
+      // Canonicalize answer keys to production short format (js/publish.js).
+      // The form uses q* field IDs (qCarBrand, qYear...), but the
+      // publishListing Cloud Function validates against the production
+      // question registry which expects short keys (brand, year...).
+      // Without this, EVERY publish fails with INVALID_ARGUMENT.
+      const Q_TO_SHORT: Record<string, string> = {
+        qArea: 'area', qAvailability: 'availability', qBattery: 'battery',
+        qBatteryRange: 'batteryRange', qBeautyType: 'type', qBeautyCond: 'condition',
+        qBrand: 'brand', qCarBrand: 'brand', qPhoneBrand: 'brand',
+        qTrotBrand: 'brand', qMachineBrand: 'brand',
+        qCarModel: 'model', qModel: 'model',
+        qCondition: 'condition', qContract: 'contract',
+        qExperience: 'experience', qFuel: 'fuel', qGear: 'gear',
+        qGender: 'gender', qJobTitle: 'jobTitle', qJobType: 'jobType',
+        qListingPurpose: 'purpose', qPurpose: 'purpose',
+        qMachineDomain: 'domain', qMachineYear: 'year',
+        qMileage: 'mileage', qOs: 'os', qPricing: 'pricing',
+        qProductType: 'type', qProfession: 'profession',
+        qPropertyType: 'propertyType', qRooms: 'rooms', qSalary: 'salary',
+        qSector: 'sector', qSpareFor: 'forVehicle',
+        qSpareModel: 'compatibleModel', qStorage: 'storage',
+        qTrotType: 'trotType', qVeloType: 'veloType', qVolume: 'volume',
+        qWheelSize: 'wheelSize', qYear: 'year',
+      };
+      const NUMERIC_ANSWERS = new Set(['year', 'mileage', 'rooms', 'area', 'salary']);
+      const canonAnswers: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(answers)) {
+        if (v === '' || v == null) continue;
+        const short = Q_TO_SHORT[k] || k;
+        // Skip qBeautyCond here — it's mapped to top-level condition below
+        // (production also stores it in answers, but top-level is canonical).
+        if (k === 'qBeautyCond') continue;
+        canonAnswers[short] = NUMERIC_ANSWERS.has(short) ? Number(v) : v;
+      }
       const payload = {
         id: listingId,
         categoryId: cat,
@@ -1045,7 +1079,7 @@ function PublishForm({
         negotiable: isWanted || cat === 'jobs' ? false : negotiable,
         isWanted: isWanted || isSeeker,
         condition: cat === 'beauty' ? answers['qBeautyCond'] || '' : condition,
-        answers,
+        answers: canonAnswers,
         photoUrls: urls,
         photoHashes: up.hashes.slice(0, urls.length),
         photo_thumbs: urls.map((_, i) => thumbs[i] || null),
