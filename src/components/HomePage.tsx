@@ -8,11 +8,26 @@
 // mounted useLang() consumer re-renders (Round 106 app-wide store), so the
 // whole home page flips AR/FR/EN without a reload — js/i18n.js
 // onLangChange() parity.
+//
+// Round 157 (critical parity fix): production 0.0.0.39 filters the homepage
+// feed IN PLACE (apply() → loadFeed(), never navigates). Filter state lives
+// here: any filter change refetches /api/search and repaints the feed on /,
+// exactly like legacy. When all filters are default, the original
+// server-rendered feed (with taste ranking, follow boost, vitrine, wanted
+// interleave) is restored.
 
+import { useRef, useState } from 'react';
 import HomeHeader from '@/components/HomeHeader';
 import TipsTicker from '@/components/TipsTicker';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
-import { resultsCountText, type ListingCard } from '@/lib/firestore';
+import ListingCardView from '@/components/ListingCardView';
+import {
+  resultsCountText,
+  SEARCH_PAGE_SIZE,
+  type ListingCard,
+  type SearchFilters,
+} from '@/lib/firestore';
+import { filtersToQuery } from '@/app/search/filters';
 import { useLang } from '@/lib/i18n';
 
 export interface HomeFeedData {
@@ -21,6 +36,84 @@ export interface HomeFeedData {
   regularOffset: number;
   wantedOffset: number;
   hasMore: boolean;
+}
+
+interface FilteredState {
+  listings: ListingCard[];
+  total: number;
+  hasMore: boolean;
+  filters: SearchFilters;
+}
+
+// True when no filter is active — the default server-rendered feed applies.
+function isDefaultFilters(f: SearchFilters): boolean {
+  return (
+    !f.q &&
+    !f.cat &&
+    !f.wilaya &&
+    !f.min &&
+    !f.max &&
+    !f.fOs &&
+    !f.fBrand &&
+    !f.fCarBrand &&
+    !f.fFuel &&
+    !f.fGear &&
+    !f.fYearMin &&
+    !f.fYearMax &&
+    !f.fMilMin &&
+    !f.fMilMax &&
+    (!f.sort || f.sort === 'recent')
+  );
+}
+
+// In-place filtered results grid — mirrors the search page's
+// SearchResultsGrid (limit-based "عرض المزيد"), painted inside the home
+// page instead of navigating to /search (js/home.js loadFeed parity).
+function HomeFilteredGrid({
+  state,
+  onShowMore,
+  loadingMore,
+}: {
+  state: FilteredState;
+  onShowMore: () => void;
+  loadingMore: boolean;
+}) {
+  const { t, lang } = useLang();
+  return (
+    <>
+      <div
+        role="status"
+        aria-live="polite"
+        className="text-[13px] text-zinc-500 px-0.5 py-1.5 min-h-[1.2em]"
+      >
+        {resultsCountText(state.total, lang)}
+      </div>
+      {state.listings.length === 0 ? (
+        <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
+          {t('noResults')}
+          <p className="mt-2 text-sm">{t('noResultsHint')}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {state.listings.map((l) => (
+            <ListingCardView key={l.id} l={l} />
+          ))}
+        </div>
+      )}
+      {state.hasMore && (
+        <div className="text-center py-6">
+          <button
+            type="button"
+            onClick={onShowMore}
+            disabled={loadingMore}
+            className="rounded-xl border border-zinc-300 bg-white px-8 py-3 font-bold text-zinc-800 hover:border-emerald-600 disabled:opacity-50"
+          >
+            {loadingMore ? '…' : t('loadMore')}
+          </button>
+        </div>
+      )}
+    </>
+  );
 }
 
 export default function HomePage({
@@ -32,6 +125,78 @@ export default function HomePage({
 }) {
   const { t, lang } = useLang();
   const cards = feed?.cards || [];
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [filtered, setFiltered] = useState<FilteredState | null>(null);
+  const [filterLoading, setFilterLoading] = useState(false);
+  const [filterError, setFilterError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Stale-response guard: rapid filter changes must not paint out of order.
+  const reqId = useRef(0);
+  // Remounts the search input when filters reset externally (reset button).
+  const [resetKey, setResetKey] = useState(0);
+  const prevDefault = useRef(true);
+
+  async function fetchFiltered(f: SearchFilters, limit: number) {
+    const qs = filtersToQuery(f);
+    const res = await fetch(`/api/search?${qs}${qs ? '&' : ''}limit=${limit}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`search-api-${res.status}`);
+    return res.json();
+  }
+
+  // js/home.js apply() parity: read the filters, reload the feed in place.
+  function applyFilters(f: SearchFilters) {
+    setFilters(f);
+    setFilterError(null);
+    const nowDefault = isDefaultFilters(f);
+    if (nowDefault && !prevDefault.current) setResetKey((k) => k + 1);
+    prevDefault.current = nowDefault;
+    if (nowDefault) {
+      // Back to the default feed — restore the server-rendered first page.
+      reqId.current += 1;
+      setFiltered(null);
+      setFilterLoading(false);
+      return;
+    }
+    const id = ++reqId.current;
+    setFilterLoading(true);
+    fetchFiltered(f, SEARCH_PAGE_SIZE)
+      .then((j) => {
+        if (reqId.current !== id) return; // stale
+        setFiltered({
+          listings: j.listings || [],
+          total: j.total ?? 0,
+          hasMore: !!j.hasMore,
+          filters: f,
+        });
+      })
+      .catch((e) => {
+        if (reqId.current !== id) return;
+        setFilterError(e instanceof Error ? e.message : 'feed-error');
+      })
+      .finally(() => {
+        if (reqId.current === id) setFilterLoading(false);
+      });
+  }
+
+  function showMoreFiltered() {
+    if (!filtered || loadingMore) return;
+    setLoadingMore(true);
+    fetchFiltered(filtered.filters, filtered.listings.length + SEARCH_PAGE_SIZE)
+      .then((j) => {
+        setFiltered({
+          ...filtered,
+          listings: j.listings || [],
+          total: j.total ?? 0,
+          hasMore: !!j.hasMore,
+        });
+      })
+      .catch(() => {
+        /* keep current results on failure */
+      })
+      .finally(() => setLoadingMore(false));
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
@@ -43,10 +208,10 @@ export default function HomePage({
         </p>
         {/* Round 122: tips ticker above the search bar — legacy index.html order. */}
         <TipsTicker />
-        <HomeHeader />
+        <HomeHeader filters={filters} onFiltersChange={applyFilters} resetKey={resetKey} />
         <h2 className="text-lg font-semibold text-zinc-800 mb-4">{t('latestAds')}</h2>
 
-        {error ? (
+        {error && !filtered ? (
           <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">
             ⚠️ {t('errorGeneric')} ({error}){' '}
             <button
@@ -56,6 +221,44 @@ export default function HomePage({
             >
               {t('retry')}
             </button>
+          </div>
+        ) : filterLoading && !filtered ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-xl bg-white shadow-sm overflow-hidden">
+                <div className="aspect-[4/3] bg-zinc-200 animate-pulse" />
+                <div className="p-3">
+                  <div className="h-5 bg-zinc-200 rounded animate-pulse w-1/2" />
+                  <div className="mt-2 h-4 bg-zinc-200 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filterError && !filtered ? (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">
+            ⚠️ {t('errorGeneric')} ({filterError}){' '}
+            <button
+              type="button"
+              onClick={() => applyFilters(filters)}
+              className="font-bold underline"
+            >
+              {t('retry')}
+            </button>
+          </div>
+        ) : filtered ? (
+          <div className="relative">
+            {filterLoading && (
+              <div className="absolute inset-0 bg-zinc-50/60 z-10 flex items-start justify-center pt-10">
+                <div className="rounded-xl bg-white shadow px-6 py-3 text-sm text-zinc-600">
+                  …
+                </div>
+              </div>
+            )}
+            <HomeFilteredGrid
+              state={filtered}
+              onShowMore={showMoreFiltered}
+              loadingMore={loadingMore}
+            />
           </div>
         ) : cards.length === 0 ? (
           <>
