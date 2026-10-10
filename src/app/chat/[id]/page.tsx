@@ -19,99 +19,8 @@ import {
   btnSecondaryCls,
 } from '@/lib/firebase-client';
 import { formatPrice } from '@/lib/firestore';
-
-// Verbatim from js/chat.js CHAT_L10N.ar
-const STR = {
-  back: 'رجوع',
-  typeMessage: 'اكتب رسالة...',
-  send: 'إرسال',
-  proposePrice: 'اقتراح سعر',
-  proposalTitle: 'اقتراح سعر جديد',
-  proposalAmountPh: 'المبلغ (دج)',
-  proposalSend: 'إرسال الاقتراح',
-  proposalInvalid: 'أدخل مبلغاً صحيحاً أكبر من صفر',
-  proposalPending: 'بانتظار الرد',
-  proposalAccepted: 'تم قبول الاقتراح',
-  proposalRefused: 'تم رفض الاقتراح',
-  proposalAccept: 'قبول',
-  proposalDecline: 'رفض',
-  proposalCounter: 'اقتراح مضاد',
-  requestPhone: 'طلب رقم الهاتف',
-  phoneWaiting: 'تم إرسال الطلب — بانتظار رد الطرف الآخر',
-  phoneAccept: 'قبول',
-  phoneDecline: 'رفض',
-  phoneAcceptedMsg: 'تم قبول طلب رقم الهاتف',
-  phoneDeclinedMsg: 'تم رفض طلب رقم الهاتف',
-  phoneBlockedRequester: 'تم حظرك نهائياً من طلب رقم الهاتف في هذه المحادثة',
-  phoneBlockedOther: 'تم حظر {name} نهائياً من طلب رقم الهاتف في هذه المحادثة',
-  phoneSharedConfirm: 'شاركت رقم هاتفك في هذه المحادثة',
-  phoneSharedReceived: 'شارك {name} رقم هاتفه معك',
-  chatBlockedNotice: 'تم تقييد حسابك — لا يمكنك إرسال الرسائل حالياً',
-  chatBlockedUntil: 'تم تقييد حسابك مؤقتاً حتى {date}',
-  listingSoldBadge: 'تم البيع',
-  soldNegotiationClosed: 'الإعلان مُباع — التفاوض مغلق',
-  dealDoneSold: 'تمت الصفقة — الإعلان مُباع',
-  phoneTypeTitle: 'اكتب رقم هاتفك ثم أرسله للطرف الآخر',
-  phonePlaceholder: 'رقم الهاتف',
-  phoneSend: 'إرسال الرقم',
-  phoneInvalid: 'رقم الهاتف غير صالح',
-  phoneShared: 'تمت مشاركة رقم الهاتف',
-  phoneRequestedSuffix: 'طلب رقم هاتفك',
-  photoLabel: 'صورة',
-  unknownUser: 'مستخدم',
-  deletedListing: 'إعلان محذوف',
-  dealRequest: 'طلب تأكيد الصفقة',
-  dealPendingTitle: 'تأكيد الصفقة',
-  dealPendingBody: 'البائع يطلب منك تأكيد إتمام الصفقة',
-  dealYes: 'نعم، تمت الصفقة',
-  dealNo: 'لا، لم تتم',
-  dealConfirmed: 'تم تأكيد الصفقة بنجاح',
-  dealErrInvalidArgs: 'طلب غير صالح — حاول مجدداً',
-  dealErrUnauth: 'يجب تسجيل الدخول أولاً',
-  dealErrNotBuyer: 'فقط المشتري يمكنه تأكيد الصفقة',
-  dealErrNotPending: 'لا يوجد طلب تأكيد معلّق',
-  dealErrNotFound: 'المحادثة غير موجودة',
-  dealErrAlready: 'الصفقة مؤكدة مسبقاً',
-  dealErrUnavailable: 'الإعلان لم يعد متاحاً',
-  dealCancelled: 'تم إلغاء طلب التأكيد',
-  dealWaiting: 'طلب التأكيد مرسل — بانتظار رد المشتري',
-  supportNote: 'أنت تتحدث مع فريق دعم دلالة',
-  supportTitle: 'دعم دلالة',
-  supportGreeting: '👋 مرحباً بك في دعم دلالة — كيف يمكننا مساعدتك؟',
-  supportAutoReply:
-    'فريقنا يقوم بالتحقق من الأمر، سنعود نحوك لمزيد من التفاصيل إذا لزم الأمر',
-  mustVerifyChat: 'يجب تفعيل بريدك الإلكتروني أولاً للمراسلة',
-  tooFast: 'انتظر ثوانٍ قبل إرسال رسالة أخرى',
-  chatError: 'تعذّر فتح المحادثة',
-  supportConfigError: 'تعذّر الوصول للدعم حالياً',
-  supportSelfAdmin: 'أنت فريق الدعم — لا يمكنك مراسلة نفسك',
-  sayHello: 'قل مرحباً 👋 — ابدأ المحادثة برسالة ودية',
-  imageSendError: 'تعذّر إرسال الصورة',
-  today: 'اليوم',
-  yesterday: 'أمس',
-  you: 'أنت',
-  viewListing: 'عرض الإعلان',
-  announcementsTitle: 'إعلانات',
-  announcementsNote: 'قناة الإعلانات — للقراءة فقط',
-};
-// Verbatim from js/i18n.ar.js
-const STR2 = {
-  scamWarning:
-    '⚠️ لا تدفع مقدماً ولا تشارك رموز التفعيل — عاين السلعة بنفسك أولاً',
-  chatSendFailed: 'تعذّر إرسال الرسالة',
-  newMessages: 'رسائل جديدة ↓',
-  photoLoadFailed: 'تعذّر تحميل الصورة',
-  retrySend: 'إعادة الإرسال',
-  sendingPhoto: 'جارٍ إرسال الصورة…',
-  blockedChatNotice: 'لا يمكنكما مراسلة بعضكما.',
-  block: 'حظر',
-  unblock: 'إلغاء الحظر',
-  blockFailed: 'تعذّر تحديث الحظر — حاول مجدداً.',
-  loading: 'جارٍ التحميل...',
-  retry: 'إعادة المحاولة',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  messages: 'الرسائل',
-};
+import { useLang, getLang, type Lang } from '@/lib/i18n';
+import { chatSt } from './chat-strings';
 
 const CONFIRM_DEAL_URL =
   'https://europe-west3-dlala-85cea.cloudfunctions.net/confirmDeal';
@@ -189,15 +98,16 @@ function localizedTitle(title: unknown): string {
   return '';
 }
 
-function dayLabel(ts: number): string {
+function dayLabel(ts: number, lang: Lang): string {
   const d = new Date(ts);
   const now = new Date();
   const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diff = Math.round((today.getTime() - day.getTime()) / 86400000);
-  if (diff === 0) return STR.today;
-  if (diff === 1) return STR.yesterday;
-  return d.toLocaleDateString('ar-DZ');
+  if (diff === 0) return chatSt(lang, 'today');
+  if (diff === 1) return chatSt(lang, 'yesterday');
+  // Legacy parity (js/chat.js:941): LANG === 'ar' ? 'ar-DZ' : LANG
+  return d.toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang);
 }
 
 function fmtChatTime(ts: number): string {
@@ -207,33 +117,33 @@ function fmtChatTime(ts: number): string {
   return `${hh}:${mm}`;
 }
 
-function systemText(m: Msg): string {
+function systemText(m: Msg, lang: Lang): string {
   const kind = m.systemKind || '';
   const args = m.systemArgs || {};
   switch (kind) {
     case 'phone_requested':
-      return (args.name || '') + ' ' + STR.phoneRequestedSuffix;
+      return (args.name || '') + ' ' + chatSt(lang, 'phoneRequestedSuffix');
     case 'phone_accepted':
-      return STR.phoneAcceptedMsg;
+      return chatSt(lang, 'phoneAcceptedMsg');
     case 'phone_declined':
-      return STR.phoneDeclinedMsg;
+      return chatSt(lang, 'phoneDeclinedMsg');
     case 'phone_shared':
-      return STR.phoneShared;
+      return chatSt(lang, 'phoneShared');
     case 'support_greeting':
-      return STR.supportGreeting;
+      return chatSt(lang, 'supportGreeting');
     case 'support_autoreply':
-      return STR.supportAutoReply;
+      return chatSt(lang, 'supportAutoReply');
     default:
       return m.text || '';
   }
 }
 
-function proposalStatusText(status: string): string {
+function proposalStatusText(status: string, lang: Lang): string {
   return status === 'accepted'
-    ? STR.proposalAccepted
+    ? chatSt(lang, 'proposalAccepted')
     : status === 'refused'
-      ? STR.proposalRefused
-      : STR.proposalPending;
+      ? chatSt(lang, 'proposalRefused')
+      : chatSt(lang, 'proposalPending');
 }
 
 // Phone flow state — pure derivation, mirrors chat.js phoneFlowState.
@@ -310,6 +220,10 @@ function ChatInner() {
   const searchParams = useSearchParams();
   const convId = (params.id as string) || '';
   const authState = useRequireAuth();
+  // Language: mirrors js/chat.js — .chat-lang switcher + onLangChange re-render
+  // (React re-renders from state on switch; st() always reads the current lang).
+  const { lang, setLang } = useLang();
+  const st = (k: string) => chatSt(lang, k);
 
   const [conv, setConv] = useState<ConvData | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -433,12 +347,16 @@ function ChatInner() {
 
   const openThread = useCallback(
     async (client: FirebaseClient, user: CompatUser) => {
+      // Read language at call time (not from render closure): openThread runs once
+      // at thread open; getLang() always reflects the latest switch (useLang persists
+      // to localStorage synchronously). Keeps the [convId, searchParams] memo intact.
+      const gst = (k: string) => chatSt(getLang(), k);
       const uid = user.uid;
       let snap: CompatDocSnap;
       try {
         snap = await client.db.doc(`conversations/${convId}`).get();
       } catch {
-        setFatal(STR.chatError);
+        setFatal(gst('chatError'));
         return;
       }
       if (!snap.exists) {
@@ -494,19 +412,19 @@ function ChatInner() {
           } catch (e) {
             setFatal(
               (e as Error)?.message === 'no-admin-self'
-                ? STR.supportSelfAdmin
-                : STR.supportConfigError
+                ? gst('supportSelfAdmin')
+                : gst('supportConfigError')
             );
             return;
           }
         } else {
-          setFatal(STR.chatError);
+          setFatal(gst('chatError'));
           return;
         }
       }
       const data = { id: snap.id, ...((snap.data() || {}) as object) } as ConvData;
       if (!(data.participants || []).includes(uid)) {
-        setFatal(STR.chatError);
+        setFatal(gst('chatError'));
         return;
       }
       convRef.current = data;
@@ -515,16 +433,16 @@ function ChatInner() {
       // Verified email required for normal threads; support threads allow
       // any signed-in user.
       if (data.listingId !== 'support' && !user.emailVerified) {
-        setFatal(STR.mustVerifyChat);
+        setFatal(gst('mustVerifyChat'));
         return;
       }
 
       // Header: peer name + listing chip
       const other = (data.participants || []).find((p) => p !== uid) || '';
       (async () => {
-        let name = STR.unknownUser;
-        if (data.listingId === 'support') name = STR.supportTitle;
-        else if (data.listingId === 'announcements') name = STR.announcementsTitle;
+        let name = gst('unknownUser');
+        if (data.listingId === 'support') name = gst('supportTitle');
+        else if (data.listingId === 'announcements') name = gst('announcementsTitle');
         else if (other) {
           try {
             const d = await client.db.doc(`users_public/${other}`).get();
@@ -533,7 +451,7 @@ function ChatInner() {
               name =
                 (m.name as string) ||
                 ((m.username as string) ? '@' + m.username : '') ||
-                STR.unknownUser;
+                gst('unknownUser');
             }
           } catch {
             /* keep fallback */
@@ -554,7 +472,7 @@ function ChatInner() {
               (m.photoUrls as string[]) ||
               [];
             setListingChip({
-              title: localizedTitle(m.title) || STR.deletedListing,
+              title: localizedTitle(m.title) || gst('deletedListing'),
               photo: thumbs[0] || '',
               id: lid,
             });
@@ -562,7 +480,7 @@ function ChatInner() {
               m.status === 'sold' || m.soldConfirmed === true
             );
           } else {
-            setListingChip({ title: STR.deletedListing, photo: '', id: lid });
+            setListingChip({ title: gst('deletedListing'), photo: '', id: lid });
           }
         } catch (e) {
           if ((e as { code?: string })?.code === 'permission-denied') {
@@ -753,11 +671,11 @@ function ChatInner() {
 
   function blockedSendGuard(): boolean {
     if (amBlocked) {
-      showToast(STR.chatBlockedNotice);
+      showToast(st('chatBlockedNotice'));
       return true;
     }
     if (userBlockSevered) {
-      showToast(STR2.blockedChatNotice);
+      showToast(st('blockedChatNotice'));
       return true;
     }
     return false;
@@ -775,12 +693,12 @@ function ChatInner() {
     if (!client || !user || !c) return null;
     if (blockedSendGuard()) return null;
     if (sendInFlightRef.current) {
-      showToast(STR.tooFast);
+      showToast(st('tooFast'));
       return null;
     }
     const now = Date.now();
     if (now - lastSendAtRef.current < 3000) {
-      showToast(STR.tooFast);
+      showToast(st('tooFast'));
       return null;
     }
     const t = cleanText(opts.text || '');
@@ -882,7 +800,7 @@ function ChatInner() {
         proposal: opts.proposal,
         mid: msgId,
       });
-      setStatusBar({ mode: 'error', text: STR2.chatSendFailed });
+      setStatusBar({ mode: 'error', text: st('chatSendFailed') });
       return null;
     } finally {
       sendInFlightRef.current = false;
@@ -922,15 +840,15 @@ function ChatInner() {
     const user = userRef.current;
     if (!client || !user || !file) return;
     if (!file.type || !file.type.startsWith('image/')) {
-      showToast(STR.imageSendError);
+      showToast(st('imageSendError'));
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
-      showToast(STR.imageSendError);
+      showToast(st('imageSendError'));
       return;
     }
     if (blockedSendGuard()) return;
-    setStatusBar({ mode: 'info', text: STR2.sendingPhoto });
+    setStatusBar({ mode: 'info', text: st('sendingPhoto') });
     try {
       // Downscale to 1280px JPEG 0.8 — mirrors chat.js downscaleChat.
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -981,12 +899,12 @@ function ChatInner() {
       const id = await sendChatMessage({ imageUrl: publicUrl });
       if (!id && !failedSend) {
         setFailedSend({ imageUrl: publicUrl, mid: mintMessageId(user.uid) });
-        setStatusBar({ mode: 'error', text: STR2.chatSendFailed });
+        setStatusBar({ mode: 'error', text: st('chatSendFailed') });
       }
     } catch {
       setFailedSend({ mid: mintMessageId(user.uid) });
-      setStatusBar({ mode: 'error', text: STR2.chatSendFailed });
-      showToast(STR.imageSendError);
+      setStatusBar({ mode: 'error', text: st('chatSendFailed') });
+      showToast(st('imageSendError'));
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
@@ -998,7 +916,7 @@ function ChatInner() {
     const client = clientRef.current;
     if (!client || blockedSendGuard()) return;
     if (sold) {
-      showToast(STR.soldNegotiationClosed);
+      showToast(st('soldNegotiationClosed'));
       return;
     }
     try {
@@ -1009,7 +927,7 @@ function ChatInner() {
         .doc(msgId)
         .update({ 'proposal.status': status });
     } catch {
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1024,12 +942,12 @@ function ChatInner() {
   async function sendProposal() {
     if (blockedSendGuard()) return;
     if (sold) {
-      showToast(STR.soldNegotiationClosed);
+      showToast(st('soldNegotiationClosed'));
       return;
     }
     const amt = Number(proposalAmt);
     if (!amt || amt <= 0) {
-      showToast(STR.proposalInvalid);
+      showToast(st('proposalInvalid'));
       return;
     }
     const id = await sendChatMessage({ proposal: amt });
@@ -1085,13 +1003,13 @@ function ChatInner() {
         updatedAt: client.FieldValue.serverTimestamp(),
       });
       await appendSystem('phone_requested', {
-        name: (user.displayName || '').trim().split(' ')[0] || STR.you,
+        name: (user.displayName || '').trim().split(' ')[0] || st('you'),
       }).catch(() => {});
     } catch {
       const rb = { ...c, phoneRequestBy: prevBy, phoneRequestStatus: prevStatus };
       convRef.current = rb;
       setConv(rb);
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1121,7 +1039,7 @@ function ChatInner() {
       const rb = { ...c, phoneRequestStatus: prevStatus };
       convRef.current = rb;
       setConv(rb);
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1132,7 +1050,7 @@ function ChatInner() {
     if (!client || !user || !c || blockedSendGuard()) return;
     const normalized = normalizePhone(phoneInput);
     if (!normalized) {
-      showToast(STR.phoneInvalid);
+      showToast(st('phoneInvalid'));
       return;
     }
     try {
@@ -1151,7 +1069,7 @@ function ChatInner() {
       setRevealSharedBy((prev) => ({ ...prev, [user.uid]: true }));
       setPhoneInput('');
     } catch {
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1160,21 +1078,21 @@ function ChatInner() {
   function dealConfirmErr(code: string): string {
     switch (code) {
       case 'invalid_args':
-        return STR.dealErrInvalidArgs;
+        return st('dealErrInvalidArgs');
       case 'unauthenticated':
-        return STR.dealErrUnauth;
+        return st('dealErrUnauth');
       case 'not_buyer':
-        return STR.dealErrNotBuyer;
+        return st('dealErrNotBuyer');
       case 'not_pending':
-        return STR.dealErrNotPending;
+        return st('dealErrNotPending');
       case 'not_found':
-        return STR.dealErrNotFound;
+        return st('dealErrNotFound');
       case 'already_confirmed':
-        return STR.dealErrAlready;
+        return st('dealErrAlready');
       case 'listing_unavailable':
-        return STR.dealErrUnavailable;
+        return st('dealErrUnavailable');
       default:
-        return STR.dealErrInvalidArgs;
+        return st('dealErrInvalidArgs');
     }
   }
 
@@ -1201,12 +1119,12 @@ function ChatInner() {
       }
       const data = await resp.json().catch(() => null);
       if (resp.ok && data && data.ok) {
-        showToast(STR.dealConfirmed);
+        showToast(st('dealConfirmed'));
         return;
       }
       showToast(dealConfirmErr(data && data.error));
     } catch {
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1226,9 +1144,9 @@ function ChatInner() {
       } catch {
         /* best-effort */
       }
-      showToast(STR.dealCancelled);
+      showToast(st('dealCancelled'));
     } catch {
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1241,7 +1159,7 @@ function ChatInner() {
         updatedAt: client.FieldValue.serverTimestamp(),
       });
     } catch {
-      showToast(STR2.errorGeneric);
+      showToast(st('errorGeneric'));
     }
   }
 
@@ -1285,14 +1203,14 @@ function ChatInner() {
         }
       }
     } catch {
-      showToast(STR2.blockFailed);
+      showToast(st('blockFailed'));
     }
   }
 
   // ---------- render ----------
 
   if (authState.status !== 'signed-in') {
-    return <LoadingSpinner label={STR2.loading} />;
+    return <LoadingSpinner label={st('loading')} />;
   }
 
   if (fatal) {
@@ -1305,13 +1223,13 @@ function ChatInner() {
               className="rounded-lg bg-emerald-700 px-4 py-2.5 font-bold text-white hover:bg-emerald-800"
               onClick={() => window.location.reload()}
             >
-              {STR2.retry}
+              {st('retry')}
             </button>
             <a
               href="/conversations"
               className={btnSecondaryCls + ' no-underline inline-block'}
             >
-              {STR2.messages}
+              {st('messages')}
             </a>
           </div>
         </main>
@@ -1320,7 +1238,7 @@ function ChatInner() {
   }
 
   if (!conv) {
-    return <LoadingSpinner label={STR2.loading} />;
+    return <LoadingSpinner label={st('loading')} />;
   }
 
   const fmtBlockDate = (ms: number) => {
@@ -1341,31 +1259,31 @@ function ChatInner() {
     if (userBlockSevered) {
       return (
         <div className="mx-3 my-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-          🚫 {STR2.blockedChatNotice}
+          🚫 {st('blockedChatNotice')}
         </div>
       );
     }
     const oUid = otherUid || '';
     const count = conv?.phoneRequestCount || 0;
     const slotBusy = pf.pendingBy !== '' || pf.acceptedBy !== '';
-    const name = otherName || STR.unknownUser;
+    const name = otherName || st('unknownUser');
     return (
       <div className="mx-3 my-2 space-y-2">
         {pf.sharedBy[oUid] ? (
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
-            ✅ {STR.phoneSharedReceived.replace('{name}', name)}
+            ✅ {st('phoneSharedReceived').replace('{name}', name)}
           </div>
         ) : pf.myBlocked ? (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-            🚫 {STR.phoneBlockedRequester}
+            🚫 {st('phoneBlockedRequester')}
           </div>
         ) : pf.pendingBy === myUid ? (
           <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-            📞 {STR.phoneWaiting}
+            📞 {st('phoneWaiting')}
           </div>
         ) : pf.acceptedBy === myUid ? (
           <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-            📞 {STR.phoneAcceptedMsg}
+            📞 {st('phoneAcceptedMsg')}
           </div>
         ) : (
           !slotBusy &&
@@ -1374,47 +1292,47 @@ function ChatInner() {
               className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
               onClick={requestPhone}
             >
-              📞 {STR.requestPhone}
+              📞 {st('requestPhone')}
             </button>
           )
         )}
 
         {pf.sharedBy[myUid] ? (
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
-            ✅ {STR.phoneSharedConfirm}
+            ✅ {st('phoneSharedConfirm')}
           </div>
         ) : (pf.declines[oUid] || 0) >= 3 ? (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-            🚫 {STR.phoneBlockedOther.replace('{name}', name)}
+            🚫 {st('phoneBlockedOther').replace('{name}', name)}
           </div>
         ) : pf.pendingBy === oUid ? (
           <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-            📞 {name} {STR.phoneRequestedSuffix}
+            📞 {name} {st('phoneRequestedSuffix')}
             <div className="flex gap-2 mt-2">
               <button
                 className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
                 onClick={() => answerPhone('accepted')}
               >
-                {STR.phoneAccept}
+                {st('phoneAccept')}
               </button>
               <button
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
                 onClick={() => answerPhone('declined')}
               >
-                {STR.phoneDecline}
+                {st('phoneDecline')}
               </button>
             </div>
           </div>
         ) : (
           pf.acceptedBy === oUid && (
             <div className="rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-              📞 {STR.phoneTypeTitle}
+              📞 {st('phoneTypeTitle')}
               <div className="flex gap-2 mt-2">
                 <input
                   type="tel"
                   inputMode="tel"
                   dir="ltr"
-                  placeholder={STR.phonePlaceholder}
+                  placeholder={st('phonePlaceholder')}
                   className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-base text-zinc-900 text-left"
                   value={phoneInput}
                   onChange={(e) => setPhoneInput(e.target.value)}
@@ -1423,7 +1341,7 @@ function ChatInner() {
                   className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
                   onClick={sharePhone}
                 >
-                  {STR.phoneSend}
+                  {st('phoneSend')}
                 </button>
               </div>
             </div>
@@ -1439,14 +1357,14 @@ function ChatInner() {
     if (conv?.dealConfirmedByBuyer) {
       return (
         <div className="mx-3 my-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
-          ✅ {STR.dealConfirmed}
+          ✅ {st('dealConfirmed')}
         </div>
       );
     }
     if (listingSold) {
       return (
         <div className="mx-3 my-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-          🤝 {STR.dealDoneSold}
+          🤝 {st('dealDoneSold')}
         </div>
       );
     }
@@ -1454,21 +1372,21 @@ function ChatInner() {
       if (isBuyer) {
         return (
           <div className="mx-3 my-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-zinc-800">
-            <b>{STR.dealPendingTitle}</b>
+            <b>{st('dealPendingTitle')}</b>
             <br />
-            {STR.dealPendingBody}
+            {st('dealPendingBody')}
             <div className="flex gap-2 mt-2">
               <button
                 className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white hover:bg-emerald-800"
                 onClick={dealConfirmYes}
               >
-                {STR.dealYes}
+                {st('dealYes')}
               </button>
               <button
                 className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
                 onClick={dealConfirmNo}
               >
-                {STR.dealNo}
+                {st('dealNo')}
               </button>
             </div>
           </div>
@@ -1476,7 +1394,7 @@ function ChatInner() {
       }
       return (
         <div className="mx-3 my-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700">
-          ⏳ {STR.dealWaiting}
+          ⏳ {st('dealWaiting')}
         </div>
       );
     }
@@ -1487,7 +1405,7 @@ function ChatInner() {
             className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             onClick={dealRequest}
           >
-            🤝 {STR.dealRequest}
+            🤝 {st('dealRequest')}
           </button>
         </div>
       );
@@ -1500,7 +1418,7 @@ function ChatInner() {
     const ts = tsMs(m.at);
     const nodes: React.ReactNode[] = [];
     if (ts) {
-      const day = dayLabel(ts);
+      const day = dayLabel(ts, lang);
       if (day !== lastDay) {
         lastDay = day;
         nodes.push(
@@ -1516,7 +1434,7 @@ function ChatInner() {
       nodes.push(
         <div key={m.id} className="flex justify-center my-2">
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-500">
-            {systemText(m)}
+            {systemText(m, lang)}
           </span>
         </div>
       );
@@ -1541,7 +1459,7 @@ function ChatInner() {
               <NextImage
                 unoptimized
                 src={m.imageUrl}
-                alt={STR.photoLabel}
+                alt={st('photoLabel')}
                 width={640}
                 height={480}
                 sizes="(max-width: 768px) 80vw, 480px"
@@ -1567,7 +1485,7 @@ function ChatInner() {
                         : 'text-zinc-500'
                 }`}
               >
-                {proposalStatusText(p.status)}
+                {proposalStatusText(p.status, lang)}
               </div>
               {!mine && p.status === 'pending' && !isAnn && !isSupport && !sold && (
                 <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -1575,19 +1493,19 @@ function ChatInner() {
                     className="rounded-lg bg-white/90 text-emerald-800 px-2.5 py-1 text-xs font-bold"
                     onClick={() => respondProposal(m.id, 'accepted')}
                   >
-                    {STR.proposalAccept}
+                    {st('proposalAccept')}
                   </button>
                   <button
                     className="rounded-lg bg-white/20 px-2.5 py-1 text-xs"
                     onClick={() => respondProposal(m.id, 'refused')}
                   >
-                    {STR.proposalDecline}
+                    {st('proposalDecline')}
                   </button>
                   <button
                     className="rounded-lg bg-white/20 px-2.5 py-1 text-xs"
                     onClick={() => counterProposal(m.id)}
                   >
-                    {STR.proposalCounter}
+                    {st('proposalCounter')}
                   </button>
                 </div>
               )}
@@ -1615,7 +1533,7 @@ function ChatInner() {
       <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
         <div className="max-w-2xl mx-auto px-3 py-2.5 flex items-center gap-2">
           <button
-            aria-label={STR.back}
+            aria-label={st('back')}
             className="w-9 h-9 rounded-full hover:bg-emerald-600 flex items-center justify-center text-xl"
             onClick={() => {
               if (window.history && history.length > 1) history.back();
@@ -1649,7 +1567,7 @@ function ChatInner() {
             )}
             {sold && (
               <span className="inline-block bg-red-700 text-white text-xs font-bold px-2.5 py-0.5 rounded-full mt-0.5">
-                🏷️ {STR.listingSoldBadge}
+                🏷️ {st('listingSoldBadge')}
               </span>
             )}
           </div>
@@ -1658,9 +1576,36 @@ function ChatInner() {
               className="text-xs rounded-lg border border-emerald-500 px-2.5 py-1.5 hover:bg-emerald-600"
               onClick={toggleBlock}
             >
-              {iBlockedThem ? STR2.unblock : STR2.block}
+              {iBlockedThem ? st('unblock') : st('block')}
             </button>
           )}
+          {/* 0.0.0.43 chat.html parity: in-header language switcher.
+              FIX-WEB-033: the active language carries aria-pressed="true". */}
+          <div className="flex items-center gap-1" role="group" aria-label="Language">
+            {(
+              [
+                ['ar', 'AR', 'العربية'],
+                ['fr', 'FR', 'Français'],
+                ['en', 'EN', 'English'],
+              ] as const
+            ).map(([l, label, aria]) => (
+              <button
+                key={l}
+                type="button"
+                lang={l}
+                aria-label={aria}
+                aria-pressed={l === lang}
+                onClick={() => setLang(l)}
+                className={`min-w-11 min-h-11 px-2 text-[11px] font-bold rounded ${
+                  l === lang
+                    ? 'bg-white text-emerald-700'
+                    : 'text-emerald-100 hover:bg-emerald-600'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -1669,25 +1614,25 @@ function ChatInner() {
         <div className="mx-3 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
           🚫{' '}
           {blockUntilMs != null
-            ? STR.chatBlockedUntil.replace('{date}', fmtBlockDate(blockUntilMs))
-            : STR.chatBlockedNotice}
+            ? st('chatBlockedUntil').replace('{date}', fmtBlockDate(blockUntilMs))
+            : st('chatBlockedNotice')}
         </div>
       )}
       {userBlockSevered && !amBlocked && (
         <div className="mx-3 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-          🚫 {STR2.blockedChatNotice}
+          🚫 {st('blockedChatNotice')}
         </div>
       )}
 
       {/* thread note */}
       {isAnn && (
         <div className="mx-3 mt-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-600 text-center">
-          {STR.announcementsNote}
+          {st('announcementsNote')}
         </div>
       )}
       {isSupport && (
         <div className="mx-3 mt-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-600 text-center">
-          {STR.supportNote}
+          {st('supportNote')}
         </div>
       )}
 
@@ -1700,7 +1645,7 @@ function ChatInner() {
           {msgs.length === 0 ? (
             <div className="text-center py-10 text-zinc-500">
               <div className="text-4xl mb-2">👋</div>
-              <p className="text-sm">{STR.sayHello}</p>
+              <p className="text-sm">{st('sayHello')}</p>
             </div>
           ) : (
             msgNodes
@@ -1715,7 +1660,7 @@ function ChatInner() {
             }}
             className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 rounded-full bg-emerald-700 px-4 py-2 text-[13px] font-bold text-white shadow-lg active:scale-95"
           >
-            {STR2.newMessages}
+            {st('newMessages')}
           </button>
         )}
       </div>
@@ -1735,7 +1680,7 @@ function ChatInner() {
               className="font-bold underline"
               onClick={retrySend}
             >
-              {STR2.retrySend}
+              {st('retrySend')}
             </button>
           )}
         </div>
@@ -1745,14 +1690,14 @@ function ChatInner() {
       {proposalOpen && (
         <div className="mx-3 mb-1 rounded-xl bg-white shadow-sm p-3">
           <div className="font-bold text-sm text-zinc-900 mb-2">
-            {STR.proposalTitle}
+            {st('proposalTitle')}
           </div>
           <div className="flex gap-2">
             <input
               type="number"
               min={1}
               inputMode="numeric"
-              placeholder={STR.proposalAmountPh}
+              placeholder={st('proposalAmountPh')}
               className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900"
               value={proposalAmt}
               onChange={(e) => setProposalAmt(e.target.value)}
@@ -1761,7 +1706,7 @@ function ChatInner() {
               className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800"
               onClick={sendProposal}
             >
-              {STR.proposalSend}
+              {st('proposalSend')}
             </button>
             <button
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-700"
@@ -1778,7 +1723,7 @@ function ChatInner() {
         <footer className="sticky bottom-0 bg-white border-t border-zinc-200">
           <div className="max-w-2xl mx-auto px-3 py-2">
             <div className="text-[11px] text-amber-700 mb-1.5">
-              {STR2.scamWarning}
+              {st('scamWarning')}
             </div>
             <div className="flex items-center gap-1.5">
               <input
@@ -1792,7 +1737,7 @@ function ChatInner() {
                 }}
               />
               <button
-                aria-label={STR.photoLabel}
+                aria-label={st('photoLabel')}
                 className="w-10 h-10 rounded-full hover:bg-zinc-100 text-xl shrink-0 disabled:opacity-40"
                 disabled={composerLocked}
                 onClick={() => fileRef.current?.click()}
@@ -1800,7 +1745,7 @@ function ChatInner() {
                 📷
               </button>
               <button
-                aria-label={STR.proposePrice}
+                aria-label={st('proposePrice')}
                 className="w-10 h-10 rounded-full hover:bg-zinc-100 text-xl shrink-0 disabled:opacity-40"
                 disabled={composerLocked || sold}
                 style={sold ? { opacity: 0.4 } : undefined}
@@ -1809,8 +1754,8 @@ function ChatInner() {
                 💰
               </button>
               <input
-                aria-label={STR.typeMessage}
-                placeholder={STR.typeMessage}
+                aria-label={st('typeMessage')}
+                placeholder={st('typeMessage')}
                 maxLength={2000}
                 autoComplete="off"
                 className="flex-1 rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:border-emerald-600 focus:outline-none min-w-0"
@@ -1829,7 +1774,7 @@ function ChatInner() {
                 disabled={composerLocked}
                 onClick={doSendText}
               >
-                {STR.send}
+                {st('send')}
               </button>
             </div>
           </div>
@@ -1846,8 +1791,9 @@ function ChatInner() {
 }
 
 export default function ChatPage() {
+  const { lang } = useLang();
   return (
-    <Suspense fallback={<LoadingSpinner label={STR2.loading} />}>
+    <Suspense fallback={<LoadingSpinner label={chatSt(lang, 'loading')} />}>
       <ChatInner />
     </Suspense>
   );
