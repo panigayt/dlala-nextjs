@@ -24,6 +24,7 @@ import {
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
 import TimeAgo from '@/components/TimeAgo';
+import WilayaSelect from './WilayaSelect';
 
 const WANTED_LIMIT = 60;
 
@@ -178,26 +179,7 @@ function FilterBar({ f }: { f: Filters }) {
         ))}
       </div>
 
-      <div>
-        <label htmlFor="wWilaya" className="sr-only">
-          الولاية
-        </label>
-        <select
-          id="wWilaya"
-          defaultValue={f.wilaya}
-          onChange={(e) => {
-            window.location.href = params({ wilaya: e.target.value });
-          }}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 text-base"
-        >
-          <option value="">كل الولايات</option>
-          {WILAYAS.map((w) => (
-            <option key={w.code} value={String(w.code)}>
-              {w.code} - {w.ar}
-            </option>
-          ))}
-        </select>
-      </div>
+      <WilayaSelect f={f} />
     </div>
   );
 }
