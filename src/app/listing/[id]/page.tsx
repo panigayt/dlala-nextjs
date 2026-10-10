@@ -23,6 +23,7 @@ import {
 import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
+import OwnerSellerCard from './OwnerSellerCard';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -145,6 +146,17 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Head: title / price / meta */}
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
+        {/* LIS-1 (legacy js/listing.js): sold listings get an explicit
+            "no longer available" banner, prepended to the detail card. */}
+        {l.status === 'sold' && (
+          <div
+            className="bg-[#7a1f1f] text-white px-[14px] py-[10px] rounded-[10px] mb-3 font-bold text-center"
+            lang="ar"
+            dir="rtl"
+          >
+            تم بيع هذا الإعلان — لم يعد متاحاً
+          </div>
+        )}
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
         <p className="mt-2 text-3xl font-bold text-emerald-700">{formatPrice(l.price || 0)}</p>
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -184,7 +196,10 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         )}
       </div>
 
-      {/* Seller card — denormalized fast path (R11-RADICAL) */}
+      {/* Seller card — denormalized fast path (R11-RADICAL).
+          Owners see a compact "✓ إعلانك" indicator instead (js/listing.js
+          parity, via OwnerSellerCard). */}
+      <OwnerSellerCard sellerId={l.sellerId}>
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold">البائع</h2>
         {(l as unknown as { sellerName?: string; sellerPhotoUrl?: string }).sellerName ? (
@@ -213,6 +228,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             </Link>
         )}
       </div>
+      </OwnerSellerCard>
 
       {/* Description */}
       {description(l) && (

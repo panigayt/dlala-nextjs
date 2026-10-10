@@ -34,7 +34,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
-import { withTimeout } from '@/lib/firebase-compat';
+import { getFirebase, withTimeout } from '@/lib/firebase-compat';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 
 // Verbatim strings from js/i18n.ar.js
@@ -46,7 +46,14 @@ const STR = {
   verifyToContact: 'أرسلنا لك رابط التفعيل. فعّل بريدك لتتمكن من النشر ومراسلة البائعين.',
   contactSeller: 'مراسلة البائع',
   contacting: 'جارٍ فتح المحادثة...',
-  soldNotice: 'الإعلان مُباع',
+  // Verbatim js/i18n.ar.js: t('soldNotice') — used for the sold banner AND
+  // the disabled contact button title (legacy sets both from the same key).
+  soldNotice: 'تم بيع هذا الإعلان — لم يعد متاحاً',
+  // Owner actions (js/listing.js refreshAuthDependent + deleteOwnListing).
+  edit: 'تعديل',
+  delete: 'حذف',
+  deleteConfirm: 'هل أنت متأكد من حذف هذا الإعلان؟',
+  deleting: 'جارٍ الحذف...',
   errorGeneric: 'حدث خطأ — حاول مجدداً',
   shareAd: 'مشاركة الإعلان',
   loginToReport: 'سجّل الدخول للإبلاغ عن هذا الإعلان',
@@ -148,6 +155,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   const [fav, setFav] = useState<boolean | null>(null); // null = checking / neutral
   const [toast, setToast] = useState<string | null>(null);
   const [contacting, setContacting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [repReason, setRepReason] = useState<string>('scam');
@@ -481,6 +489,89 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     }
   }, [auth.status, contacting, user, client, sellerId, sold, listingId, router, guestNudgeThenLogin]);
 
+  // Owner actions — js/listing.js: editBtn → publish.html?edit=<id>;
+  // deleteOwnListing: confirm → deletedAds audit + listing delete in one
+  // batch (atomic) → Storage/R2 photo cleanup best-effort → back to home.
+  const onEdit = useCallback(() => {
+    router.push('/publish?edit=' + encodeURIComponent(listingId));
+  }, [router, listingId]);
+
+  const onDelete = useCallback(async () => {
+    if (auth.status === 'loading' || deleting) return;
+    if (!user || !client || user.uid !== sellerId) return;
+    if (!window.confirm(STR.deleteConfirm)) return;
+    setDeleting(true);
+    try {
+      const listingRef = client.db.doc(`listings/${listingId}`);
+      const d = await withTimeout(listingRef.get(), 15000);
+      if (!d.exists) {
+        router.push('/');
+        return;
+      }
+      const l = d.data() as Record<string, unknown>;
+      if (l.sellerId !== user.uid) {
+        window.alert(STR.errorGeneric);
+        return;
+      }
+      const batch = client.db.batch();
+      const lt = l.title as { ar?: string } | string | undefined;
+      batch.set(client.db.collection('deletedAds').doc(), {
+        sellerId: user.uid,
+        listingId,
+        title:
+          typeof lt === 'object' ? lt?.ar || '' : typeof lt === 'string' ? lt : '',
+        sellerName: user.displayName || '',
+        deletedAt: client.FieldValue.serverTimestamp(),
+        reason: 'owner',
+        adminId: '',
+      });
+      batch.delete(listingRef);
+      // 0.0.0.36 C-R52-1 (legacy parity): a deleted listing must not linger
+      // as a stale Vitrine pick.
+      batch.update(client.db.doc(`users/${user.uid}`), {
+        vitrineIds: client.FieldValue.arrayRemove(listingId),
+      });
+      await withTimeout(batch.commit(), 20000);
+      // Photo cleanup (best-effort, my-listings parity): legacy Firebase
+      // Storage URLs first, then R2 (the server skips non-R2 values and
+      // enforces uid ownership).
+      const urls: string[] = [
+        ...(Array.isArray(l.photoUrls) ? l.photoUrls : []),
+        ...(Array.isArray(l.thumbUrls) ? l.thumbUrls : []),
+        ...(Array.isArray(l.photo_thumbs) ? l.photo_thumbs : []),
+      ].filter((u): u is string => typeof u === 'string' && !!u);
+      try {
+        const fb = await getFirebase();
+        const storage = fb.storage() as unknown as {
+          ref: (p: string) => { delete: () => Promise<void> };
+        };
+        await Promise.all(
+          urls.map(async (u) => {
+            try {
+              await storage.ref(u).delete();
+            } catch {
+              // ignore missing objects
+            }
+          })
+        );
+      } catch {
+        // non-fatal
+      }
+      try {
+        const idToken = await user.getIdToken();
+        await deleteR2Objects(urls, idToken);
+      } catch {
+        // non-fatal
+      }
+      router.push('/');
+    } catch (e) {
+      console.error(e);
+      window.alert(STR.errorGeneric);
+    } finally {
+      if (mounted.current) setDeleting(false);
+    }
+  }, [auth.status, deleting, user, client, sellerId, listingId, router]);
+
   // Owner viewing their own listing: hide buyer actions (favorite/contact/
   // report make no sense on your own ad) but KEEP share — js/listing.js
   // parity (owner actions are Edit, Delete, Share).
@@ -535,6 +626,27 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         >
           ⚑ {STR.reportAd}
         </button>
+      )}
+      {/* Owner actions — js/listing.js parity: Edit + Delete (Share stays
+          visible for everyone). Buyer actions are hidden above. */}
+      {auth.status === 'signed-in' && isOwn && (
+        <>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
+          >
+            ✏️ {STR.edit}
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            className="rounded-lg px-5 py-2.5 font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+          >
+            {deleting ? STR.deleting : `🗑 ${STR.delete}`}
+          </button>
+        </>
       )}
       {shareOpen && (
         <Modal title={STR.shareAd} onClose={() => setShareOpen(false)}>
