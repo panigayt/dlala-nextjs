@@ -297,6 +297,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     ratingsTitle: 'التقييمات',
     noRatingsYet: 'لا توجد تقييمات بعد.',
     dealsConfirmed: 'صفقات مؤكدة',
+    memberSince: 'عضو منذ',
+    deliveryAllWilayas: 'توصيل لجميع الولايات',
     // [port] — not in legacy i18n:
     storeListings: '📋 الإعلانات',
     infosTab: 'المعلومات',
@@ -625,6 +627,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     ratingsTitle: 'Avis',
     noRatingsYet: 'Aucun avis pour le moment.',
     dealsConfirmed: 'Ventes confirmées',
+    memberSince: 'Membre depuis',
+    deliveryAllWilayas: 'Livraison toutes wilayas',
     // [port] — not in legacy i18n:
     storeListings: '📋 Annonces',
     infosTab: 'Infos',
@@ -953,6 +957,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     ratingsTitle: 'Reviews',
     noRatingsYet: 'No reviews yet.',
     dealsConfirmed: 'Confirmed deals',
+    memberSince: 'Member since',
+    deliveryAllWilayas: 'Delivery to all wilayas',
     // [port] — not in legacy i18n:
     storeListings: '📋 Listings',
     infosTab: 'Info',
