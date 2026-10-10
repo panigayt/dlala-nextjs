@@ -778,3 +778,178 @@ export function timeAgo(d: Date | undefined, lang = 'ar'): string {
   const days = Math.floor(h / 24);
   return lang === 'ar' ? `منذ ${days} يوم` : `il y a ${days} j`;
 }
+
+// ================= VITRINE SHOWCASES (Round 55) =================
+// Ported from ~/workspace/dlala-040/js/home.js (fetchVitrineExtraSellers,
+// selectVitrineShowcases, withVitrinePicksBackfilled).
+//
+// The home feed discovers vitrine-eligible sellers via the dedicated
+// `vitrineSellers` collection — NOT by scanning listings. The registry is
+// self-maintaining: the vitrine picker upserts/deletes the seller's doc on
+// every save (see src/app/vitrine/page.tsx syncVitrineRegistry).
+
+export interface VitrineRegistryEntry {
+  sellerId: string;
+  storeTier?: string | null;
+  vitrineIds?: string[];
+  vitrineBoostUntil?: Date | null;
+}
+
+export interface VitrineShowcaseData {
+  seller: {
+    id: string;
+    name?: string;
+    storeName?: string;
+    storeTier?: string;
+    verified?: boolean;
+    emailVerified?: boolean;
+    rating?: number;
+    ratingCount?: number;
+    followerCount?: number;
+    vitrineIds?: string[];
+    vitrineBoostUntil?: Date | null;
+  };
+  products: ListingCard[];
+}
+
+// Fetch all vitrine-eligible sellers from the registry.
+// Eligibility: pro stores always; ordinary sellers need an active boost
+// AND at least one pick (mirrors js/home.js fetchVitrineExtraSellers).
+export async function fetchVitrineRegistry(): Promise<VitrineRegistryEntry[]> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const structuredQuery = {
+    from: [{ collectionId: 'vitrineSellers' }],
+    select: {
+      fields: [
+        { fieldPath: 'sellerId' },
+        { fieldPath: 'storeTier' },
+        { fieldPath: 'vitrineIds' },
+        { fieldPath: 'vitrineBoostUntil' },
+      ],
+    },
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`vitrine-registry-${res.status}`);
+  const body = await res.json().catch(() => null);
+  const nowMs = Date.now();
+  const out: VitrineRegistryEntry[] = [];
+  const seen = new Set<string>();
+  for (const r of Array.isArray(body) ? body : []) {
+    const f = r?.document?.fields;
+    if (!f) continue;
+    const sid = String(restValue(f.sellerId) || '');
+    if (!sid || seen.has(sid)) continue;
+    const isPro = restValue(f.storeTier) === 'verified';
+    let eligible = !!isPro;
+    if (!eligible) {
+      const bu = restValue(f.vitrineBoostUntil);
+      const ms = bu instanceof Date ? bu.getTime() : 0;
+      const picks = restValue(f.vitrineIds);
+      const nPicks = Array.isArray(picks) ? picks.length : 0;
+      eligible = !!(ms && ms > nowMs && nPicks > 0);
+    }
+    if (eligible) {
+      seen.add(sid);
+      out.push({
+        sellerId: sid,
+        storeTier: (restValue(f.storeTier) as string) || null,
+        vitrineIds: (restValue(f.vitrineIds) as string[]) || [],
+        vitrineBoostUntil: (restValue(f.vitrineBoostUntil) as Date) || null,
+      });
+    }
+  }
+  return out;
+}
+
+// Batch-get listing docs by ID (for vitrine pick backfill).
+async function batchGetListings(ids: string[]): Promise<ListingCard[]> {
+  if (!ids.length) return [];
+  const url =
+    FIRESTORE_REST_BASE + ':batchGet?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const docs = ids.slice(0, 100).map(
+    (id) => `${FIRESTORE_REST_BASE}/listings/${encodeURIComponent(id)}`
+  );
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      documents: docs,
+      mask: { fieldPaths: CARD_REST_FIELDS },
+    }),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`vitrine-batchget-${res.status}`);
+  const body = await res.json().catch(() => null);
+  const out: ListingCard[] = [];
+  for (const r of Array.isArray(body) ? body : []) {
+    if (r.found) out.push(restDocToObj(r.found));
+  }
+  return out;
+}
+
+// Fetch full showcase data: registry → public seller profiles → pick listings.
+// Returns showcases ready for selectVitrineShowcases() filtering.
+export async function fetchVitrineShowcases(): Promise<VitrineShowcaseData[]> {
+  const registry = await fetchVitrineRegistry();
+  if (!registry.length) return [];
+
+  // Fetch public seller profiles in parallel (best-effort per seller).
+  const showcases: VitrineShowcaseData[] = [];
+  await Promise.all(
+    registry.map(async (entry) => {
+      try {
+        const profile = await fetchSeller(entry.sellerId);
+        if (!profile) return;
+        const picks = entry.vitrineIds || [];
+        // Fetch pick listings (best-effort: fall back to empty).
+        let products: ListingCard[] = [];
+        try {
+          const fetched = await batchGetListings(picks.slice(0, 8));
+          // Only available/negotiating products (legacy parity).
+          products = fetched.filter(
+            (l) => l.status === 'available' || l.status === 'negotiating'
+          );
+        } catch {
+          products = [];
+        }
+        // Pro stores with no picks fall back to latest products (legacy FIX 3).
+        if (!products.length && entry.storeTier === 'verified') {
+          try {
+            const latest = await fetchSellerListings(entry.sellerId, 8);
+            products = latest.filter(
+              (l) => l.status === 'available' || l.status === 'negotiating'
+            );
+          } catch {
+            products = [];
+          }
+        }
+        if (!products.length) return;
+        showcases.push({
+          seller: {
+            id: entry.sellerId,
+            name: profile.name,
+            storeName: profile.storeName,
+            storeTier: profile.storeTier || entry.storeTier || undefined,
+            verified: profile.verified,
+            emailVerified: profile.emailVerified,
+            rating: profile.rating,
+            ratingCount: profile.ratingCount,
+            followerCount: profile.followerCount,
+            vitrineIds: picks,
+            vitrineBoostUntil: entry.vitrineBoostUntil,
+          },
+          products,
+        });
+      } catch {
+        /* per-seller failure must never break the whole showcase fetch */
+      }
+    })
+  );
+  return showcases;
+}

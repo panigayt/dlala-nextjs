@@ -13,8 +13,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import ListingCardView from '@/components/ListingCardView';
-import { interleaveWanted, type ListingCard } from '@/lib/firestore';
+import VitrineShowcase from '@/components/VitrineShowcase';
+import { interleaveWanted, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
+import {
+  selectVitrineShowcases,
+  recordVitrineShown,
+  vitrineNoRepeatLoad,
+  vitrineSlotIndices,
+  VITRINE_MAX,
+  type VitrineShowcase as Showcase,
+  type VitrineSeller,
+} from '@/lib/vitrine';
 
 const PAGE_SIZE = 24;
 
@@ -42,6 +52,11 @@ export default function FeedWithLoadMore({
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Vitrine showcases (R17 no-repeat model, js/home.js insertVitrineCards):
+  // fetched client-side after paint, filtered by per-viewer localStorage
+  // state, inserted after card 2 then every 8, max 3 per load.
+  const [showcases, setShowcases] = useState<Showcase[]>([]);
+  const vitrineDone = useRef(false);
   // Tracks the taste-ranked regular cards currently displayed, so "show
   // more" can pass the FULL regular pool to the taste append path
   // (js/taste.js: the append call receives old+new; only fresh docs are
@@ -66,6 +81,72 @@ export default function FeedWithLoadMore({
       /* taste must never break the feed */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Vitrine showcase insertion (js/home.js insertVitrineCards, R17 model).
+  // Async + best-effort: the feed is already painted when this runs.
+  // Fetches candidates from /api/vitrine-showcases, applies the per-viewer
+  // no-repeat filter (localStorage), selects up to VITRINE_MAX showcases
+  // (boosted/pro prioritized), and records them as shown.
+  useEffect(() => {
+    if (vitrineDone.current) return;
+    vitrineDone.current = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/vitrine-showcases', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        const raw: VitrineShowcaseData[] = data?.showcases || [];
+        if (!raw.length) return;
+
+        // Build the selection inputs (legacy selectVitrineShowcases shape).
+        const usersById: Record<string, VitrineSeller> = {};
+        const listings: ListingCard[] = [];
+        for (const sh of raw) {
+          const sid = sh.seller.id;
+          usersById[sid] = {
+            id: sid,
+            name: sh.seller.name,
+            storeName: sh.seller.storeName,
+            storeTier: sh.seller.storeTier,
+            verified: sh.seller.verified,
+            emailVerified: sh.seller.emailVerified,
+            rating: sh.seller.rating,
+            ratingCount: sh.seller.ratingCount,
+            followerCount: sh.seller.followerCount,
+            vitrineIds: sh.seller.vitrineIds,
+            vitrineBoostUntil: sh.seller.vitrineBoostUntil,
+          };
+          for (const p of sh.products) listings.push(p);
+        }
+        // Rotation: bump per page view (legacy VITRINE_ROT_KEY, session).
+        let rotation = 0;
+        try {
+          rotation = (Number(sessionStorage.getItem('dlala_vitrine_rot')) || 0) + 1;
+          sessionStorage.setItem('dlala_vitrine_rot', String(rotation));
+        } catch {
+          /* session storage unavailable: rotation stays 0 */
+        }
+        const noRepeat = vitrineNoRepeatLoad();
+        const sel = selectVitrineShowcases({
+          listings,
+          usersById,
+          rotation,
+          noRepeat,
+          maxShowcases: VITRINE_MAX,
+        });
+        const chosen = sel.shown.concat(sel.fallback);
+        if (!chosen.length) return;
+        setShowcases(chosen);
+        recordVitrineShown(
+          sel.shown,
+          sel.fallback.slice(0, Math.max(0, chosen.length - sel.shown.length)),
+          noRepeat
+        );
+      } catch {
+        /* vitrine must never break the feed */
+      }
+    })();
   }, []);
 
   async function loadMore() {
@@ -119,12 +200,35 @@ export default function FeedWithLoadMore({
     }
   }
 
+  // Build the render list: cards interleaved with vitrine showcases.
+  // Slots (legacy): after card 2, then every 8, max VITRINE_MAX.
+  // Showcases span the full grid width (col-span-full).
+  const slots = vitrineSlotIndices(cards.length, showcases.length);
+  const renderItems: ({ type: 'card'; card: ListingCard } | { type: 'showcase'; showcase: Showcase })[] = [];
+  {
+    let scIdx = 0;
+    for (let i = 0; i < cards.length; i++) {
+      renderItems.push({ type: 'card', card: cards[i] });
+      // Slot k means "after the k-th card" (1-based); i is 0-based.
+      if (scIdx < slots.length && slots[scIdx] === i + 1) {
+        renderItems.push({ type: 'showcase', showcase: showcases[scIdx] });
+        scIdx++;
+      }
+    }
+  }
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {cards.map((l) => (
-          <ListingCardView key={l.id} l={l} />
-        ))}
+        {renderItems.map((item, idx) =>
+          item.type === 'card' ? (
+            <ListingCardView key={item.card.id} l={item.card} />
+          ) : (
+            <div key={`vitrine-${item.showcase.seller.id}-${idx}`} className="col-span-full">
+              <VitrineShowcase showcase={item.showcase} />
+            </div>
+          )
+        )}
       </div>
       {error && (
         <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4 text-center text-red-700 text-sm">
