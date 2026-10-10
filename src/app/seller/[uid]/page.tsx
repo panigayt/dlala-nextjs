@@ -14,6 +14,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import FollowButton from '@/components/FollowButton';
+import RateCta from '@/components/RateCta';
 import SellerActions from './SellerActions';
 import RatingsList from './RatingsList';
 import SellerTabsSection from './SellerTabsSection';
@@ -380,6 +381,12 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
         infos={
           <>
             <SellerInfosTab s={seller} />
+            {/* js/seller.js loadRateCta parity: the rate CTA box sits
+                directly above the ratings list. */}
+            <RateCta
+              uid={uid}
+              rateeName={seller.name || seller.username || ''}
+            />
             <div className="mt-4">
               <RatingsList ratings={ratings} failed={ratingsFailed} />
             </div>
