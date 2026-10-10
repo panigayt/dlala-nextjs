@@ -84,6 +84,24 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     profileLoadError: 'تعذّر تحميل الملف الشخصي', unverifiedBadge: 'غير مفعّل',
     vitrine: 'الواجهة', storeVerify: 'توثيق المتجر',
     logoutFailed: 'تعذّر تسجيل الخروج — تحقق من الاتصال وحاول مجدداً.',
+    // Home page (Group D, Round 107) — verbatim js/i18n.ar.js unless noted.
+    search: 'ابحث...', searchBtn: 'بحث',
+    allCategories: 'كل الأقسام', wantedOnly: 'مطلوب فقط',
+    categoriesNav: 'الفئات', // port-added (nav aria-label)
+    wilaya: 'الولاية', allWilayas: 'كل الولايات',
+    minPrice: 'السعر الأدنى', maxPrice: 'السعر الأقصى',
+    sortLabel: 'ترتيب حسب', sortRecent: 'الأحدث',
+    sortPriceAsc: 'السعر: من الأقل', sortPriceDesc: 'السعر: من الأعلى',
+    applyFilters: 'تطبيق', resetFilters: 'مسح',
+    latestAds: 'أحدث الإعلانات', // port-added (home feed heading)
+    feedEmpty: 'لا توجد إعلانات حاليا.', // port-added (home empty state)
+    condGood: 'جيد',
+    loadMoreFailed: 'تعذر تحميل المزيد', // port-added (load-more error)
+    follow: 'متابعة', loginToFollow: 'سجّل الدخول للمتابعة',
+    loginToFavorite: 'سجّل الدخول لإضافة الإعلان إلى المفضلة',
+    discoverStore: 'اكتشف متجر',
+    wantedBadge: 'مطلوب', sold: 'مباع', wholesale: 'الجملة',
+    priceReduced: 'انخفض السعر', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
   },
   fr: {
     account: 'Mon compte', settings: 'Paramètres', myAds: 'Mes annonces', myFollows: 'Mes abonnements',
@@ -158,6 +176,24 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     profileLoadError: 'Impossible de charger le profil', unverifiedBadge: 'Non vérifié',
     vitrine: 'Vitrine', storeVerify: 'Vérification boutique',
     logoutFailed: 'Échec de la déconnexion — vérifiez votre connexion et réessayez.',
+    // Home page (Group D, Round 107) — verbatim js/i18n.fr.js unless noted.
+    search: 'Rechercher...', searchBtn: 'Chercher',
+    allCategories: 'Toutes catégories', wantedOnly: 'Recherchés uniquement',
+    categoriesNav: 'Catégories', // port-added (nav aria-label)
+    wilaya: 'Wilaya', allWilayas: 'Toutes wilayas',
+    minPrice: 'Prix min', maxPrice: 'Prix max',
+    sortLabel: 'Trier par', sortRecent: 'Plus récents',
+    sortPriceAsc: 'Prix croissant', sortPriceDesc: 'Prix décroissant',
+    applyFilters: 'Appliquer', resetFilters: 'Effacer',
+    latestAds: 'Dernières annonces', // port-added (home feed heading)
+    feedEmpty: 'Aucune annonce pour le moment.', // port-added (home empty state)
+    condGood: 'Bon état',
+    loadMoreFailed: 'Impossible de charger la suite', // port-added (load-more error)
+    follow: 'Suivre', loginToFollow: 'Connectez-vous pour suivre',
+    loginToFavorite: 'Connectez-vous pour ajouter cette annonce aux favoris',
+    discoverStore: 'Découvrez la boutique',
+    wantedBadge: 'Recherché', sold: 'Vendu', wholesale: 'Gros',
+    priceReduced: 'Prix réduit', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
   },
   en: {
     account: 'My account', settings: 'Settings', myAds: 'My ads', myFollows: 'My follows',
@@ -232,6 +268,24 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     profileLoadError: 'Couldn\'t load profile', unverifiedBadge: 'Unverified',
     vitrine: 'Showcase', storeVerify: 'Store verification',
     logoutFailed: 'Could not sign out — check your connection and try again.',
+    // Home page (Group D, Round 107) — verbatim js/i18n.en.js unless noted.
+    search: 'Search...', searchBtn: 'Search',
+    allCategories: 'All categories', wantedOnly: 'Wanted only',
+    categoriesNav: 'Categories', // port-added (nav aria-label)
+    wilaya: 'Wilaya', allWilayas: 'All wilayas',
+    minPrice: 'Min price', maxPrice: 'Max price',
+    sortLabel: 'Sort by', sortRecent: 'Most recent',
+    sortPriceAsc: 'Price: low to high', sortPriceDesc: 'Price: high to low',
+    applyFilters: 'Apply', resetFilters: 'Clear',
+    latestAds: 'Latest ads', // port-added (home feed heading)
+    feedEmpty: 'No listings right now.', // port-added (home empty state)
+    condGood: 'Good',
+    loadMoreFailed: 'Could not load more', // port-added (load-more error)
+    follow: 'Follow', loginToFollow: 'Log in to follow',
+    loginToFavorite: 'Sign in to save this listing to your favorites',
+    discoverStore: 'Discover the store',
+    wantedBadge: 'Wanted', sold: 'Sold', wholesale: 'Wholesale',
+    priceReduced: 'Price reduced', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
   },
 };
 

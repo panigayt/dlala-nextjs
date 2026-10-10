@@ -22,10 +22,12 @@
 // marks vitrine interaction for the R17 no-repeat model); reproduced here so
 // a follow tap does not mark card interaction.
 
-import { useFollowToggle, STR } from './FollowButton';
+import { useFollowToggle } from './FollowButton';
+import { useLang } from '@/lib/i18n';
 
 export default function VitrineFollowButton({ storeUid }: { storeUid: string }) {
   const { following, isOwn, toast, onTap } = useFollowToggle(storeUid);
+  const { t } = useLang();
 
   // Owner can't follow themselves — legacy hydrateFollowButtons hides it.
   if (isOwn) return null;
@@ -50,7 +52,7 @@ export default function VitrineFollowButton({ storeUid }: { storeUid: string }) 
           onTap();
         }}
       >
-        {following ? `✓ ${STR.following}` : `+ ${STR.follow}`}
+        {following ? `✓ ${t('following')}` : `+ ${t('follow')}`}
       </button>
       {toast && (
         <span

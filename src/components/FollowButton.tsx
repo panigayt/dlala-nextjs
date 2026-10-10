@@ -22,8 +22,11 @@ import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
+import { useLang } from '@/lib/i18n';
 
-// Verbatim strings from js/i18n.ar.js
+// Verbatim strings from js/i18n.ar.js — kept for backward compatibility
+// (other modules import STR). New code should use useLang() t() instead;
+// the hook below already does (Round 107 trilingual).
 export const STR = {
   follow: 'متابعة',
   following: 'أتابع',
@@ -63,6 +66,8 @@ interface FieldValueLike {
 export function useFollowToggle(storeUid: string) {
   const router = useRouter();
   const auth = useAuthState();
+  // Round 107: toast/button strings follow the UI language (trilingual parity).
+  const { t } = useLang();
   // null = checking (never a false +/✓)
   const [following, setFollowing] = useState<boolean | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -122,7 +127,7 @@ export function useFollowToggle(storeUid: string) {
       // nudge via toast, then login — never a silent bounce to /auth.
       // QA 16 Sep 2026 #4: keep the scroll position across the bounce.
       saveScrollForReturn(window.location.pathname);
-      showToast(STR.loginToFollow);
+      showToast(t('loginToFollow'));
       window.setTimeout(
         () => router.push(authLoginHref(window.location.pathname, window.location.search)),
         1500
@@ -197,17 +202,18 @@ export function useFollowToggle(storeUid: string) {
       } catch {
         if (mounted.current) setFollowing(wasOn);
       }
-      showToast(STR.errorGeneric);
+      showToast(t('errorGeneric'));
     } finally {
       inFlight.current = false;
     }
-  }, [auth.status, user, client, following, storeUid, router, showToast]);
+  }, [auth.status, user, client, following, storeUid, router, showToast, t]);
 
   return { following, isOwn, toast, onTap };
 }
 
 export default function FollowButton({ storeUid }: { storeUid: string }) {
   const { following, isOwn, toast, onTap } = useFollowToggle(storeUid);
+  const { t } = useLang();
 
   if (isOwn) return null;
 
@@ -223,7 +229,7 @@ export default function FollowButton({ storeUid }: { storeUid: string }) {
             : 'bg-emerald-700 text-white hover:bg-emerald-800'
         }`}
       >
-        {following ? `✓ ${STR.following}` : `+ ${STR.follow}`}
+        {following ? `✓ ${t('following')}` : `+ ${t('follow')}`}
       </button>
       {toast && (
         <div

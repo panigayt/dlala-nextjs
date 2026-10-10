@@ -9,18 +9,23 @@ import { cardTitle, cardImage, formatPrice, type ListingCard } from '@/lib/fires
 import { WILAYAS } from '@/lib/wilayas';
 import { catName } from '@/lib/categories';
 import { dzPriceWords } from '@/lib/dz-price';
+import { useLang, type Lang } from '@/lib/i18n';
 import TimeAgo from '@/components/TimeAgo';
 import FavoriteToggle from '@/components/FavoriteToggle';
 import BlurUpImage from '@/components/BlurUpImage';
 import { OwnBadge, ProBadge } from '@/components/CardMarkers';
 
-function wilayaName(code: number | undefined): string {
+// Round 107: wilaya name follows the UI language (js/home.js c[LANG] parity).
+function wilayaName(code: number | undefined, lang: Lang): string {
   if (!code) return '';
-  const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
-  return w ? `${w.code} - ${w.ar}` : '';
+  const w = (WILAYAS as { code: number; ar: string; fr: string; en: string }[]).find(
+    (x) => x.code === Number(code)
+  );
+  return w ? `${w.code} - ${w[lang]}` : '';
 }
 
 export default function ListingCardView({ l }: { l: ListingCard }) {
+  const { t, lang } = useLang();
   const img = cardImage(l);
   const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
   const jobType = (l.answers && typeof l.answers.jobType === 'string' && l.answers.jobType) || '';
@@ -28,20 +33,21 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
   const isOffer = jobType === 'jobOffer';
   const words = dzPriceWords(l.price || 0);
   const favCount = Number(l.favoriteCount) || 0;
+  // Round 107: condition + category follow the UI language (trilingual parity).
   const cond =
-    l.condition === 'new' ? 'جديد' : l.condition === 'good' ? 'جيد' : l.condition === 'used' ? 'مستعمل' : '';
-  const cat = catName(l.categoryId || '');
+    l.condition === 'new' ? t('condNew') : l.condition === 'good' ? t('condGood') : l.condition === 'used' ? t('condUsed') : '';
+  const cat = catName(l.categoryId || '', lang);
   // js/market.js wantedCard: seekers keep their own blue badge, never stack
   // the orange wanted badge; wilayaCode 0 shows "كل الولايات".
   const showWantedBadge = !!l.isWanted && !isSeeker;
-  const wilayaLabel = l.isWanted && !l.wilayaCode ? 'كل الولايات' : wilayaName(l.wilayaCode);
+  const wilayaLabel = l.isWanted && !l.wilayaCode ? t('allWilayas') : wilayaName(l.wilayaCode, lang);
   const metaBits = [cond, cat, wilayaLabel].filter(Boolean).join(' · ');
   return (
     <a
       href={`/listing/${l.id}`}
       data-sid={l.sellerId || ''}
       className="block relative rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-      dir="rtl"
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       {/* HOM-4 parity (js/app.js markOwnCards): "yours" badge, positioned
           against the card (absolute vs this relative anchor). */}
@@ -60,27 +66,27 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
         {(showWantedBadge || l.status === 'sold' || l.isWholesale || reduced || isSeeker || isOffer) && (
           <div className="absolute top-2 right-2 flex flex-col items-start gap-1">
             {showWantedBadge && (
-              <span className="rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white">مطلوب</span>
+              <span className="rounded-full bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wantedBadge')}</span>
             )}
             {l.status === 'sold' && (
-              <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">مباع</span>
+              <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">{t('sold')}</span>
             )}
             {l.isWholesale && (
-              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">الجملة</span>
+              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wholesale')}</span>
             )}
             {reduced && (
               <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white">
-                ▼ انخفض السعر
+                ▼ {t('priceReduced')}
               </span>
             )}
             {isSeeker && (
               <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-bold text-white">
-                باحث عن عمل
+                {t('seekerBadge')}
               </span>
             )}
             {isOffer && (
               <span className="rounded-full bg-emerald-700 px-2.5 py-0.5 text-xs font-bold text-white">
-                عرض عمل
+                {t('offerBadge')}
               </span>
             )}
           </div>
@@ -115,7 +121,7 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
         </h3>
         {metaBits && <p className="mt-1 text-xs text-zinc-600">{metaBits}</p>}
         <p className="mt-1 text-xs text-zinc-500">
-          {l.createdAt ? <TimeAgo iso={l.createdAt.toISOString()} /> : ''}
+          {l.createdAt ? <TimeAgo iso={l.createdAt.toISOString()} lang={lang} /> : ''}
         </p>
       </div>
     </a>

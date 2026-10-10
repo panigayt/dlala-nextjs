@@ -38,12 +38,7 @@ import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { savePendingAction } from '@/lib/pending-action';
 
-// Verbatim strings from js/i18n.ar.js
-const STR = {
-  favorites: 'المفضلة',
-  loginToFavorite: 'سجّل الدخول لإضافة الإعلان إلى المفضلة',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-};
+import { useLang } from '@/lib/i18n';
 
 interface DocRefLike {
   get: () => Promise<{ exists: boolean }>;
@@ -79,6 +74,8 @@ interface Props {
 export default function FavoriteToggle({ listingId, sellerId, initialCount, title, price, photoUrl, compact }: Props) {
   const router = useRouter();
   const auth = useAuthState();
+  // Round 107: toast/aria strings follow the UI language (trilingual parity).
+  const { t } = useLang();
   // null = checking (never a false ♡/♥)
   const [fav, setFav] = useState<boolean | null>(null);
   // Net count adjustment relative to initialCount (legacy paintHeart
@@ -166,7 +163,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       if (!user || !client) {
         // LIS-4 parity: guests get the login nudge via toast, then login —
         // never a silent bounce to /auth.
-        showToastThenAuth(STR.loginToFavorite);
+        showToastThenAuth(t('loginToFavorite'));
         return;
       }
       if (user.uid === sellerId) return; // own — not rendered anyway
@@ -246,12 +243,12 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
             setDelta(0);
           }
         }
-        showToast(STR.errorGeneric);
+        showToast(t('errorGeneric'));
       } finally {
         inFlight.current = false;
       }
     },
-    [auth.status, user, client, fav, listingId, sellerId, title, price, photoUrl, showToastThenAuth, showToast]
+    [auth.status, user, client, fav, listingId, sellerId, title, price, photoUrl, showToastThenAuth, showToast, t]
   );
 
   // Own listings get no heart at all (legacy listingCard !isMine /
@@ -272,7 +269,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           data-fid={listingId}
           aria-pressed={fav === true}
           aria-busy={fav === null}
-          aria-label={STR.favorites}
+          aria-label={t('favorites')}
           className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/90 text-[15px] leading-none shadow-sm"
           style={{ color: fav === true ? '#e0245e' : '#666' }}
         >
@@ -298,7 +295,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         data-fid={listingId}
         aria-pressed={fav === true}
         aria-busy={fav === null}
-        aria-label={STR.favorites}
+        aria-label={t('favorites')}
         className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 shadow-sm"
       >
         <span aria-hidden="true">{fav === true ? '♥' : '♡'}</span>

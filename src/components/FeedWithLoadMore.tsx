@@ -354,13 +354,13 @@ export default function FeedWithLoadMore({
       </div>
       {error && (
         <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4 text-center text-red-700 text-sm">
-          تعذر تحميل المزيد ({error}).{' '}
+          {t('loadMoreFailed')} ({error}).{' '}
           <button
             type="button"
             onClick={loadMore}
             className="font-bold underline"
           >
-            حاول مرة أخرى
+            {t('retry')}
           </button>
         </div>
       )}
@@ -372,7 +372,7 @@ export default function FeedWithLoadMore({
             disabled={loading}
             className="rounded-xl border border-zinc-300 bg-white px-8 py-3 font-bold text-zinc-800 hover:border-emerald-600 disabled:opacity-50"
           >
-            {loading ? '…' : 'عرض المزيد'}
+            {loading ? '…' : t('loadMore')}
           </button>
         </div>
       )}
