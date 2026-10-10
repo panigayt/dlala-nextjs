@@ -64,7 +64,7 @@ export default function SearchResultsGrid({
       {/* js/home.js 0.0.0.1m (Zak): verified-store cards above the results
           when the text query matches a pro store — background fetch, fails
           closed. Mounted once: "عرض المزيد" appends never re-trigger it. */}
-      <StoreMatchCards q={filters.q || ''} lang={lang} />
+      <StoreMatchCards q={filters.q || ''} />
       {listings.length === 0 ? (
         <div className="rounded-xl bg-white p-8 text-center text-zinc-500">
           <p className="text-lg">{t('noResults')}</p>

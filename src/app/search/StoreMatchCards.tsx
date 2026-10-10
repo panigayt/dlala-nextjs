@@ -6,56 +6,36 @@
 // when F.q is empty); mounted once above the grid so "عرض المزيد"
 // appends never re-trigger it (legacy: "skipped on appends — the cards
 // are already painted above page 1").
+//
+// Round 123: wired to the app-wide language store (js/i18n.js setLang
+// parity) — the local STR copy is gone; matchingStore/matchingStoresPick/
+// visitStore now live in src/lib/i18n.ts (verbatim js/i18n.{ar,fr,en}.js),
+// and wilayaName uses the 0.0.0.21 I-08 formula (ar / en-with-fr-fallback / fr).
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { WILAYAS } from '@/lib/wilayas';
+import { useLang, type Lang } from '@/lib/i18n';
 import type { VerifiedStore } from '@/lib/firestore';
 
-// Byte-exact vs js/i18n.{ar,fr,en}.js (matchingStore/matchingStoresPick/
-// proMerchant/visitStore). The search page is AR-first today; FR/EN ride
-// the future full-page i18n pass — the component already takes lang.
-const STR = {
-  ar: {
-    matchingStore: 'متجر مطابق',
-    matchingStoresPick: 'عدة متاجر مطابقة — اختر واحداً',
-    proMerchant: 'تاجر محترف',
-    visitStore: 'زيارة',
-  },
-  fr: {
-    matchingStore: 'Boutique correspondante',
-    matchingStoresPick: 'Plusieurs boutiques correspondent — choisissez-en une',
-    proMerchant: 'Commerçant pro',
-    visitStore: 'Visiter',
-  },
-  en: {
-    matchingStore: 'Matching store',
-    matchingStoresPick: 'Multiple matching stores — pick one',
-    proMerchant: 'Pro merchant',
-    visitStore: 'Visit',
-  },
-} as const;
-
-type Lang = keyof typeof STR;
-
-function wilayaName(code: number | undefined): string {
+// 0.0.0.21 (I-08): English UI uses the English transliterations.
+// Verbatim js/app.js wilayaName, LANG → lang.
+function wilayaName(code: number | undefined, lang: Lang): string {
   if (!code) return '';
-  const w = (WILAYAS as { code: number; ar: string }[]).find(
+  const w = (WILAYAS as { code: number; ar: string; fr: string; en: string }[]).find(
     (x) => x.code === Number(code)
   );
-  return w ? `${w.code} - ${w.ar}` : '';
+  if (!w) return '';
+  return lang === 'ar'
+    ? `${w.code} - ${w.ar}`
+    : lang === 'en' && w.en
+      ? `${w.code} - ${w.en}`
+      : `${w.code} - ${w.fr}`;
 }
 
 // js/home.js storeMatchCardHtml — verbatim structure and class names.
-function StoreCard({
-  s,
-  eager,
-  t,
-}: {
-  s: VerifiedStore;
-  eager: boolean;
-  t: (typeof STR)[Lang];
-}) {
+function StoreCard({ s, eager }: { s: VerifiedStore; eager: boolean }) {
+  const { t, lang } = useLang();
   const uid = s.uid || '';
   const name = s.storeName || s.username || '';
   const logo =
@@ -65,7 +45,7 @@ function StoreCard({
   const letter = (String(name).trim()[0] || '?').toUpperCase();
   // 0.0.0.31 FIX-WEB-007: the matches block sits above the results, so the
   // first logo is an LCP candidate — eager + high priority, not lazy.
-  const meta = [wilayaName(s.storeWilaya), `👥 ${Number(s.followerCount) || 0}`]
+  const meta = [wilayaName(s.storeWilaya, lang), `👥 ${Number(s.followerCount) || 0}`]
     .filter(Boolean)
     .join(' · ');
   return (
@@ -87,23 +67,18 @@ function StoreCard({
         )}
         <span className="smc-body">
           <span className="smc-name">
-            {name} <span className="pro-badge">★ {t.proMerchant}</span>
+            {name} <span className="pro-badge">★ {t('proMerchant')}</span>
           </span>
           <span className="smc-meta">{meta}</span>
         </span>
-        <span className="smc-go">{t.visitStore} ←</span>
+        <span className="smc-go">{t('visitStore')} ←</span>
       </Link>
     </div>
   );
 }
 
-export default function StoreMatchCards({
-  q,
-  lang = 'ar',
-}: {
-  q: string;
-  lang?: Lang;
-}) {
+export default function StoreMatchCards({ q }: { q: string }) {
+  const { t } = useLang();
   const [stores, setStores] = useState<VerifiedStore[] | null>(null);
 
   useEffect(() => {
@@ -123,15 +98,14 @@ export default function StoreMatchCards({
     };
   }, [q]);
 
-  const t = STR[lang] ?? STR.ar;
   if (!stores || stores.length === 0) return null;
   // js/home.js insertStoreCards — verbatim: singular/plural label with 🏪.
-  const label = stores.length === 1 ? t.matchingStore : t.matchingStoresPick;
+  const label = stores.length === 1 ? t('matchingStore') : t('matchingStoresPick');
   return (
     <div className="store-matches">
       <div className="smc-label">🏪 {label}</div>
       {stores.map((s, i) => (
-        <StoreCard key={s.uid || `store-${i}`} s={s} eager={i === 0} t={t} />
+        <StoreCard key={s.uid || `store-${i}`} s={s} eager={i === 0} />
       ))}
     </div>
   );

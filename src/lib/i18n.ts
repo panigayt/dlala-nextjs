@@ -140,6 +140,10 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     searchEmpty: 'اكتب كلمة للبحث في الإعلانات.', // port-added (no-filter state)
     searchFailed: 'تعذر البحث', // port-added (search error)
     saving: 'جارٍ الحفظ...', // port-added (save-search button)
+    // Round 123 — verbatim js/i18n.ar.js (verified-store cards atop search results).
+    matchingStore: 'متجر مطابق',
+    matchingStoresPick: 'عدة متاجر مطابقة — اختر واحداً',
+    visitStore: 'زيارة',
     facetOs: 'نظام التشغيل', facetBrand: 'الماركة',
     facetFuel: 'الوقود', facetGear: 'ناقل الحركة',
     yearFrom: 'السنة من', yearTo: 'إلى',
@@ -462,6 +466,10 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     searchEmpty: 'Tapez un mot pour rechercher dans les annonces.', // port-added (no-filter state)
     searchFailed: 'Échec de la recherche', // port-added (search error)
     saving: 'Enregistrement...', // port-added (save-search button)
+    // Round 123 — verbatim js/i18n.fr.js (verified-store cards atop search results).
+    matchingStore: 'Boutique correspondante',
+    matchingStoresPick: 'Plusieurs boutiques correspondent — choisissez-en une',
+    visitStore: 'Visiter',
     facetOs: 'Système d\'exploitation', facetBrand: 'Marque',
     facetFuel: 'Carburant', facetGear: 'Transmission',
     yearFrom: 'Année min', yearTo: 'max',
@@ -784,6 +792,10 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     searchEmpty: 'Type a word to search the ads.', // port-added (no-filter state)
     searchFailed: 'Search failed', // port-added (search error)
     saving: 'Saving...', // port-added (save-search button)
+    // Round 123 — verbatim js/i18n.en.js (verified-store cards atop search results).
+    matchingStore: 'Matching store',
+    matchingStoresPick: 'Multiple matching stores — pick one',
+    visitStore: 'Visit',
     facetOs: 'OS', facetBrand: 'Brand',
     facetFuel: 'Fuel', facetGear: 'Gearbox',
     yearFrom: 'Year from', yearTo: 'to',
