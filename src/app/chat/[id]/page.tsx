@@ -267,6 +267,9 @@ function ChatInner() {
   const convRef = useRef<ConvData | null>(null);
   const msgsRef = useRef<Msg[]>([]);
   const unsubsRef = useRef<(() => void)[]>([]);
+  // js/chat.js listenersActive parity: listeners attach exactly once —
+  // no duplicates, no leaks across re-subscribes (visibility return).
+  const listenersActiveRef = useRef(false);
   const sendInFlightRef = useRef(false);
   const lastSendAtRef = useRef(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -277,6 +280,79 @@ function ChatInner() {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2600);
   }, []);
+
+  // js/chat.js unsubscribeAll parity: detach the Firestore listeners
+  // (conversation doc + messages query). Called on effect cleanup,
+  // on pagehide, and while the page is hidden.
+  const unsubscribeAll = useCallback(() => {
+    for (const u of unsubsRef.current) {
+      try {
+        u();
+      } catch {
+        /* noop */
+      }
+    }
+    unsubsRef.current = [];
+    listenersActiveRef.current = false;
+  }, []);
+
+  // js/chat.js subscribeAll parity: attach the conversation + messages
+  // listeners exactly once (listenersActive guard) — no duplicates when
+  // re-subscribing after the tab becomes visible again.
+  const subscribeAll = useCallback(
+    (client: FirebaseClient) => {
+      if (listenersActiveRef.current) return;
+      listenersActiveRef.current = true;
+      const unsubs: (() => void)[] = [];
+      unsubs.push(
+        client.db.doc(`conversations/${convId}`).onSnapshot(
+          (s) => {
+            if (s.exists) {
+              const d = {
+                id: s.id,
+                ...((s.data() || {}) as object),
+              } as ConvData;
+              convRef.current = d;
+              setConv(d);
+            }
+          },
+          () => {}
+        )
+      );
+      unsubs.push(
+        client.db
+          .collection('conversations')
+          .doc(convId)
+          .collection('messages')
+          .orderBy('at', 'asc')
+          .limit(100)
+          .onSnapshot(
+            (snap2) => {
+              const list: Msg[] = snap2.docs.map(
+                (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
+              );
+              const prevIds = new Set(msgsRef.current.map((m) => m.id));
+              const hasNew = list.some((m) => !prevIds.has(m.id));
+              msgsRef.current = list;
+              setMsgs(list);
+              // Legacy applyMsgScroll parity: auto-scroll only when the user
+              // is already near the bottom (or first paint); otherwise show
+              // the "new messages" pill so history reading isn't yanked.
+              if (!hasNew) return;
+              if (nearBottomNow()) {
+                scrollBottom();
+                setShowPill(false);
+              } else {
+                setShowPill(true);
+              }
+            },
+            () => {}
+          )
+      );
+      unsubsRef.current = unsubs;
+    },
+    [convId]
+  );
 
   const isSupport = conv?.listingId === 'support';
   const isAnn = conv?.listingId === 'announcements';
@@ -552,54 +628,9 @@ function ChatInner() {
         }
       })();
 
-      // Live subscriptions
-      const unsubs: (() => void)[] = [];
-      unsubs.push(
-        client.db.doc(`conversations/${convId}`).onSnapshot(
-          (s) => {
-            if (s.exists) {
-              const d = {
-                id: s.id,
-                ...((s.data() || {}) as object),
-              } as ConvData;
-              convRef.current = d;
-              setConv(d);
-            }
-          },
-          () => {}
-        )
-      );
-      unsubs.push(
-        client.db
-          .collection('conversations')
-          .doc(convId)
-          .collection('messages')
-          .orderBy('at', 'asc')
-          .limit(100)
-          .onSnapshot(
-            (snap2) => {
-              const list: Msg[] = snap2.docs.map(
-                (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
-              );
-              const prevIds = new Set(msgsRef.current.map((m) => m.id));
-              const hasNew = list.some((m) => !prevIds.has(m.id));
-              msgsRef.current = list;
-              setMsgs(list);
-              // Legacy applyMsgScroll parity: auto-scroll only when the user
-              // is already near the bottom (or first paint); otherwise show
-              // the "new messages" pill so history reading isn't yanked.
-              if (!hasNew) return;
-              if (nearBottomNow()) {
-                scrollBottom();
-                setShowPill(false);
-              } else {
-                setShowPill(true);
-              }
-            },
-            () => {}
-          )
-      );
-      unsubsRef.current = unsubs;
+      // Live subscriptions (js/chat.js subscribeAll — extracted above so the
+      // visibilitychange handler can re-attach them on tab return).
+      subscribeAll(client);
       openedRef.current = true;
       markRead(client, data, uid);
 
@@ -624,7 +655,7 @@ function ChatInner() {
         /* ignore */
       }
     },
-    [convId, searchParams]
+    [convId, searchParams, subscribeAll]
   );
 
   useEffect(() => {
@@ -641,17 +672,30 @@ function ChatInner() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     openThread(authState.client, authState.user);
     return () => {
-      for (const u of unsubsRef.current) {
-        try {
-          u();
-        } catch {
-          /* noop */
-        }
-      }
-      unsubsRef.current = [];
+      unsubscribeAll();
       openedRef.current = false;
     };
-  }, [authState, convId, openThread, router]);
+  }, [authState, convId, openThread, router, unsubscribeAll]);
+
+  // js/chat.js parity: detach Firestore listeners while the page is hidden
+  // (no duplicates, no leaks — battery/data on mobile); re-attach on return
+  // so the thread is always fresh. pagehide covers full-page unload.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) {
+        unsubscribeAll();
+      } else if (openedRef.current && clientRef.current) {
+        subscribeAll(clientRef.current);
+      }
+    };
+    const onHide = () => unsubscribeAll();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onHide);
+    };
+  }, [subscribeAll, unsubscribeAll]);
 
   // Hide the "new messages" pill once the user scrolls back near the
   // bottom (legacy js/chat.js parity, 140px threshold).
