@@ -8,8 +8,10 @@
 // - storeSearchHaystack (QA 16 Sep 2026 #2): title/description are localized
 //   objects — search across every language variant, never String(obj).
 // - renderStoreAdsGrid: client-side filter by category + search text.
+// - R3 "Show more" (Zak ordered): the grid starts at SELLER_LISTINGS_PAGE_SIZE
+//   ads; the button adds +30 and re-queries the server with the new limit.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   cardTitle,
   cardImage,
@@ -88,15 +90,32 @@ function haystack(l: ListingCard): string {
     .join(' ');
 }
 
+// Legacy R3 verbatim: the 'Show more' button adds 30 to the limit.
+const SHOW_MORE_STEP = 30;
+
 export default function StoreListingsGrid({
-  listings,
+  uid,
+  initialListings,
+  initialLimit,
   isPro,
+  onCountChange,
 }: {
-  listings: ListingCard[];
+  uid: string;
+  initialListings: ListingCard[];
+  initialLimit: number;
   isPro: boolean;
+  onCountChange?: (count: number) => void;
 }) {
+  const [listings, setListings] = useState(initialListings);
+  const [limit, setLimit] = useState(initialLimit);
   const [searchText, setSearchText] = useState('');
   const [activeCat, setActiveCat] = useState('');
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState(false);
+
+  useEffect(() => {
+    onCountChange?.(listings.length);
+  }, [listings.length, onCountChange]);
 
   const cats = useMemo(() => {
     const set = new Set<string>();
@@ -112,6 +131,35 @@ export default function StoreListingsGrid({
     if (q) docs = docs.filter((l) => haystack(l).includes(q));
     return docs;
   }, [listings, activeCat, searchText]);
+
+  // js/seller.js R3 verbatim: the button renders when the server returned a
+  // full page (listings.length >= limit, so more may exist) AND the filtered
+  // grid is non-empty.
+  const showMore = listings.length >= limit && filtered.length > 0;
+
+  async function handleShowMore() {
+    if (loadingMore) return;
+    const nextLimit = limit + SHOW_MORE_STEP;
+    setLoadingMore(true);
+    setMoreError(false);
+    try {
+      const res = await fetch(
+        `/api/seller/${encodeURIComponent(uid)}/listings?limit=${nextLimit}`
+      );
+      if (!res.ok) throw new Error('seller-listings-' + res.status);
+      const data = await res.json();
+      if (!Array.isArray(data.listings))
+        throw new Error('seller-listings-bad-shape');
+      // Legacy re-queries with the full new limit (newest-first), so a full
+      // replace — not an append — is the correct client behavior.
+      setListings(data.listings);
+      setLimit(nextLimit);
+    } catch {
+      setMoreError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const tabCls = (active: boolean) =>
     `rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
@@ -172,6 +220,23 @@ export default function StoreListingsGrid({
           {filtered.map((l) => (
             <ListingCardView key={l.id} l={l} />
           ))}
+        </div>
+      )}
+      {showMore && (
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={handleShowMore}
+            disabled={loadingMore}
+            className="rounded-lg bg-white text-emerald-700 border border-emerald-700 px-6 py-2.5 font-medium hover:bg-emerald-50 disabled:opacity-60"
+          >
+            {loadingMore ? 'جارٍ التحميل...' : 'عرض المزيد'}
+          </button>
+          {moreError && (
+            <p className="mt-2 text-sm text-red-600">
+              تعذّر تحميل المزيد. حاول مجددًا.
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -253,7 +253,13 @@ export async function fetchSeller(uid: string): Promise<SellerProfile | null> {
 
 // Seller's active listings — same card projection as the feed, plus a
 // sellerId == uid filter. Mirrors the seller.html grid query.
-export async function fetchSellerListings(uid: string, limit = 24): Promise<ListingCard[]> {
+// js/seller.js R3 parity: the seller grid loads 30 ads initially; the
+// 'عرض المزيد' (Show more) button adds 30 and re-queries the server.
+export const SELLER_LISTINGS_PAGE_SIZE = 30;
+export async function fetchSellerListings(
+  uid: string,
+  limit = SELLER_LISTINGS_PAGE_SIZE
+): Promise<ListingCard[]> {
   const url =
     FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const structuredQuery = {

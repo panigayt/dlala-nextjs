@@ -16,12 +16,12 @@ import { cacheLife } from 'next/cache';
 import FollowButton from './FollowButton';
 import SellerActions from './SellerActions';
 import RatingsList from './RatingsList';
-import SellerTabs from './SellerTabs';
-import StoreListingsGrid from './StoreListingsGrid';
+import SellerTabsSection from './SellerTabsSection';
 import {
   fetchSeller,
   fetchSellerListings,
   fetchSellerRatings,
+  SELLER_LISTINGS_PAGE_SIZE,
   type ListingCard,
   type SellerProfile,
   type SellerRating,
@@ -33,10 +33,11 @@ async function getSeller(uid: string): Promise<SellerProfile | null> {
   return fetchSeller(uid);
 }
 
+// js/seller.js R3 parity: the grid starts at 30 ads; "Show more" adds +30.
 async function getSellerListings(uid: string): Promise<ListingCard[]> {
   'use cache';
   cacheLife({ revalidate: 60 });
-  return fetchSellerListings(uid, 24);
+  return fetchSellerListings(uid, SELLER_LISTINGS_PAGE_SIZE);
 }
 
 function Header() {
@@ -381,11 +382,11 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
         </div>
       )}
 
-      <SellerTabs
+      <SellerTabsSection
         uid={uid}
         isPro={seller.storeTier === 'verified'}
-        listingsCount={listings.length}
-        listings={<StoreListingsGrid listings={listings} isPro={isPro} />}
+        initialListings={listings}
+        initialLimit={SELLER_LISTINGS_PAGE_SIZE}
         infos={
           <>
             <SellerInfosTab s={seller} />
