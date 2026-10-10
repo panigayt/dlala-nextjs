@@ -28,6 +28,10 @@ import {
   type FirebaseCompat,
 } from '../../lib/firebase-compat';
 import { authReturnTarget } from '../../lib/auth-return';
+import {
+  isDisposableEmail,
+  hasPlusAddress,
+} from '../../lib/auth-security';
 
 // Arabic user-facing strings — verbatim from js/i18n.ar.js (production).
 const STR = {
@@ -44,6 +48,8 @@ const STR = {
   pleaseWait: 'جارٍ الانتظار...',
   sdkLoadFailed: 'تعذر تحميل خدمة الدخول — تحقق من الاتصال وحاول مجدداً',
   usernameTaken: 'اسم المستخدم محجوز',
+  disposableEmail: 'البريد المؤقت غير مسموح — استخدم بريدًا حقيقيًا',
+  plusEmailNotAllowed: 'العناوين التي تحتوي + غير مسموحة — استخدم بريدك الأساسي',
   termsRequired: 'يجب الموافقة على شروط الاستخدام للتسجيل.',
   nameHint: 'بالأحرف اللاتينية فقط، مثال: Zak Benali',
   usernameHint: '3 إلى 20 حرفًا: a-z 0-9 . _',
@@ -346,6 +352,27 @@ export default function AuthPage() {
     try {
       fb = await getFirebase();
       const auth: CompatAuth = fb.auth();
+      // SECURITY (15 Sep 2026): block disposable/temporary email domains.
+      // js/auth.js parity — checked after the SDK loads, before the username
+      // registry pre-check.
+      if (isDisposableEmail(em)) {
+        if (mounted.current) {
+          setError(STR.disposableEmail);
+          setLoading(false);
+        }
+        return;
+      }
+      // SECURITY (15 Sep 2026): block plus-addressing (user+1@gmail.com)
+      // to prevent mass account creation with aliases.
+      // AUT-3 (16 Sep 2026): dedicated message — a plus-address is not a
+      // "disposable" email and must not say so.
+      if (hasPlusAddress(em)) {
+        if (mounted.current) {
+          setError(STR.plusEmailNotAllowed);
+          setLoading(false);
+        }
+        return;
+      }
       // m-15: check the username registry BEFORE creating the Auth account —
       // a taken handle used to fail the post-creation batch in ensureUserDoc(),
       // leaving an Auth account with no user doc (a stuck account). The batch
