@@ -14,15 +14,19 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import FollowButton from './FollowButton';
+import SellerActions from './SellerActions';
+import RatingsList from './RatingsList';
 import SellerTabs from './SellerTabs';
 import {
   fetchSeller,
   fetchSellerListings,
+  fetchSellerRatings,
   cardTitle,
   cardImage,
   formatPrice,
   type ListingCard,
   type SellerProfile,
+  type SellerRating,
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
@@ -263,6 +267,8 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
 
   let seller: SellerProfile | null = null;
   let listings: ListingCard[] = [];
+  let ratings: SellerRating[] | null = null;
+  let ratingsFailed = false;
   let error: string | null = null;
   try {
     const [s, ls] = await Promise.all([getSeller(uid), getSellerListings(uid)]);
@@ -276,12 +282,31 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
     return <NotFoundView />;
   }
 
+  // Ratings are secondary content (js/seller.js loadRatings): a failed
+  // fetch shows an error box with retry inside the Infos tab — it never
+  // fails the whole profile.
+  try {
+    ratings = await fetchSellerRatings(uid);
+  } catch {
+    ratingsFailed = true;
+  }
+
+  // Share dialog name — FD-003 parity: verified stores are branded by
+  // their store name.
+  const shareName =
+    seller.storeTier === 'verified' && seller.storeName
+      ? seller.storeName
+      : seller.name || seller.username || '';
+
   return (
     <main className="max-w-6xl mx-auto px-4 py-6" dir="rtl">
       <SellerProfileCard s={seller} />
 
-      <div className="mt-4">
-        <FollowButton storeUid={uid} />
+      <div className="mt-4 flex flex-wrap gap-3 items-stretch">
+        <div className="flex-1 min-w-[220px]">
+          <FollowButton storeUid={uid} />
+        </div>
+        <SellerActions uid={uid} storeName={shareName} />
       </div>
 
       <SellerTabs
@@ -301,7 +326,14 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
             </div>
           )
         }
-        infos={<SellerInfosTab s={seller} />}
+        infos={
+          <>
+            <SellerInfosTab s={seller} />
+            <div className="mt-4">
+              <RatingsList ratings={ratings} failed={ratingsFailed} />
+            </div>
+          </>
+        }
       />
     </main>
   );

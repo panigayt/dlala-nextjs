@@ -144,6 +144,66 @@ export async function fetchFeed(limit = 24, offset = 0): Promise<ListingCard[]> 
   return rawDocs.map(restDocToObj);
 }
 
+// js/seller.js — loadRatings (verbatim query shape): ratings where
+// rateeId == uid, limit 50, client-side createdAt DESC sort, slice 20.
+// No server orderBy: avoids the composite-index requirement (legacy parity).
+// Only buyer-confirmed-deal ratings are ever written to this collection,
+// so no status filter is needed.
+export interface SellerRating {
+  id: string;
+  stars: number; // 0..5 integer, clamped (XSS hardening, 15 Sep 2026)
+  raterName: string;
+  comment: string;
+  createdAt: Date | null;
+}
+
+export async function fetchSellerRatings(uid: string): Promise<SellerRating[]> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const structuredQuery = {
+    from: [{ collectionId: 'ratings' }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: 'rateeId' },
+        op: 'EQUAL',
+        value: { stringValue: String(uid) },
+      },
+    },
+    limit: 50,
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`seller-ratings-rest-${res.status}`);
+  }
+  const body = await res.json().catch(() => null);
+  const rawDocs = (Array.isArray(body) ? body : [])
+    .filter((r) => r.document)
+    .map((r) => r.document);
+  const toMs = (d: unknown): number =>
+    d instanceof Date && !isNaN(d.getTime()) ? d.getTime() : 0;
+  return rawDocs
+    .map((doc: { name: string; fields?: Record<string, unknown> }) => {
+      const fs = doc.fields || {};
+      // XSS hardening (15 Sep 2026): stars must be a 0..5 integer.
+      const st5 = Math.min(5, Math.max(0, Math.round(Number(restValue(fs.stars)) || 0)));
+      const c = restValue(fs.createdAt);
+      return {
+        id: String(doc.name.split('/').pop() || ''),
+        stars: st5,
+        raterName: String(restValue(fs.raterName) || ''),
+        comment: String(restValue(fs.comment) || ''),
+        createdAt: c instanceof Date ? c : null,
+      };
+    })
+    .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt))
+    .slice(0, 20);
+}
+
 export interface ListingDetail extends ListingCard {
   description?: Record<string, string>;
   quantity?: number;
