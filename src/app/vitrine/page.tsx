@@ -77,6 +77,45 @@ function dateOf(v: unknown): Date | null {
   return null;
 }
 
+// VITRINE REGISTRY (27 Sep 2026): keeps the public `vitrineSellers`
+// collection in sync. The home feed discovers vitrine candidates from
+// this registry — NOT by scanning listings — so it works at any catalog
+// size. Called after every vitrineIds save and after activation success.
+// Eligibility mirrors the feed's check: pro stores are always in;
+// ordinary sellers need an active boost AND at least one pick.
+// Mirrors js/vitrine.js syncVitrineRegistry (0.0.0.43).
+async function syncVitrineRegistry(
+  client: FirebaseClient,
+  uid: string,
+  u: Record<string, unknown>
+) {
+  try {
+    const isPro = u.storeTier === 'verified';
+    const picks = Array.isArray(u.vitrineIds) ? (u.vitrineIds as string[]) : [];
+    const boostUntil = dateOf(u.vitrineBoostUntil);
+    const boosted = !!boostUntil && boostUntil.getTime() > Date.now();
+    const eligible = !!(isPro || (boosted && picks.length > 0));
+    const docRef = client.db.collection('vitrineSellers').doc(uid);
+    if (eligible) {
+      await docRef.set(
+        {
+          sellerId: uid,
+          storeTier: (u.storeTier as string) || null,
+          vitrineIds: picks,
+          vitrineBoostUntil: u.vitrineBoostUntil || null,
+          updatedAt: client.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } else {
+      await docRef.delete().catch(() => {}); // already absent: fine
+    }
+  } catch (e) {
+    // Non-fatal: the seller's own vitrineIds save already succeeded.
+    console.error('[vitrine] registry sync failed', e);
+  }
+}
+
 type BoxState =
   | { kind: 'loading' }
   | { kind: 'error' }
@@ -188,6 +227,14 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     try {
       // Save picks first
       await client.db.collection('users').doc(user.uid).update({ vitrineIds: picked });
+      // VITRINE REGISTRY (27 Sep 2026): keep the public discovery registry
+      // in sync so the home feed finds this seller at any catalog size.
+      try {
+        const snap = await client.db.collection('users').doc(user.uid).get();
+        const udata = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+        udata.vitrineIds = picked;
+        await syncVitrineRegistry(client, user.uid, udata);
+      } catch (e) { console.error('[vitrine] registry sync failed', e); }
       const { ok, body } = await callFn();
       if (!ok) {
         const code = String(body?.error?.status || '').toLowerCase();
@@ -196,6 +243,13 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
         setMsg(T.errorGeneric);
         return;
       }
+      // VITRINE REGISTRY (27 Sep 2026): activation succeeded — sync the
+      // public registry so the home feed discovers this seller.
+      try {
+        const usnap = await client.db.collection('users').doc(user.uid).get();
+        const udata = (usnap.exists ? usnap.data() : {}) as Record<string, unknown>;
+        await syncVitrineRegistry(client, user.uid, udata);
+      } catch (e) { console.error('[vitrine] registry sync failed', e); }
       await load();
     } catch {
       setMsg(T.errorGeneric);
