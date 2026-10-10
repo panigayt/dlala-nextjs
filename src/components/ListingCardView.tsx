@@ -64,7 +64,7 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
           <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
         )}
         {(showWantedBadge || l.status === 'sold' || l.isWholesale || reduced || isSeeker || isOffer) && (
-          <div className="absolute top-2 right-2 flex flex-col items-start gap-1">
+          <div className="absolute top-2 start-2 flex flex-col items-start gap-1">
             {showWantedBadge && (
               <span className="rounded-md bg-orange-500 px-2.5 py-0.5 text-xs font-bold text-white">{t('wantedBadge')}</span>
             )}
@@ -92,7 +92,7 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
           </div>
         )}
       </div>
-      <div className="p-3">
+      <div className="px-3 pt-[10px] pb-[10px]">
         <div className="flex items-center gap-2">
           {/* Interactive favorite pill — Zak 21 Sep option B white-pill
               model (inline heart + count next to the price, pill first in
@@ -113,7 +113,7 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
             {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
           </p>
         </div>
-        <h3 className="mt-1 text-sm text-zinc-900 whitespace-nowrap overflow-hidden text-ellipsis" style={{unicodeBidi: 'plaintext'}}>
+        <h3 className="mt-1 mb-1 text-sm text-zinc-900 whitespace-nowrap overflow-hidden text-ellipsis" style={{unicodeBidi: 'plaintext'}}>
           {cardTitle(l)}
           {/* 16 Sep 2026 parity (js/app.js markProCards): gold pro badge
               appended inside the card title for verified pro merchants. */}

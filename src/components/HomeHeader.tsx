@@ -80,7 +80,7 @@ function CategoryChips() {
 function HomeFilters() {
   const { t, lang } = useLang();
   const ctl =
-    'rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-2 text-base text-zinc-900';
+    'rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-[9px] text-base text-zinc-900';
   return (
     <form action="/search" method="get" className="flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#e5e7eb] rounded-xl p-3">
       <label htmlFor="home-wilaya" className="sr-only">

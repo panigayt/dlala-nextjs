@@ -383,7 +383,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           there is neither (0.0.0.31 FIX-WEB-027). Buttons row: view
           store/profile link + report-user button. */}
       <OwnerSellerCard sellerId={l.sellerId}>
-      <div className="mt-4 rounded-xl bg-white border border-[#e5e7eb] shadow-[0_1px_3px_rgba(16,24,20,.06)] p-[18px]">
+      <div className="mt-4 rounded-xl bg-white border border-[#e5e7eb] shadow-[0_1px_3px_rgba(16,24,20,.06)] p-[10px]">
         {/* js/listing.js loadSeller full-card parity: heading + identity row
             (name left, .follow-btn right) + rating row + view-store/page +
             report-user buttons. Trilingual via ListingShell. OwnerSellerCard
