@@ -39,3 +39,13 @@ body {
 .g-hero { transition: filter .45s ease; }
 .g-hero.blurred { filter: blur(12px); }
 @media (prefers-reduced-motion: reduce) { .g-hero { transition: none; } }
+
+/* Card badges — verbatim from css/style.css (js/app.js listingCard, HOM-4).
+   .badge-own: "yours" marker — end side, below the wholesale slot so it never
+   overlaps the sold/wholesale/reduced badges (16 Sep 2026). */
+.badge {
+  position: absolute; top: 8px; inset-inline-start: 8px;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff;
+}
+.badge-own { background: #0b6b4f; }
+.badge-own { inset-inline-start: auto; inset-inline-end: 8px; top: 34px; }

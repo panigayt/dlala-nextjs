@@ -12,6 +12,7 @@ import { dzPriceWords } from '@/lib/dz-price';
 import TimeAgo from '@/components/TimeAgo';
 import FavoriteToggle from '@/components/FavoriteToggle';
 import BlurUpImage from '@/components/BlurUpImage';
+import { OwnBadge, ProBadge } from '@/components/CardMarkers';
 
 function wilayaName(code: number | undefined): string {
   if (!code) return '';
@@ -39,9 +40,12 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
     <a
       href={`/listing/${l.id}`}
       data-sid={l.sellerId || ''}
-      className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+      className="block relative rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
       dir="rtl"
     >
+      {/* HOM-4 parity (js/app.js markOwnCards): "yours" badge, positioned
+          against the card (absolute vs this relative anchor). */}
+      <OwnBadge sellerId={l.sellerId || ''} />
       <div className="relative aspect-[4/3] bg-zinc-100">
         {img ? (
           <BlurUpImage
@@ -103,7 +107,12 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
             {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
           </p>
         </div>
-        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
+        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
+          {cardTitle(l)}
+          {/* 16 Sep 2026 parity (js/app.js markProCards): gold pro badge
+              appended inside the card title for verified pro merchants. */}
+          <ProBadge sellerId={l.sellerId || ''} />
+        </h3>
         {metaBits && <p className="mt-1 text-xs text-zinc-600">{metaBits}</p>}
         <p className="mt-1 text-xs text-zinc-500">
           {l.createdAt ? <TimeAgo iso={l.createdAt.toISOString()} /> : ''}

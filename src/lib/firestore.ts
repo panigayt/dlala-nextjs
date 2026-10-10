@@ -7,8 +7,8 @@
 //                                        restValue, restDocToObj, cardSelectClause)
 //   ~/workspace/dlala-040/js/home.js    (buildFeedRestQuery default branch)
 
-const FIREBASE_API_KEY = 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M';
-const FIRESTORE_REST_BASE =
+export const FIREBASE_API_KEY = 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M';
+export const FIRESTORE_REST_BASE =
   'https://firestore.googleapis.com/v1/projects/dlala-85cea/databases/(default)/documents';
 
 // js/app.js — CARD_REST_FIELDS (verbatim, same order)
