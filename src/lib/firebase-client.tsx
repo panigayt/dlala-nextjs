@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { tasteMirrorUid } from '@/lib/taste';
 
 export const FIREBASE_CONFIG = {
   apiKey: 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M',
@@ -182,8 +183,12 @@ export function useRequireAuth(): AuthState {
         unsub = client.auth.onAuthStateChanged((u) => {
           if (cancelled) return;
           if (u) {
+            // js/app.js attachAuth parity: mirror the uid so on-device
+            // stores (taste, snapshots) split registered vs guest.
+            tasteMirrorUid(u.uid);
             setState({ status: 'signed-in', user: u, client });
           } else {
+            tasteMirrorUid(null);
             setState({ status: 'signed-out' });
             window.location.href = '/auth';
           }
@@ -213,6 +218,9 @@ export function useAuthState(): AuthState {
         if (cancelled) return;
         unsub = client.auth.onAuthStateChanged((u) => {
           if (cancelled) return;
+          // js/app.js attachAuth parity: mirror the uid so on-device
+          // stores (taste, snapshots) split registered vs guest.
+          tasteMirrorUid(u ? u.uid : null);
           if (u) setState({ status: 'signed-in', user: u, client });
           else setState({ status: 'signed-out' });
         });

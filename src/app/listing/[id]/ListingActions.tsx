@@ -36,6 +36,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { getFirebase, withTimeout } from '@/lib/firebase-compat';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
+import { tasteNoteFav } from '@/lib/taste';
 
 // Verbatim strings from js/i18n.ar.js
 const STR = {
@@ -392,6 +393,14 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       }
       await withTimeout(batch.commit(), 15000);
       if (mounted.current) setFav(!snap.exists);
+      // js/taste.js tasteNoteFav (via js/app.js toggleFavorite): a
+      // successful toggle IS new behavior — the taste stamp refreshes even
+      // before the favorites snapshot does.
+      try {
+        tasteNoteFav(listingId);
+      } catch {
+        /* never break the favorite toggle */
+      }
     } catch (e) {
       console.error(e);
       // BUG-5 fix (legacy): never trust the in-memory state here. Ask the

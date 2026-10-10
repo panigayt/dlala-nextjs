@@ -39,6 +39,7 @@ import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import Gallery from './Gallery';
+import TasteViewRecorder from './TasteViewRecorder';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -270,6 +271,18 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
+      {/* js/taste.js tasteRecordView (via js/listing.js): every non-owner
+          view is an on-device taste signal. Owner views are excluded
+          inside tasteRecordView via the dlala_uid mirror. */}
+      <TasteViewRecorder
+        listing={{
+          id,
+          categoryId: l.categoryId,
+          price: l.price,
+          wilayaCode: l.wilayaCode,
+          sellerId: l.sellerId,
+        }}
+      />
       {jsonLdScript && (
         <script
           type="application/ld+json"

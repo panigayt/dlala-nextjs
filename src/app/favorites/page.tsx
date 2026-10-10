@@ -25,6 +25,7 @@ import AuthGate, { PageHeader } from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
+import { tasteNoteFav } from '@/lib/taste';
 
 const FAV_PAGE = 60;
 
@@ -44,6 +45,12 @@ interface LiveListing {
   status?: string;
   isWanted?: boolean;
   exists: boolean;
+  // Carried at runtime via the ...data spread in hydratePage; declared here
+  // so the taste favorites snapshot (js/snapshot.js parity) can project
+  // them with types instead of casts.
+  categoryId?: string;
+  category?: string;
+  wilayaCode?: number;
 }
 
 type CardStatus = 'ok' | 'deleted' | 'failed';
@@ -168,6 +175,34 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       }
       cursorRef.current = lastDoc;
       setCards(page);
+      // js/favorites.js 0.0.0.22 + js/snapshot.js: save the first page so
+      // the taste personalization (tasteReadFavs in @/lib/taste) sees the
+      // favorites' category/price/wilaya signals. Same key, envelope
+      // ({v:1, ts, data}) and 10-minute TTL contract as legacy.
+      try {
+        const pairs = page
+          .filter((c) => c.status === 'ok' && c.live)
+          .map((c) => ({
+            live: {
+              id: String(c.live!.id || ''),
+              categoryId: String(
+                c.live!.categoryId || c.live!.category || ''
+              ),
+              price: Number(c.live!.price) || 0,
+              wilayaCode: Number(c.live!.wilayaCode) || 0,
+            },
+            fav: { listingId: c.fav.listingId },
+          }))
+          .filter((p) => p.live.categoryId);
+        if (pairs.length) {
+          localStorage.setItem(
+            'dlala_snap_favorites_' + user.uid,
+            JSON.stringify({ v: 1, ts: Date.now(), data: { cards: pairs } })
+          );
+        }
+      } catch {
+        /* best-effort — the live path still works */
+      }
       setHasMore(full);
     } catch (e) {
       if (!mounted.current) return;
@@ -266,6 +301,13 @@ function FavoritesContent({ user }: { user: CompatUser }) {
           await withTimeout(db.doc(`listingFavoriters/${listingId}/users/${user.uid}`).delete(), 15000);
         } catch {
           // non-fatal
+        }
+        // js/taste.js tasteNoteFav: a successful toggle IS new behavior —
+        // the taste stamp refreshes even before the snapshot above does.
+        try {
+          tasteNoteFav(listingId);
+        } catch {
+          /* never break the remove flow */
         }
         if (mounted.current) {
           setCards((prev) => (prev ? prev.filter((c) => c.fav.listingId !== listingId) : prev));
