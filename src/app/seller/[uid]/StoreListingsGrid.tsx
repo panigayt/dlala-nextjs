@@ -12,75 +12,9 @@
 //   ads; the button adds +30 and re-queries the server with the new limit.
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  cardTitle,
-  cardImage,
-  formatPrice,
-  type ListingCard,
-} from '@/lib/firestore';
+import { type ListingCard } from '@/lib/firestore';
 import { catName } from '@/lib/categories';
-import { WILAYAS } from '@/lib/wilayas';
-import TimeAgo from '@/components/TimeAgo';
-import BlurUpImage from '@/components/BlurUpImage';
-
-function wilayaName(code: number | undefined): string {
-  if (!code) return '';
-  const w = (WILAYAS as { code: number; ar: string }[]).find(
-    (x) => x.code === Number(code)
-  );
-  return w ? `${w.code} - ${w.ar}` : '';
-}
-
-function ListingCardView({ l }: { l: ListingCard }) {
-  const img = cardImage(l);
-  const createdIso =
-    l.createdAt instanceof Date
-      ? l.createdAt.toISOString()
-      : typeof l.createdAt === 'string'
-        ? l.createdAt
-        : '';
-  return (
-    <a
-      href={`/listing/${l.id}`}
-      className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-      dir="rtl"
-    >
-      <div className="relative aspect-[4/3] bg-zinc-100">
-        {img ? (
-          <BlurUpImage
-            listing={l}
-            img={img}
-            alt={cardTitle(l)}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">
-            📷
-          </div>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-bold text-emerald-700 text-lg">
-          {formatPrice(l.price || 0)}
-        </p>
-        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
-          {cardTitle(l)}
-        </h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          {wilayaName(l.wilayaCode)}
-          {createdIso ? (
-            <>
-              {' · '}
-              <TimeAgo iso={createdIso} />
-            </>
-          ) : (
-            ''
-          )}
-        </p>
-      </div>
-    </a>
-  );
-}
+import ListingCardView from '@/components/ListingCardView';
 
 // js/seller.js storeSearchHaystack parity.
 function haystack(l: ListingCard): string {

@@ -12,6 +12,7 @@ import { cardTitle, cardImage, formatPrice, type ListingCard } from '@/lib/fires
 import { markVitrineInteracted, type VitrineShowcase as Showcase } from '@/lib/vitrine';
 import TimeAgo from '@/components/TimeAgo';
 import BlurUpImage from '@/components/BlurUpImage';
+import FavoriteToggle from '@/components/FavoriteToggle';
 
 function condLabel(cond: string | undefined): string {
   if (cond === 'new') return 'جديد';
@@ -44,6 +45,19 @@ function MiniProduct({ p }: { p: ListingCard }) {
             <span className="absolute bottom-1 right-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white">
               ♥ {favCount}
             </span>
+          )}
+          {/* 16 Sep 2026 (js/home.js .fav-heart.vitrine-fav parity): minis
+              carry interactive hearts — own listings and sold get none. */}
+          {p.status !== 'sold' && (
+            <FavoriteToggle
+              compact
+              listingId={p.id}
+              sellerId={p.sellerId || ''}
+              initialCount={favCount}
+              title={cardTitle(p)}
+              price={p.price || 0}
+              photoUrl={img || ''}
+            />
           )}
         </div>
       </Link>

@@ -68,9 +68,15 @@ interface Props {
   title: string;
   price: number;
   photoUrl: string;
+  /**
+   * Compact glyph-only overlay (vitrine minis, js/home.js .fav-heart.vitrine-fav
+   * parity): no count pill, 30px white disc positioned by the parent.
+   * The parent must be `relative`; this renders an absolute overlay.
+   */
+  compact?: boolean;
 }
 
-export default function FavoriteToggle({ listingId, sellerId, initialCount, title, price, photoUrl }: Props) {
+export default function FavoriteToggle({ listingId, sellerId, initialCount, title, price, photoUrl, compact }: Props) {
   const router = useRouter();
   const auth = useAuthState();
   // null = checking (never a false ♡/♥)
@@ -253,6 +259,36 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
   if (isOwn) return null;
 
   const count = Math.max(0, initialCount + delta);
+
+  // Compact overlay for vitrine minis (js/home.js .fav-heart.vitrine-fav
+  // parity): glyph-only 30px white disc, no count pill. The parent thumbnail
+  // is `relative`; this anchors to its inline-start/top corner.
+  if (compact) {
+    return (
+      <span className="absolute start-1.5 top-1.5 z-10">
+        <button
+          type="button"
+          onClick={onTap}
+          data-fid={listingId}
+          aria-pressed={fav === true}
+          aria-busy={fav === null}
+          aria-label={STR.favorites}
+          className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/90 text-[15px] leading-none shadow-sm"
+          style={{ color: fav === true ? '#e0245e' : '#666' }}
+        >
+          <span aria-hidden="true">{fav === true ? '♥' : '♡'}</span>
+        </button>
+        {toast && (
+          <span
+            role="status"
+            className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
+          >
+            {toast}
+          </span>
+        )}
+      </span>
+    );
+  }
 
   return (
     <span className="relative inline-flex">
