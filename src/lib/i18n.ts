@@ -185,6 +185,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     loginToFavorite: 'سجّل الدخول لإضافة الإعلان إلى المفضلة',
     discoverStore: 'اكتشف متجر',
     wantedBadge: 'مطلوب', sold: 'مباع', wholesale: 'الجملة',
+    noWanted: 'لا توجد إعلانات مطلوب حالياً', // verbatim js/i18n.ar.js:134
+    wantedPublishCta: 'انشر إعلان مطلوب', // port-added (wanted page publish CTA)
     priceReduced: 'انخفض السعر', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
     // Listing detail page (Round 108) — verbatim js/i18n.ar.js unless noted.
     loginToContact: 'سجّل الدخول لمراسلة البائع',
@@ -511,6 +513,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     loginToFavorite: 'Connectez-vous pour ajouter cette annonce aux favoris',
     discoverStore: 'Découvrez la boutique',
     wantedBadge: 'Recherché', sold: 'Vendu', wholesale: 'Gros',
+    noWanted: 'Aucune annonce recherchée pour le moment', // verbatim js/i18n.fr.js:134
+    wantedPublishCta: 'Publier une annonce recherchée', // port-added (wanted page publish CTA)
     priceReduced: 'Prix réduit', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
     // Listing detail page (Round 108) — verbatim js/i18n.fr.js unless noted.
     loginToContact: 'Connectez-vous pour contacter le vendeur',
@@ -837,6 +841,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     loginToFavorite: 'Sign in to save this listing to your favorites',
     discoverStore: 'Discover the store',
     wantedBadge: 'Wanted', sold: 'Sold', wholesale: 'Wholesale',
+    noWanted: 'No wanted ads right now', // verbatim js/i18n.en.js:134
+    wantedPublishCta: 'Post a wanted ad', // port-added (wanted page publish CTA)
     priceReduced: 'Price reduced', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
     // Listing detail page (Round 108) — verbatim js/i18n.en.js unless noted.
     loginToContact: 'Sign in to contact the seller',
