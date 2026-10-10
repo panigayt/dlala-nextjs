@@ -5,6 +5,8 @@
 // the wanted listing page under the «عروض مطابقة لطلبك» heading
 // (js/listing.js loadMatches, isWanted branch).
 
+import { normalizeListingTitle } from './duplicates';
+
 // 0.0.0.31 FIX-WEB-020: AR/FR stop words — without them «سيارة»/«voiture»
 // matched nearly every ad, and ONE shared word (e.g. the year) was enough
 // to pair «Symbol 2018» with «Clio 2019».
@@ -67,4 +69,48 @@ export function matchingOffers(
     for (const w of lw) if (words.has(w) && ++shared >= 2) return true;
     return false;
   });
+}
+
+// ---------------------------------------------------------------------------
+// js/market.js — matchVerifiedStores (verbatim logic, Round 93).
+//
+// Verified-store cards atop search results (js/home.js 0.0.0.1m, Zak).
+// Pure: match verified stores against a search query. Arabic-aware (reuses
+// normalizeListingTitle), matches storeName or username, strips a leading @,
+// verified-only, capped at `max`.
+// Ranking (20 Sep 2026 review, Zak): exact @username first, then exact
+// normalized store name, then partial matches — within each tier the
+// most-followed store comes first. Exact duplicate verified store names will
+// be rejected at admin approval, so the exact-name tier normally holds one store.
+export interface MatchableStore {
+  storeTier?: string;
+  storeName?: string;
+  username?: string;
+  followerCount?: number;
+}
+
+export function matchVerifiedStores<T extends MatchableStore>(
+  stores: T[] | null | undefined,
+  query: unknown,
+  max?: number
+): T[] {
+  const m = max || 3;
+  let q = String(query || '').trim();
+  if (q.charAt(0) === '@') q = q.slice(1);
+  q = normalizeListingTitle(q);
+  if (!q) return [];
+  const out: { s: T; tier: number; fc: number }[] = [];
+  (stores || []).forEach((s) => {
+    if (!s || s.storeTier !== 'verified') return;
+    const name = normalizeListingTitle(s.storeName || '');
+    const uname = normalizeListingTitle(s.username || '');
+    const nameHit = name !== '' && name.indexOf(q) !== -1;
+    const unameHit = uname !== '' && uname.indexOf(q) !== -1;
+    if (!nameHit && !unameHit) return;
+    // 0 = exact username, 1 = exact normalized store name, 2 = partial.
+    const tier = uname !== '' && uname === q ? 0 : name !== '' && name === q ? 1 : 2;
+    out.push({ s, tier, fc: Number(s.followerCount) || 0 });
+  });
+  out.sort((a, b) => a.tier - b.tier || b.fc - a.fc);
+  return out.slice(0, m).map((e) => e.s);
 }

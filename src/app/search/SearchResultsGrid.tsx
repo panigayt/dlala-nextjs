@@ -18,6 +18,7 @@ import {
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
+import StoreMatchCards from './StoreMatchCards';
 import { filtersToQuery } from './filters';
 
 function wilayaName(code: number | undefined): string {
@@ -108,6 +109,10 @@ export default function SearchResultsGrid({
       <p id="resultsMeta" role="status" className="text-sm text-zinc-500 mb-3">
         {resultsCountText(total, 'ar')}
       </p>
+      {/* js/home.js 0.0.0.1m (Zak): verified-store cards above the results
+          when the text query matches a pro store — background fetch, fails
+          closed. Mounted once: "عرض المزيد" appends never re-trigger it. */}
+      <StoreMatchCards q={filters.q || ''} />
       {listings.length === 0 ? (
         <div className="rounded-xl bg-white p-8 text-center text-zinc-500">
           <p className="text-lg">لا توجد نتائج مطابقة</p>

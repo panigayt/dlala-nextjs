@@ -251,6 +251,91 @@ export async function fetchSeller(uid: string): Promise<SellerProfile | null> {
   return o as unknown as SellerProfile;
 }
 
+// js/home.js — fetchVerifiedStores (0.0.0.1m, Zak): verified-store cards
+// atop search results. The users-list rule allows public listing ONLY of
+// storeTier=='verified' docs, so this single-field query works for guests
+// too; it fails closed ([]) until the rules/mirror carry the field.
+// 0.0.0.1n (Zak): a failed fetch no longer poisons the whole session —
+// retry at most every 30s. Server-side analog: module cache (5-min TTL)
+// + 30s fail-retry suppression.
+export interface VerifiedStore {
+  uid: string;
+  storeName?: string;
+  username?: string;
+  storeLogoUrl?: string;
+  storeWilaya?: number;
+  followerCount?: number;
+  storeTier?: string;
+}
+
+let verifiedStoresCache: VerifiedStore[] | null = null;
+let verifiedStoresCacheAt = 0;
+let verifiedStoresFailAt = 0;
+const VERIFIED_STORES_TTL_MS = 5 * 60 * 1000;
+const VERIFIED_STORES_FAIL_RETRY_MS = 30 * 1000;
+
+export async function fetchVerifiedStores(): Promise<VerifiedStore[]> {
+  const now = Date.now();
+  if (verifiedStoresCache && now - verifiedStoresCacheAt < VERIFIED_STORES_TTL_MS) {
+    return verifiedStoresCache;
+  }
+  if (now - verifiedStoresFailAt < VERIFIED_STORES_FAIL_RETRY_MS) return [];
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const structuredQuery = {
+    from: [{ collectionId: 'users_public' }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: 'storeTier' },
+        op: 'EQUAL',
+        value: { stringValue: 'verified' },
+      },
+    },
+    select: {
+      fields: [
+        { fieldPath: 'storeName' },
+        { fieldPath: 'username' },
+        { fieldPath: 'storeLogoUrl' },
+        { fieldPath: 'storeWilaya' },
+        { fieldPath: 'followerCount' },
+        { fieldPath: 'storeTier' },
+      ],
+    },
+    limit: 50,
+  };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`verified-stores-${res.status}`);
+    const body = await res.json().catch(() => null);
+    const out: VerifiedStore[] = [];
+    for (const r of Array.isArray(body) ? body : []) {
+      const d = r?.document;
+      if (!d || !d.fields) continue;
+      const f = d.fields as Record<string, unknown>;
+      out.push({
+        uid: String(d.name.split('/').pop() || ''),
+        storeName: restValue(f.storeName) as string | undefined,
+        username: restValue(f.username) as string | undefined,
+        storeLogoUrl: restValue(f.storeLogoUrl) as string | undefined,
+        storeWilaya: restValue(f.storeWilaya) as number | undefined,
+        followerCount: restValue(f.followerCount) as number | undefined,
+        storeTier: restValue(f.storeTier) as string | undefined,
+      });
+    }
+    verifiedStoresCache = out;
+    verifiedStoresCacheAt = now;
+    return out;
+  } catch {
+    verifiedStoresFailAt = now;
+    return [];
+  }
+}
+
 // Seller's active listings — same card projection as the feed, plus a
 // sellerId == uid filter. Mirrors the seller.html grid query.
 // js/seller.js R3 parity: the seller grid loads 30 ads initially; the
