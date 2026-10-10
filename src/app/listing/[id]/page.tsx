@@ -20,6 +20,7 @@ import {
   cardTitle,
   cardImage,
   formatPrice,
+  viewsText,
   type ListingCard,
   type ListingDetail,
 } from '@/lib/firestore';
@@ -331,12 +332,15 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
               <b><TimeAgo iso={l.createdAt.toISOString()} /></b>
             </div>
           )}
-          {typeof l.views === 'number' && (
-            <div>
-              <span className="text-zinc-500">المشاهدات: </span>
-              <b>{l.views}</b>
-            </div>
-          )}
+        </div>
+        {/* js/app.js FIX-WEB-025 parity: stat-row under the meta grid —
+            views with proper Arabic plurals + favorite count (public
+            popularity signal). Legacy markup:
+            <div class="stat-row"><span>👁 viewsText(l.views)</span>
+            <span>♥ favCount inFavorites</span></div>. */}
+        <div className="mt-2.5 flex flex-wrap gap-x-[18px] gap-y-1 text-[13px] text-zinc-500">
+          <span>👁 {viewsText(l.views)}</span>
+          <span>♥ {Number(l.favoriteCount) || 0} في المفضلة</span>
         </div>
         {/* Favorite + contact seller (client component — needs auth state) */}
         {l.sellerId && (

@@ -677,6 +677,23 @@ export function resultsCountText(n: number, lang = 'ar'): string {
   return n === 1 ? '1 result' : n + ' results';
 }
 
+// 0.0.0.31 FIX-WEB-025: proper plurals for the views counter
+// (AR: مشاهدة واحدة/مشاهدتان/مشاهدات/مشاهدة).
+// Verbatim port of js/app.js viewsText — LANG replaced by a lang param
+// (default 'ar'), pure and unit-tested like resultsCountText.
+export function viewsText(n: number | null | undefined, lang = 'ar'): string {
+  n = Math.max(0, Math.floor(Number(n) || 0));
+  if (lang === 'ar') {
+    if (n === 0) return 'لا مشاهدات';
+    if (n === 1) return 'مشاهدة واحدة';
+    if (n === 2) return 'مشاهدتان';
+    if (n <= 10) return `${n} مشاهدات`;
+    return `${n} مشاهدة`;
+  }
+  if (lang === 'fr') return n <= 1 ? `${n} vue` : `${n} vues`;
+  return n === 1 ? '1 view' : `${n} views`;
+}
+
 // js/home.js paging constants — DEEP_POOL = 60 (single deep fetch when
 // client-side refinements need room), MAX_SEARCH_MATCHES = 60 (text-search
 // match cap), PAGE_SIZE = 24 (docs per page).
