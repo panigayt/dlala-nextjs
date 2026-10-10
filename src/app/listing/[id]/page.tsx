@@ -9,17 +9,20 @@
 //   - Public view renders without auth; sold/hidden docs (403 anonymous)
 //     render the trilingual 404.
 
-import { Suspense } from 'react';
+import { Suspense, Fragment } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import {
   fetchListing,
+  fetchSimilarListings,
   cardTitle,
   cardImage,
   formatPrice,
+  type ListingCard,
   type ListingDetail,
 } from '@/lib/firestore';
+import { answerRows } from '@/lib/answers';
 import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
@@ -75,6 +78,48 @@ function Header() {
   );
 }
 
+// Card for the similar-ads grid — mirrors the seller page's
+// ListingCardView (same markup, Link instead of plain anchor).
+function SimilarCard({ l }: { l: ListingCard }) {
+  const img = cardImage(l);
+  return (
+    <Link
+      href={`/listing/${l.id}`}
+      className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+      dir="rtl"
+    >
+      <div className="relative aspect-[4/3] bg-zinc-100">
+        {img ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={img}
+            alt={cardTitle(l)}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="font-bold text-emerald-700 text-lg">{formatPrice(l.price || 0)}</p>
+        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
+        <p className="mt-1 text-xs text-zinc-500">
+          {wilayaName(l.wilayaCode)}
+          {l.createdAt ? (
+            <>
+              {' · '}
+              <TimeAgo iso={l.createdAt.toISOString()} />
+            </>
+          ) : (
+            ''
+          )}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
 function ListingSkeleton() {
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
@@ -111,6 +156,18 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
   const mainPhoto = photos[0] || cardImage(l);
   const title = cardTitle(l);
+  // js/app.js renderAnswers parity: structured category Q&A.
+  const rows = answerRows(l.answers);
+  // js/listing.js loadMatches parity: similar ads (same category, max 12).
+  // null = fetch failed -> render nothing (legacy catch behavior).
+  let similar: ListingCard[] | null = null;
+  if (l.categoryId) {
+    try {
+      similar = await fetchSimilarListings(l.categoryId, Number(l.wilayaCode) || 0, id);
+    } catch {
+      similar = null;
+    }
+  }
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
@@ -235,6 +292,37 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
           <h2 className="text-lg font-semibold mb-2">الوصف</h2>
           <p className="whitespace-pre-wrap text-zinc-800">{description(l)}</p>
+        </div>
+      )}
+
+      {/* Answers box — structured category Q&A (js/app.js renderAnswers) */}
+      {rows.length > 0 && (
+        <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
+          <h2 className="text-lg font-semibold mb-2">التفاصيل</h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 mt-2 text-sm">
+            {rows.map((r, i) => (
+              <Fragment key={i}>
+                <dt className="text-zinc-500">{r.label}</dt>
+                <dd className="text-zinc-900">{r.value}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {/* Similar ads — same category, max 12 (js/listing.js loadMatches) */}
+      {similar !== null && (
+        <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
+          <h2 className="text-lg font-semibold mb-4">إعلانات مشابهة</h2>
+          {similar.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {similar.map((s) => (
+                <SimilarCard key={s.id} l={s} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-zinc-500">لا توجد إعلانات مشابهة حالياً</p>
+          )}
         </div>
       )}
 

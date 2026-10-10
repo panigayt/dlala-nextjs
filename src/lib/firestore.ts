@@ -256,6 +256,106 @@ export async function fetchListing(id: string): Promise<ListingDetail | null> {
   return restDocToObj(doc) as ListingDetail;
 }
 
+// js/listing.js — fetchSimilarRest + the LIS-6 client refine (verbatim
+// logic, server-side here).
+//
+// S-39 (0.0.0.21): the unconstrained 40-doc window contained zero docs
+// from the viewer's wilaya, so every listing showed the SAME 12 "similar"
+// ads. Constrain to the viewer's wilaya first (orderBy createdAt desc,
+// limit 12), falling back to recent ads across wilayas when fewer than 12
+// match. The wilaya query needs the composite index
+// (categoryId, wilayaCode, status, createdAt) — until it exists the
+// failure is caught and the old unfiltered window is used instead.
+//
+// R11-ST31: both queries fire in parallel and merge (dedupe by id, wilaya
+// hits first). LIS-6: same category, not this ad, not wanted, not sold;
+// same wilaya first, then newest; max 12.
+export async function fetchSimilarListings(
+  categoryId: string,
+  wilayaCode: number,
+  excludeId: string
+): Promise<ListingCard[]> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const baseFilters: Record<string, unknown>[] = [
+    {
+      fieldFilter: {
+        field: { fieldPath: 'categoryId' },
+        op: 'EQUAL',
+        value: { stringValue: String(categoryId) },
+      },
+    },
+    {
+      fieldFilter: {
+        field: { fieldPath: 'status' },
+        op: 'IN',
+        value: {
+          arrayValue: {
+            values: [{ stringValue: 'available' }, { stringValue: 'negotiating' }],
+          },
+        },
+      },
+    },
+  ];
+  const runQuery = async (withWilaya: boolean, limit: number): Promise<ListingCard[]> => {
+    const filters = withWilaya
+      ? baseFilters.concat([
+          {
+            fieldFilter: {
+              field: { fieldPath: 'wilayaCode' },
+              op: 'EQUAL',
+              value: { integerValue: String(Number(wilayaCode)) },
+            },
+          },
+        ])
+      : baseFilters.slice();
+    const structuredQuery = {
+      from: [{ collectionId: 'listings' }],
+      where: { compositeFilter: { op: 'AND', filters } },
+      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+      select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
+      limit,
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery }),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`similar-rest-${res.status}`);
+    const body = await res.json().catch(() => null);
+    const rawDocs = (Array.isArray(body) ? body : [])
+      .filter((r) => r.document)
+      .map((r) => r.document);
+    return rawDocs.map(restDocToObj);
+  };
+  const w = Number(wilayaCode) || 0;
+  const wilayaP = w > 0 ? runQuery(true, 12).catch(() => [] as ListingCard[]) : Promise.resolve([] as ListingCard[]);
+  const windowP = runQuery(false, 40).catch(() => [] as ListingCard[]);
+  const [wilayaDocs, windowDocs] = await Promise.all([wilayaP, windowP]);
+  const docs = wilayaDocs.slice();
+  const seen = new Set(docs.map((d) => d.id));
+  for (const d of windowDocs) {
+    if (seen.has(d.id)) continue;
+    seen.add(d.id);
+    docs.push(d);
+    if (docs.length >= 12) break;
+  }
+  const createdMs = (d: ListingCard): number => {
+    const c = d.createdAt;
+    if (c instanceof Date) return c.getTime();
+    return 0;
+  };
+  return docs
+    .filter((d) => d.id !== excludeId && !d.isWanted)
+    .sort(
+      (a, b) =>
+        (Number(b.wilayaCode) === w ? 1 : 0) - (Number(a.wilayaCode) === w ? 1 : 0) ||
+        createdMs(b) - createdMs(a)
+    )
+    .slice(0, 12);
+}
+
 // js/market.js — normSearchText (verbatim logic)
 export function normSearchText(s: unknown): string {
   return String(s || '')
