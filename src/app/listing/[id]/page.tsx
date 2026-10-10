@@ -28,6 +28,7 @@ import {
 } from '@/lib/firestore';
 
 import { WILAYAS } from '@/lib/wilayas';
+import { dzPriceWords } from '@/lib/dz-price';
 import {
   SITE,
   SITE_TAGLINE,
@@ -207,6 +208,11 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
     (p, i) => (l.photo_thumbs && l.photo_thumbs[i]) || (l.thumbUrls && l.thumbUrls[i]) || p
   );
   const title = cardTitle(l);
+  // Round 128 (js/app.js priceWordsHtml / detailPriceHtml parity, 0.0.0.39):
+  // the Darija price parenthetical «(200 مليون)» next to the DZD price on
+  // the detail page — display-only, stays Arabic in FR/EN UI (Zak, 21 Sep
+  // 2026). dzPriceWords returns '' for the 1-DZD no-price convention.
+  const priceWords = dzPriceWords(l.price || 0);
   // Per-listing JSON-LD (js/seo.js listingJsonLd parity). Rendered as a
   // script tag — crawlers read JSON-LD anywhere in the HTML. '<' is
   // escaped (\u003c) so user content can never break out of the script.
@@ -303,7 +309,10 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             "no longer available" banner, prepended to the detail card. */}
         {l.status === 'sold' && <SoldBanner />}
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
-        <p className="mt-2 text-3xl font-bold text-emerald-700">{formatPrice(l.price || 0)}</p>
+        <p className="mt-2 text-3xl font-bold text-emerald-700">
+          <span dir="ltr">{formatPrice(l.price || 0)}</span>
+          {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
+        </p>
         <MetaGrid
           wilayaCode={l.wilayaCode}
           condition={l.condition}

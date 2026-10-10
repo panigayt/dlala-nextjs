@@ -11,6 +11,7 @@
 import Link from 'next/link';
 import { useLang, type Lang } from '@/lib/i18n';
 import { WILAYAS } from '@/lib/wilayas';
+import { dzPriceWords } from '@/lib/dz-price';
 import {
   viewsText,
   formatPrice,
@@ -263,6 +264,10 @@ export function AnswersBox({
 function SimilarCard({ l }: { l: ListingCard }) {
   const { lang } = useLang();
   const img = cardImage(l);
+  // Round 128 (js/app.js listingCard priceWordsHtml parity): similar ads
+  // use the full card renderer in legacy, so they carry the Darija
+  // parenthetical too.
+  const words = dzPriceWords(l.price || 0);
   return (
     <Link
       href={`/listing/${l.id}`}
@@ -286,7 +291,8 @@ function SimilarCard({ l }: { l: ListingCard }) {
       </div>
       <div className="p-3">
         <p className="font-bold text-emerald-700 text-lg">
-          {formatPrice(l.price || 0)}
+          <span dir="ltr">{formatPrice(l.price || 0)}</span>
+          {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
         </p>
         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
           {cardTitle(l)}
