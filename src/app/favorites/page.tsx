@@ -7,7 +7,12 @@
 // - Reads favorites/{uid}/items subcollection (orderBy createdAt desc, 60/page)
 // - Hydrates each favorite with its live listing doc
 // - Price-drop badge when live price < favorited price
-// - Orphan favorites (listing deleted) show a "removed" placeholder
+// - Orphan favorites (listing read succeeded and doc does NOT exist) show a
+//   "removed" placeholder — shown ONLY when the doc definitively doesn't exist.
+// - Unreadable listings (read failed: timeout/network/permission) show a
+//   per-card error with retry, NEVER the "removed" placeholder (Round 30).
+// - F7 (legacy sweep): if EVERY hydration fails on first load, the page shows
+//   a full-page error state with retry — never a misleading empty/removed state.
 // - Un-favorite removes the fav doc (+ listingFavoriters doc, best-effort)
 // - "Shown / total" footer with "show more" pagination
 // - Empty state with browse CTA
@@ -41,9 +46,15 @@ interface LiveListing {
   exists: boolean;
 }
 
+type CardStatus = 'ok' | 'deleted' | 'failed';
+
 interface FavCard {
   fav: FavItem;
-  live: LiveListing | null; // null = orphan (listing deleted)
+  live: LiveListing | null; // only set when status === 'ok'
+  status: CardStatus;
+  // 'deleted' = the listing read SUCCEEDED and the doc does not exist (true orphan).
+  // 'failed'  = the listing read FAILED (timeout/network/permission) — never
+  //             render the "removed" placeholder for these; they get a retry card.
 }
 
 function listingTitle(l: LiveListing, lang: Lang): string {
@@ -93,6 +104,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const cursorRef = useRef<unknown>(null);
   const mounted = useRef(true);
 
@@ -103,20 +115,24 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       };
       const snap = await withTimeout(q.get(), 20000);
       const lastDoc = snap.empty ? null : snap.docs[snap.docs.length - 1];
-      const hydrated = await Promise.all(
+      const hydrated: FavCard[] = await Promise.all(
         snap.docs.map(async (d) => {
           const raw = d.data() as FavItem;
           const fav: FavItem = { listingId: String(raw.listingId || ''), price: raw.price, createdAt: raw.createdAt };
           try {
             const l = await withTimeout(db.doc('listings/' + fav.listingId).get(), 15000);
-            if (!l.exists) return { fav, live: null };
+            // Distinguish "deleted" (read succeeded, doc absent) from
+            // "unreadable" (read failed — caught below). A failed read must
+            // NEVER render as a "removed" placeholder (Round 30).
+            if (!l.exists) return { fav, live: null, status: 'deleted' };
             const data = l.data() as Record<string, unknown>;
             return {
               fav,
               live: { id: l.id, exists: true, ...data } as LiveListing,
+              status: 'ok' as const,
             };
           } catch {
-            return { fav, live: null };
+            return { fav, live: null, status: 'failed' as const };
           }
         })
       );
@@ -143,6 +159,13 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       const q = col.orderBy('createdAt', 'desc').limit(FAV_PAGE);
       const { cards: page, lastDoc, full } = await hydratePage(db, q);
       if (!mounted.current) return;
+      // F7 (legacy sweep): if EVERY hydration failed on first load, that is a
+      // full-page error state — never show the misleading "no favorites" empty
+      // state (and never the "removed" placeholders).
+      if (page.length > 0 && page.every((c) => c.status === 'failed')) {
+        setError(t('errorGeneric'));
+        return;
+      }
       cursorRef.current = lastDoc;
       setCards(page);
       setHasMore(full);
@@ -194,6 +217,42 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       mounted.current = false;
     };
   }, [load]);
+
+  // Per-card hydration retry (Round 30): re-reads a single listing doc. If the
+  // doc now reads and doesn't exist, the card flips to the orphan placeholder;
+  // if it reads and exists, it becomes a normal card.
+  const retryCard = useCallback(
+    async (listingId: string) => {
+      setRetrying(listingId);
+      try {
+        const fb = await getFirebase();
+        const db = fb.firestore() as unknown as DbLike;
+        const l = await withTimeout(db.doc('listings/' + listingId).get(), 15000);
+        if (!mounted.current) return;
+        if (!l.exists) {
+          setCards((prev) =>
+            prev ? prev.map((c) => (c.fav.listingId === listingId ? { ...c, status: 'deleted' as const } : c)) : prev
+          );
+        } else {
+          const data = l.data() as Record<string, unknown>;
+          setCards((prev) =>
+            prev
+              ? prev.map((c) =>
+                  c.fav.listingId === listingId
+                    ? { fav: c.fav, live: { id: l.id, exists: true, ...data } as LiveListing, status: 'ok' as const }
+                    : c
+                )
+              : prev
+          );
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted.current) setRetrying(null);
+      }
+    },
+    []
+  );
 
   const removeFavorite = useCallback(
     async (listingId: string, orphan: boolean) => {
@@ -264,11 +323,32 @@ function FavoritesContent({ user }: { user: CompatUser }) {
         {!error && cards !== null && cards.length > 0 && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {cards.map(({ fav, live }) => {
+              {cards.map(({ fav, live, status }) => {
                 const lid = fav.listingId;
                 const busy = removing === lid;
-                if (!live) {
-                  // Orphan: listing was deleted — show placeholder with remove control.
+                if (status === 'failed') {
+                  // Read failed (timeout/network/permission): per-card error
+                  // state with retry — NEVER the "removed" placeholder.
+                  const retryBusy = retrying === lid;
+                  return (
+                    <div key={lid} className="relative rounded-xl bg-white shadow-sm overflow-hidden">
+                      <div className="p-6 text-center">
+                        <p className="text-3xl mb-2">⚠️</p>
+                        <p className="text-sm text-zinc-500 mb-3">{t('favCardLoadFailed')}</p>
+                        <button
+                          onClick={() => retryCard(lid)}
+                          disabled={retryBusy}
+                          className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                        >
+                          {retryBusy ? '…' : t('retry')}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                if (status === 'deleted' || !live) {
+                  // Orphan: the read SUCCEEDED and the doc does not exist —
+                  // only this case shows the "removed" placeholder.
                   return (
                     <div key={lid} className="relative rounded-xl bg-white shadow-sm overflow-hidden">
                       <div className="p-6 text-center">
