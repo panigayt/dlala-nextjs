@@ -1106,7 +1106,8 @@ function PublishForm({
         if (code === 'unauthenticated' || code === 'permission-denied') {
           fail(t('mustLogin')); return;
         }
-        fail(t('publishError'));
+        // DEBUG-TEMP: surface the real server error so we can diagnose publish failures.
+        fail(t('publishError') + ' [' + code + ': ' + (fnBody?.error?.message || 'no message') + ']');
         return;
       }
       const finalId = fnBody.result?.listingId || listingId;
