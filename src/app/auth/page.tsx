@@ -437,7 +437,14 @@ export default function AuthPage() {
         }
       }
       if (mounted.current) {
-        setError(authErrorMessage(e, t, 'signupError'));
+        // Round 143 TEMPORARY debug — remove after identifying the signup error
+        console.error('SIGNUP DEBUG:', (e as { code?: string })?.code, (e as Error)?.message);
+        setError(
+          authErrorMessage(e, t, 'signupError') +
+            ' [' +
+            ((e as { code?: string })?.code || 'no-code') +
+            ']'
+        );
         setLoading(false);
       }
     }
