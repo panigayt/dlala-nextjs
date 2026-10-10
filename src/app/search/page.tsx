@@ -1,8 +1,9 @@
 // Dlala search — Server-Side Rendered.
 //
-// Query params: q (text), cat (category), wilaya, min/max (price).
-// Structured filters run in Firestore; text query is normalized
-// client-side-matching on the server (mirrors js/home.js R-9).
+// Query params: q (text), cat (category), wilaya, min/max (price), sort
+// (recent | priceAsc | priceDesc). Structured filters run in Firestore;
+// text query is normalized client-side-matching on the server
+// (mirrors js/home.js R-9).
 
 import { Suspense } from 'react';
 import Link from 'next/link';
@@ -153,8 +154,9 @@ async function SearchContent({
     wilaya: get('wilaya') || undefined,
     min: get('min') || undefined,
     max: get('max') || undefined,
+    sort: get('sort') || undefined,
   };
-  const hasFilter = filters.q || filters.cat || filters.wilaya || filters.min || filters.max;
+  const hasFilter = filters.q || filters.cat || filters.wilaya || filters.min || filters.max || filters.sort;
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6">

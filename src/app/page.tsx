@@ -132,6 +132,76 @@ function CategoryChips() {
   );
 }
 
+// Filters — mirrors the .filters block in ~/workspace/dlala-040/index.html
+// (wilaya select, min/max price, sort, تطبيق/مسح). GET form: submits to
+// /search?wilaya=..&min=..&max=..&sort=.. — the search backend reads these
+// params (legacy applied them to the home feed in-place; here they lead to
+// the dedicated search page, which is the Next.js equivalent).
+// text-base (16px) honors the iOS no-zoom rule (Zak, 20 Sep 2026).
+function HomeFilters() {
+  const ctl =
+    'rounded-xl border border-zinc-300 bg-white px-3 py-3 text-base text-zinc-900';
+  return (
+    <form action="/search" method="get" className="flex flex-wrap items-center gap-2 mb-4">
+      <label htmlFor="home-wilaya" className="sr-only">
+        الولاية
+      </label>
+      <select id="home-wilaya" name="wilaya" className={ctl} defaultValue="">
+        <option value="">كل الولايات</option>
+        {(WILAYAS as { code: number; ar: string }[]).map((w) => (
+          <option key={w.code} value={w.code}>
+            {w.code} - {w.ar}
+          </option>
+        ))}
+      </select>
+      <label htmlFor="home-min" className="sr-only">
+        السعر الأدنى
+      </label>
+      <input
+        id="home-min"
+        type="number"
+        name="min"
+        min="0"
+        inputMode="numeric"
+        placeholder="السعر الأدنى"
+        className={`${ctl} w-32`}
+      />
+      <label htmlFor="home-max" className="sr-only">
+        السعر الأقصى
+      </label>
+      <input
+        id="home-max"
+        type="number"
+        name="max"
+        min="0"
+        inputMode="numeric"
+        placeholder="السعر الأقصى"
+        className={`${ctl} w-32`}
+      />
+      <label htmlFor="home-sort" className="sr-only">
+        ترتيب
+      </label>
+      <select id="home-sort" name="sort" className={ctl} defaultValue="recent">
+        <option value="recent">الأحدث</option>
+        <option value="priceAsc">السعر: من الأقل</option>
+        <option value="priceDesc">السعر: من الأعلى</option>
+      </select>
+      <button
+        type="submit"
+        className="rounded-xl bg-emerald-700 px-5 py-3 text-base font-bold text-white hover:bg-emerald-800"
+      >
+        تطبيق
+      </button>
+      <button
+        type="reset"
+        className="rounded-xl border border-zinc-300 bg-white px-5 py-3 text-base text-zinc-700 hover:border-emerald-600"
+      >
+        مسح
+      </button>
+    </form>
+  );
+}
+
 export default async function Home() {
   let listings: ListingCard[] = [];
   let error: string | null = null;
@@ -153,6 +223,7 @@ export default async function Home() {
       <main className="max-w-6xl mx-auto px-4 py-6">
         <SearchBar />
         <CategoryChips />
+        <HomeFilters />
         <h2 className="text-lg font-semibold text-zinc-800 mb-4">أحدث الإعلانات</h2>
 
         {error ? (

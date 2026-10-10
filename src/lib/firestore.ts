@@ -305,6 +305,7 @@ export interface SearchFilters {
   wilaya?: string;
   min?: string;
   max?: string;
+  sort?: string; // 'recent' | 'priceAsc' | 'priceDesc' (legacy home.js fSort)
 }
 
 // Server-side search: structured Firestore filters + client-side text match
@@ -351,6 +352,14 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
   }
 
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  // Sort: legacy fSort (الأحدث / السعر من الأقل / السعر من الأعلى).
+  // A price orderBy with other filters may need a composite index — the
+  // index-error fallback below then sorts client-side.
+  const priceDir =
+    f.sort === 'priceAsc' ? 'ASCENDING' : f.sort === 'priceDesc' ? 'DESCENDING' : null;
+  const orderBy = priceDir
+    ? [{ field: { fieldPath: 'price' }, direction: priceDir }]
+    : [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }];
   const runQuery = async (useFilters: unknown[]) => {
     const r = await fetch(url, {
       method: 'POST',
@@ -361,7 +370,7 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
           where: useFilters.length > 1
             ? { compositeFilter: { op: 'AND', filters: useFilters } }
             : useFilters[0],
-          orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+          orderBy,
           select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
           limit: f.q ? 100 : limit, // text query needs a pool to scan
         },
@@ -399,6 +408,11 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
       if (f.max !== undefined && f.max !== '' && (d.price ?? 0) > Number(f.max)) return false;
       return true;
     });
+    // Server orderBy(price) was dropped with the filters — sort client-side.
+    if (priceDir) {
+      const asc = priceDir === 'ASCENDING';
+      docs.sort((a, b) => (asc ? 1 : -1) * ((a.price ?? 0) - (b.price ?? 0)));
+    }
   }
 
   // Text query: normalized substring match on title/description
