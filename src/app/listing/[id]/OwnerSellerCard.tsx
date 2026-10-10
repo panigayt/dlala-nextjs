@@ -6,8 +6,7 @@
 
 import type { ReactNode } from 'react';
 import { useAuthState } from '@/lib/firebase-client';
-
-const YOUR_LISTING = 'إعلانك';
+import { useLang } from '@/lib/i18n';
 
 export default function OwnerSellerCard({
   sellerId,
@@ -17,6 +16,8 @@ export default function OwnerSellerCard({
   children: ReactNode;
 }) {
   const auth = useAuthState();
+  // Round 108: trilingual AR/FR/EN (js/i18n.js parity) — t('yourListing').
+  const { t, lang } = useLang();
   const isOwn =
     !!sellerId &&
     auth.status === 'signed-in' &&
@@ -26,13 +27,12 @@ export default function OwnerSellerCard({
   if (isOwn) {
     return (
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
-        <h2 className="text-lg font-semibold">البائع</h2>
+        <h2 className="text-lg font-semibold">{t('seller')}</h2>
         <span
           className="mt-2 inline-block rounded-full bg-emerald-100 text-emerald-800 font-bold px-4 py-1.5"
-          lang="ar"
-          dir="rtl"
+          dir={lang === 'ar' ? 'rtl' : 'ltr'}
         >
-          ✓ {YOUR_LISTING}
+          ✓ {t('yourListing')}
         </span>
       </div>
     );

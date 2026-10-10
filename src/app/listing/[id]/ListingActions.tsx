@@ -44,59 +44,15 @@ import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { tasteNoteFav } from '@/lib/taste';
+import { useLang } from '@/lib/i18n';
 
-// Verbatim strings from js/i18n.ar.js
-const STR = {
-  favorites: 'المفضلة',
-  loginToFavorite: 'سجّل الدخول لإضافة الإعلان إلى المفضلة',
-  loginToContact: 'سجّل الدخول لمراسلة البائع',
-  ownFavorite: 'لا يمكنك إضافة إعلانك إلى المفضلة',
-  verifyToContact: 'أرسلنا لك رابط التفعيل. فعّل بريدك لتتمكن من النشر ومراسلة البائعين.',
-  contactSeller: 'مراسلة البائع',
-  contacting: 'جارٍ فتح المحادثة...',
-  // Verbatim js/i18n.ar.js: t('soldNotice') — used for the sold banner AND
-  // the disabled contact button title (legacy sets both from the same key).
-  soldNotice: 'تم بيع هذا الإعلان — لم يعد متاحاً',
-  // Owner actions (js/listing.js refreshAuthDependent + deleteOwnListing).
-  edit: 'تعديل',
-  delete: 'حذف',
-  deleteConfirm: 'هل أنت متأكد من حذف هذا الإعلان؟',
-  deleting: 'جارٍ الحذف...',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  shareAd: 'مشاركة الإعلان',
-  loginToReport: 'سجّل الدخول للإبلاغ عن هذا الإعلان',
-  reportAd: 'الإبلاغ عن الإعلان',
-  reportReason: 'سبب البلاغ',
-  reportDetails: 'تفاصيل إضافية',
-  reportDetailsHint: 'اشرح ما حدث…',
-  reportPhoto: 'صورة دليل (اختياري)',
-  optional: 'اختياري',
-  sendReport: 'إرسال البلاغ',
-  reportSent: 'تم إرسال البلاغ. شكراً لك.',
-  reportFailed: 'تعذّر إرسال البلاغ. حاول مجدداً.',
-  reportExists: 'لقد أبلغت عن هذا مسبقاً.',
-  copyLink: 'نسخ الرابط',
-  linkCopied: 'تم نسخ الرابط.',
-  close: 'إغلاق',
-  // Propose price (js/listing.js onProposePrice — verbatim js/i18n.ar.js keys).
-  proposePrice: 'اقتراح سعر',
-  yourOffer: 'عرضك (دج)',
-  offerHint: 'اكتب السعر الذي تقترحه، ثم افتح المحادثة لإرساله للبائع.',
-  openChatFirst: 'افتح المحادثة',
-  loginToOffer: 'سجّل الدخول لاقتراح سعر',
-  loading: 'جارٍ التحميل...',
-  offerInvalid: 'أدخل سعراً أكبر من صفر',
-};
+// Report reasons — verbatim order from js/market.js REPORT_REASONS; labels
+// via t('reasonX') (legacy: t('reason' + r[0].toUpperCase() + r.slice(1))).
+const REASON_IDS = ['scam', 'fake', 'prohibited', 'spam', 'abuse', 'other'] as const;
 
-// Verbatim REPORT_REASONS order from js/market.js.
-const REASONS: ReadonlyArray<readonly [string, string]> = [
-  ['scam', 'احتيال'],
-  ['fake', 'إعلان وهمي'],
-  ['prohibited', 'محتوى محظور'],
-  ['spam', 'إزعاج / سبام'],
-  ['abuse', 'إساءة'],
-  ['other', 'أخرى'],
-];
+function reasonLabel(id: string, t: (k: string) => string): string {
+  return t('reason' + id[0].toUpperCase() + id.slice(1));
+}
 
 // Canonical share URL — verbatim js/market.js shareListing (the '?id=' form
 // is routed by the Android app AND served by hosting, so one URL works in
@@ -113,6 +69,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t, lang } = useLang();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -123,7 +80,7 @@ function Modal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      dir="rtl"
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
       onClick={onClose}
     >
       <div
@@ -138,7 +95,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            aria-label={STR.close}
+            aria-label={t('close')}
             className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100"
           >
             ✕
@@ -168,6 +125,9 @@ function showToast(setToast: (m: string | null) => void, msg: string, timer: { c
 export default function ListingActions({ listingId, sellerId, title, price, photoUrl, sold }: Props) {
   const router = useRouter();
   const auth = useAuthState();
+  // Round 108: trilingual AR/FR/EN (js/i18n.js parity) — replaces the
+  // hardcoded STR object; re-renders on language switch.
+  const { t } = useLang();
   const [fav, setFav] = useState<boolean | null>(null); // null = checking / neutral
   const [toast, setToast] = useState<string | null>(null);
   const [contacting, setContacting] = useState(false);
@@ -264,19 +224,19 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       await window.navigator.clipboard.writeText(shareUrl);
       setShareOpen(false);
       // 19 Sep 2026 (legacy): visible in-page confirmation, not alert().
-      showToast(setToast, STR.linkCopied, toastTimer);
+      showToast(setToast, t('linkCopied'), toastTimer);
     } catch {
       // Legacy fallback when the clipboard API is unavailable/blocked.
-      window.prompt(STR.copyLink, shareUrl);
+      window.prompt(t('copyLink'), shareUrl);
     }
-  }, [shareUrl]);
+  }, [shareUrl, t]);
 
   // Report ad — js/listing.js onReportAd: guest nudge first (LIS-4), then
   // openReportDialog which itself requires a verified email (requireVerified).
   const onReportClick = useCallback(async () => {
     if (auth.status === 'loading') return;
     if (!user || !client) {
-      guestNudgeThenLogin(STR.loginToReport);
+      guestNudgeThenLogin(t('loginToReport'));
       return;
     }
     if (user.uid === sellerId) return; // owner never sees this button
@@ -289,12 +249,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       /* offline — use cached */
     }
     if (!user.emailVerified) {
-      showToast(setToast, STR.verifyToContact, toastTimer);
+      showToast(setToast, t('verifyToContact'), toastTimer);
       return;
     }
     setRepError(null);
     setReportOpen(true);
-  }, [auth.status, user, client, sellerId, guestNudgeThenLogin]);
+  }, [auth.status, user, client, sellerId, guestNudgeThenLogin, t]);
 
   const onSendReport = useCallback(async () => {
     if (!user || !client || repSending) return;
@@ -341,7 +301,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       setReportOpen(false);
       setRepPhoto(null);
       setRepDetails('');
-      showToast(setToast, STR.reportSent, toastTimer);
+      showToast(setToast, t('reportSent'), toastTimer);
     } catch (e) {
       console.error(e);
       // The write failed AFTER the evidence photo uploaded — if the
@@ -366,20 +326,20 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         }
       }
       const code = (e as { code?: string })?.code || '';
-      setRepError(code === 'permission-denied' ? STR.reportExists : STR.reportFailed);
+      setRepError(code === 'permission-denied' ? t('reportExists') : t('reportFailed'));
     } finally {
       if (mounted.current) setRepSending(false);
     }
-  }, [user, client, repSending, repPhoto, repReason, repDetails, listingId, sellerId, title]);
+  }, [user, client, repSending, repPhoto, repReason, repDetails, listingId, sellerId, title, t]);
 
   const onFavoriteTap = useCallback(async () => {
     if (auth.status === 'loading') return;
     if (!user || !client) {
-      guestNudgeThenLogin(STR.loginToFavorite);
+      guestNudgeThenLogin(t('loginToFavorite'));
       return;
     }
     if (user.uid === sellerId) {
-      window.alert(STR.ownFavorite);
+      window.alert(t('ownFavorite'));
       return;
     }
     if (favInFlight.current) return; // same class as M6 fix in toggleFavorite
@@ -438,11 +398,11 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       } catch {
         if (mounted.current) setFav(wasOn);
       }
-      showToast(setToast, STR.errorGeneric, toastTimer);
+      showToast(setToast, t('errorGeneric'), toastTimer);
     } finally {
       favInFlight.current = false;
     }
-  }, [auth.status, user, client, fav, listingId, sellerId, title, price, photoUrl, guestNudgeThenLogin]);
+  }, [auth.status, user, client, fav, listingId, sellerId, title, price, photoUrl, guestNudgeThenLogin, t]);
 
   // Shared find-or-create conversation logic (js/listing.js onContact).
   // offerAmt rides into the chat URL as ?offer= (OF-1: bulletproof) and is
@@ -451,7 +411,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   const openConversation = useCallback(async (offerAmt: number | null) => {
     if (auth.status === 'loading' || contacting) return;
     if (!user || !client) {
-      guestNudgeThenLogin(offerAmt !== null ? STR.loginToOffer : STR.loginToContact);
+      guestNudgeThenLogin(offerAmt !== null ? t('loginToOffer') : t('loginToContact'));
       return;
     }
     if (user.uid === sellerId) return; // cannot message yourself
@@ -468,7 +428,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         /* offline — use cached */
       }
       if (!user.emailVerified) {
-        showToast(setToast, STR.verifyToContact, toastTimer);
+        showToast(setToast, t('verifyToContact'), toastTimer);
         return;
       }
       // OF-1: carry the entered amount into the chat two ways — the ?offer=
@@ -504,7 +464,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       const ldoc = await withTimeout(client.db.doc(`listings/${listingId}`).get(), 15000);
       const ldata = ldoc.exists ? ldoc.data() : null;
       if (!ldoc.exists || !ldata || ldata.sellerId !== sellerId) {
-        showToast(setToast, STR.errorGeneric, toastTimer);
+        showToast(setToast, t('errorGeneric'), toastTimer);
         return;
       }
       const sts = client.FieldValue.serverTimestamp();
@@ -532,12 +492,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       router.push(`/chat/${encodeURIComponent(ref.id)}${offerQ}`);
     } catch (e) {
       console.error(e);
-      showToast(setToast, STR.errorGeneric, toastTimer);
+      showToast(setToast, t('errorGeneric'), toastTimer);
     } finally {
       contactInFlight.current = false;
       if (mounted.current) setContacting(false);
     }
-  }, [auth.status, contacting, user, client, sellerId, sold, listingId, router, guestNudgeThenLogin]);
+  }, [auth.status, contacting, user, client, sellerId, sold, listingId, router, guestNudgeThenLogin, t]);
 
   const onContact = useCallback(() => {
     void openConversation(null);
@@ -550,7 +510,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   const onProposeClick = useCallback(async () => {
     if (auth.status === 'loading' || offerSending) return;
     if (!user || !client) {
-      guestNudgeThenLogin(STR.loginToOffer);
+      guestNudgeThenLogin(t('loginToOffer'));
       return;
     }
     if (user.uid === sellerId || sold) return;
@@ -561,17 +521,17 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       /* offline — use cached */
     }
     if (!user.emailVerified) {
-      showToast(setToast, STR.verifyToContact, toastTimer);
+      showToast(setToast, t('verifyToContact'), toastTimer);
       return;
     }
     setOfferAmt('');
     setOfferOpen(true);
-  }, [auth.status, offerSending, user, client, sellerId, sold, guestNudgeThenLogin]);
+  }, [auth.status, offerSending, user, client, sellerId, sold, guestNudgeThenLogin, t]);
 
   const onOfferGo = useCallback(() => {
     const amt = Number(offerAmt);
     if (!(amt > 0)) {
-      showToast(setToast, STR.offerInvalid, toastTimer);
+      showToast(setToast, t('offerInvalid'), toastTimer);
       offerInputRef.current?.focus();
       return;
     }
@@ -581,7 +541,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     void openConversation(amt).finally(() => {
       if (mounted.current) setOfferSending(false);
     });
-  }, [offerAmt, openConversation]);
+  }, [offerAmt, openConversation, t]);
 
   // Owner actions — js/listing.js: editBtn → publish.html?edit=<id>;
   // deleteOwnListing: confirm → deletedAds audit + listing delete in one
@@ -593,7 +553,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   const onDelete = useCallback(async () => {
     if (auth.status === 'loading' || deleting) return;
     if (!user || !client || user.uid !== sellerId) return;
-    if (!window.confirm(STR.deleteConfirm)) return;
+    if (!window.confirm(t('deleteConfirm'))) return;
     setDeleting(true);
     try {
       const listingRef = client.db.doc(`listings/${listingId}`);
@@ -604,7 +564,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       }
       const l = d.data() as Record<string, unknown>;
       if (l.sellerId !== user.uid) {
-        window.alert(STR.errorGeneric);
+        window.alert(t('errorGeneric'));
         return;
       }
       const batch = client.db.batch();
@@ -660,11 +620,11 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       router.push('/');
     } catch (e) {
       console.error(e);
-      window.alert(STR.errorGeneric);
+      window.alert(t('errorGeneric'));
     } finally {
       if (mounted.current) setDeleting(false);
     }
-  }, [auth.status, deleting, user, client, sellerId, listingId, router]);
+  }, [auth.status, deleting, user, client, sellerId, listingId, router, t]);
 
   // Owner viewing their own listing: hide buyer actions (favorite/contact/
   // offer/report make no sense on your own ad) but KEEP share — js/listing.js
@@ -686,7 +646,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
               : 'bg-white border-zinc-300 text-zinc-700 hover:border-red-300')
           }
         >
-          {fav === true ? '♥' : '♡'} {STR.favorites}
+          {fav === true ? '♥' : '♡'} {t('favorites')}
         </button>
       )}
       {showBuyerActions && (
@@ -694,7 +654,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           type="button"
           onClick={onContact}
           disabled={sold || contacting}
-          title={sold ? STR.soldNotice : undefined}
+          title={sold ? t('soldNotice') : undefined}
           className={
             'rounded-lg px-5 py-2.5 font-bold text-white transition ' +
             (sold || contacting
@@ -702,7 +662,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
               : 'bg-emerald-700 hover:bg-emerald-800')
           }
         >
-          {contacting ? STR.contacting : STR.contactSeller}
+          {contacting ? t('contacting') : t('contactSeller')}
         </button>
       )}
       {showBuyerActions && (
@@ -710,7 +670,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           type="button"
           onClick={onProposeClick}
           disabled={sold || offerSending}
-          title={sold ? STR.soldNotice : undefined}
+          title={sold ? t('soldNotice') : undefined}
           className={
             'rounded-lg px-5 py-2.5 font-bold border bg-white transition ' +
             (sold || offerSending
@@ -718,7 +678,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
               : 'border-amber-400 text-amber-700 hover:border-amber-500')
           }
         >
-          {offerSending ? STR.loading : `💰 ${STR.proposePrice}`}
+          {offerSending ? t('loading') : `💰 ${t('proposePrice')}`}
         </button>
       )}
       <button
@@ -726,7 +686,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         onClick={onShare}
         className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
       >
-        ↗ {STR.shareAd}
+        ↗ {t('shareAd')}
       </button>
       {showBuyerActions && (
         <button
@@ -734,7 +694,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           onClick={onReportClick}
           className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-red-300"
         >
-          ⚑ {STR.reportAd}
+          ⚑ {t('reportAd')}
         </button>
       )}
       {/* Owner actions — js/listing.js parity: Edit + Delete (Share stays
@@ -746,7 +706,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             onClick={onEdit}
             className="rounded-lg px-5 py-2.5 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
           >
-            ✏️ {STR.edit}
+            ✏️ {t('edit')}
           </button>
           <button
             type="button"
@@ -754,12 +714,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             disabled={deleting}
             className="rounded-lg px-5 py-2.5 font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
           >
-            {deleting ? STR.deleting : `🗑 ${STR.delete}`}
+            {deleting ? t('deleting') : `🗑 ${t('delete')}`}
           </button>
         </>
       )}
       {shareOpen && (
-        <Modal title={STR.shareAd} onClose={() => setShareOpen(false)}>
+        <Modal title={t('shareAd')} onClose={() => setShareOpen(false)}>
           <div className="flex flex-wrap gap-2">
             <a
               className="rounded-lg bg-emerald-700 text-white font-bold px-4 py-2"
@@ -782,37 +742,37 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
               onClick={onCopyLink}
               className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
             >
-              {STR.copyLink}
+              {t('copyLink')}
             </button>
           </div>
         </Modal>
       )}
       {reportOpen && (
-        <Modal title={STR.reportAd} onClose={() => !repSending && setReportOpen(false)}>
-          <label className="block text-sm font-medium">{STR.reportReason}</label>
+        <Modal title={t('reportAd')} onClose={() => !repSending && setReportOpen(false)}>
+          <label className="block text-sm font-medium">{t('reportReason')}</label>
           <select
             value={repReason}
             onChange={(e) => setRepReason(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 bg-white"
           >
-            {REASONS.map(([v, l]) => (
+            {REASON_IDS.map((v) => (
               <option key={v} value={v}>
-                {l}
+                {reasonLabel(v, t)}
               </option>
             ))}
           </select>
           <label className="mt-3 block text-sm font-medium">
-            {STR.reportDetails} <span className="text-zinc-400">({STR.optional})</span>
+            {t('reportDetails')} <span className="text-zinc-400">({t('optional')})</span>
           </label>
           <textarea
             value={repDetails}
             onChange={(e) => setRepDetails(e.target.value)}
             maxLength={1000}
             rows={3}
-            placeholder={STR.reportDetailsHint}
+            placeholder={t('reportDetailsHint')}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2"
           />
-          <label className="mt-3 block text-sm font-medium">{STR.reportPhoto}</label>
+          <label className="mt-3 block text-sm font-medium">{t('reportPhoto')}</label>
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -833,13 +793,13 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             disabled={repSending}
             className="mt-4 w-full rounded-lg bg-red-600 text-white font-bold px-5 py-2.5 disabled:opacity-50"
           >
-            {STR.sendReport}
+            {t('sendReport')}
           </button>
         </Modal>
       )}
       {offerOpen && (
-        <Modal title={STR.proposePrice} onClose={() => !offerSending && setOfferOpen(false)}>
-          <label className="block text-sm font-medium">{STR.yourOffer}</label>
+        <Modal title={t('proposePrice')} onClose={() => !offerSending && setOfferOpen(false)}>
+          <label className="block text-sm font-medium">{t('yourOffer')}</label>
           <input
             ref={offerInputRef}
             type="number"
@@ -853,14 +813,14 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-left"
             inputMode="numeric"
           />
-          <p className="mt-2 text-[13px] text-zinc-500">{STR.offerHint}</p>
+          <p className="mt-2 text-[13px] text-zinc-500">{t('offerHint')}</p>
           <button
             type="button"
             onClick={onOfferGo}
             disabled={offerSending}
             className="mt-4 w-full rounded-lg bg-emerald-700 text-white font-bold px-5 py-2.5 disabled:opacity-50"
           >
-            {offerSending ? STR.loading : STR.openChatFirst}
+            {offerSending ? t('loading') : t('openChatFirst')}
           </button>
         </Modal>
       )}

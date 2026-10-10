@@ -43,11 +43,7 @@ import {
   warmImage,
   type ConnectionLike,
 } from './gallery-prewarm';
-
-const AR_CLOSE = 'إغلاق';
-const AR_PREV = 'الصورة السابقة';
-const AR_NEXT = 'الصورة التالية';
-const AR_OPEN_VIEWER = 'فتح عارض الصور';
+import { useLang } from '@/lib/i18n';
 
 export default function Gallery({
   photos,
@@ -67,6 +63,9 @@ export default function Gallery({
   // 0.0.0.1s per-index strip thumbs (photo_thumbs → thumbUrls → full).
   thumbs?: string[];
 }) {
+  // Round 108: trilingual AR/FR/EN (js/i18n.js parity) — lightbox
+  // aria-labels follow the app language.
+  const { t } = useLang();
   const all = useMemo(
     () => (photos.length ? photos : fallback ? [fallback] : []),
     [photos, fallback]
@@ -316,13 +315,13 @@ export default function Gallery({
       <button
         type="button"
         onClick={() => openLightbox(sel)}
-        aria-label={AR_OPEN_VIEWER}
+        aria-label={t('openPhotoViewer')}
         className="block w-full cursor-zoom-in"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={shownSrc}
-          alt={`${title} — صورة ${sel + 1}/${all.length}`}
+          alt={`${title} — ${t('photo')} ${sel + 1}/${all.length}`}
           className={
             'w-full aspect-[4/3] object-cover g-hero' + (shownSharp ? '' : ' blurred')
           }
@@ -337,7 +336,7 @@ export default function Gallery({
               key={i}
               type="button"
               onClick={() => setSel(i)}
-              aria-label={`${title} — صورة ${i + 1}/${all.length}`}
+              aria-label={`${title} — ${t('photo')} ${i + 1}/${all.length}`}
               aria-pressed={i === sel}
               className={
                 'shrink-0 rounded-lg overflow-hidden transition ' +
@@ -371,7 +370,7 @@ export default function Gallery({
           <button
             type="button"
             className="lb-close absolute top-4 right-4 text-white text-2xl px-3 py-1 rounded hover:bg-white/20"
-            aria-label={AR_CLOSE}
+            aria-label={t('close')}
             onClick={closeLightbox}
           >
             ✕
@@ -381,7 +380,7 @@ export default function Gallery({
               <button
                 type="button"
                 className="absolute left-2 sm:left-4 text-white text-3xl px-3 py-6 rounded hover:bg-white/20"
-                aria-label={AR_PREV}
+                aria-label={t('prevPhoto')}
                 onClick={(e) => {
                   e.stopPropagation();
                   lbShow(-1);
@@ -392,7 +391,7 @@ export default function Gallery({
               <button
                 type="button"
                 className="absolute right-2 sm:right-4 text-white text-3xl px-3 py-6 rounded hover:bg-white/20"
-                aria-label={AR_NEXT}
+                aria-label={t('nextPhoto')}
                 onClick={(e) => {
                   e.stopPropagation();
                   lbShow(1);
@@ -406,7 +405,7 @@ export default function Gallery({
           <img
             ref={imgRef}
             src={all[lbIdx]}
-            alt={`${title} — صورة ${lbIdx + 1}/${all.length}`}
+            alt={`${title} — ${t('photo')} ${lbIdx + 1}/${all.length}`}
             className="max-w-full max-h-full object-contain"
             // LBZ-1: double-click (desktop) toggles zoom at the pointer.
             onDoubleClick={(e) => {
