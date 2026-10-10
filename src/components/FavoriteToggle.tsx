@@ -35,6 +35,7 @@ import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
 import { tasteNoteFav } from '@/lib/taste';
 import { authLoginHref } from '@/lib/auth-return';
+import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { savePendingAction } from '@/lib/pending-action';
 
 // Verbatim strings from js/i18n.ar.js
@@ -125,6 +126,9 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
 
   const showToastThenAuth = useCallback(
     (msg: string) => {
+      // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
+      // feed scroll position across the /auth round-trip.
+      saveScrollForReturn(window.location.pathname);
       // R3 (Zak ordered, js/app.js:843 parity): stash the pending favorite so
       // it auto-applies after the login round-trip.
       savePendingAction({ type: 'favorite', listingId });

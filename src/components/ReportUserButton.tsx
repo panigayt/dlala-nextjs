@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
 import { authLoginHref } from '@/lib/auth-return';
+import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 
 // Verbatim strings from js/i18n.ar.js
@@ -141,6 +142,9 @@ export default function ReportUserButton({
 
   const guestNudgeThenLogin = useCallback(
     (msg: string) => {
+      // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
+      // scroll position across the /auth round-trip.
+      saveScrollForReturn(window.location.pathname);
       showToast(msg);
       window.setTimeout(() => {
         router.push(authLoginHref(window.location.pathname, window.location.search));

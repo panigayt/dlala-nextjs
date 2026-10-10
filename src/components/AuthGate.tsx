@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang } from '@/lib/i18n';
 import { authLoginHref } from '@/lib/auth-return';
+import { saveScrollForReturn } from '@/lib/scroll-restore';
 
 interface AuthGateProps {
   children: (user: CompatUser) => ReactNode;
@@ -39,6 +40,9 @@ export default function AuthGate({ children }: AuthGateProps) {
             setUser(u);
           } else {
             // Not signed in — bounce to /auth (requireAuth behavior).
+            // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
+            // scroll position across the /auth round-trip.
+            saveScrollForReturn(window.location.pathname);
             router.push(authLoginHref(window.location.pathname, window.location.search));
           }
         });

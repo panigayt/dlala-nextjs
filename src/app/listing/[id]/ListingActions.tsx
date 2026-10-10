@@ -42,6 +42,7 @@ import { useAuthState } from '@/lib/firebase-client';
 import { getFirebase, withTimeout } from '@/lib/firebase-compat';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
+import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { tasteNoteFav } from '@/lib/taste';
 
 // Verbatim strings from js/i18n.ar.js
@@ -232,6 +233,9 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
 
   const guestNudgeThenLogin = useCallback(
     (msg: string) => {
+      // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
+      // scroll position across the /auth round-trip.
+      saveScrollForReturn(window.location.pathname);
       showToast(setToast, msg, toastTimer);
       window.setTimeout(() => {
         router.push(authLoginHref(window.location.pathname, window.location.search));

@@ -21,6 +21,7 @@ import AuthGate from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
+import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang, type Lang } from '@/lib/i18n';
 
 const BLOCK_FN_URL = 'https://europe-west3-dlala-85cea.cloudfunctions.net/toggleBlock';
@@ -355,6 +356,9 @@ function SettingsContent({ user }: { user: CompatUser }) {
         const dc = (de as { code?: string })?.code || '';
         if (dc === 'auth/requires-recent-login') {
           window.alert(t('reauthNeeded'));
+          // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
+          // scroll position across the /auth round-trip.
+          saveScrollForReturn(window.location.pathname);
           router.push(authLoginHref(window.location.pathname, window.location.search));
           return;
         }

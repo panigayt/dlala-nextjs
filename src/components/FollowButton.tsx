@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
 import { authLoginHref } from '@/lib/auth-return';
+import { saveScrollForReturn } from '@/lib/scroll-restore';
 
 // Verbatim strings from js/i18n.ar.js
 const STR = {
@@ -105,6 +106,8 @@ export default function FollowButton({ storeUid }: { storeUid: string }) {
     if (!user || !client) {
       // Legacy parity (js/app.js onFollowBtnTap): guests get the login
       // nudge via toast, then login — never a silent bounce to /auth.
+      // QA 16 Sep 2026 #4: keep the scroll position across the bounce.
+      saveScrollForReturn(window.location.pathname);
       showToast(STR.loginToFollow);
       window.setTimeout(
         () => router.push(authLoginHref(window.location.pathname, window.location.search)),
