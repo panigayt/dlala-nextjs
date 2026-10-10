@@ -7,20 +7,12 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useLang } from '@/lib/i18n';
 import { useAuthState } from '@/lib/firebase-client';
 import type { SearchFilters } from '@/lib/firestore';
 
-// Verbatim from js/i18n.ar.js
-const STR = {
-  saveThisSearch: 'حفظ هذا البحث',
-  searchSaved: 'تم حفظ البحث.',
-  maxSearchesReached: 'وصلت إلى الحد الأقصى (10 عمليات بحث).',
-  searchNeedsCriteria: 'أدخل كلمة أو اختر فئة أو ولاية أو سعرًا قبل حفظ البحث',
-  loginToSaveSearch: 'سجّل الدخول لحفظ هذا البحث',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-};
-
 export default function SaveSearchButton({ filters }: { filters: SearchFilters }) {
+  const { t } = useLang();
   const auth = useAuthState();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -45,13 +37,13 @@ export default function SaveSearchButton({ filters }: { filters: SearchFilters }
     }
     const hasCriteria = q || filters.cat || filters.wilaya || filters.min || filters.max;
     if (!hasCriteria) {
-      showToast(STR.searchNeedsCriteria);
+      showToast(t('searchNeedsCriteria'));
       return;
     }
 
     // Guests: nudge first (legacy sweep), then login with a return URL.
     if (auth.status !== 'signed-in') {
-      showToast(STR.loginToSaveSearch);
+      showToast(t('loginToSaveSearch'));
       const ret = encodeURIComponent(window.location.pathname + window.location.search);
       window.setTimeout(() => {
         router.push(`/auth?return=${ret}`);
@@ -65,7 +57,7 @@ export default function SaveSearchButton({ filters }: { filters: SearchFilters }
       const col = client.db.collection(`users/${user.uid}/savedSearches`);
       const existing = await col.get();
       if (existing.size >= 10) {
-        showToast(STR.maxSearchesReached);
+        showToast(t('maxSearchesReached'));
         return;
       }
       await col.add({
@@ -78,13 +70,13 @@ export default function SaveSearchButton({ filters }: { filters: SearchFilters }
         enabled: true,
         createdAt: client.FieldValue.serverTimestamp(),
       });
-      showToast(STR.searchSaved);
+      showToast(t('searchSaved'));
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(t('errorGeneric'));
     } finally {
       setSaving(false);
     }
-  }, [auth, filters, router, showToast]);
+  }, [auth, filters, router, showToast, t]);
 
   return (
     <div className="mb-4">
@@ -94,7 +86,7 @@ export default function SaveSearchButton({ filters }: { filters: SearchFilters }
         disabled={saving || auth.status === 'loading'}
         className="rounded-lg border border-zinc-300 bg-white px-4 py-2.5 font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 transition-colors"
       >
-        {saving ? 'جارٍ الحفظ...' : STR.saveThisSearch}
+        {saving ? t('saving') : t('saveThisSearch')}
       </button>
       {toast ? (
         <div

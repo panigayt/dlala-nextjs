@@ -6,6 +6,7 @@
 // larger limit (same pattern as the seller grid, Round 69).
 
 import { useState } from 'react';
+import { useLang } from '@/lib/i18n';
 import {
   resultsCountText,
   SEARCH_PAGE_SIZE,
@@ -27,6 +28,7 @@ export default function SearchResultsGrid({
   initialHasMore: boolean;
   filters: SearchFilters;
 }) {
+  const { t, lang } = useLang();
   const [listings, setListings] = useState(initialListings);
   const [total, setTotal] = useState(initialTotal);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -57,16 +59,16 @@ export default function SearchResultsGrid({
     <div>
       {/* Legacy #resultsMeta — FIX-WEB-014 verbatim text, announced on change. */}
       <p id="resultsMeta" role="status" className="text-sm text-zinc-500 mb-3">
-        {resultsCountText(total, 'ar')}
+        {resultsCountText(total, lang)}
       </p>
       {/* js/home.js 0.0.0.1m (Zak): verified-store cards above the results
           when the text query matches a pro store — background fetch, fails
           closed. Mounted once: "عرض المزيد" appends never re-trigger it. */}
-      <StoreMatchCards q={filters.q || ''} />
+      <StoreMatchCards q={filters.q || ''} lang={lang} />
       {listings.length === 0 ? (
         <div className="rounded-xl bg-white p-8 text-center text-zinc-500">
-          <p className="text-lg">لا توجد نتائج مطابقة</p>
-          <p className="mt-2 text-sm">جرّب كلمات مختلفة أو أزل بعض الفلاتر.</p>
+          <p className="text-lg">{t('noResults')}</p>
+          <p className="mt-2 text-sm">{t('noResultsHint')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -83,11 +85,11 @@ export default function SearchResultsGrid({
             disabled={loadingMore}
             className="rounded-lg bg-white text-emerald-700 border border-emerald-700 px-6 py-2.5 font-medium hover:bg-emerald-50 disabled:opacity-60"
           >
-            {loadingMore ? 'جارٍ التحميل...' : 'عرض المزيد'}
+            {loadingMore ? t('loading') : t('loadMore')}
           </button>
           {moreError ? (
             <p className="mt-2 text-sm text-red-600">
-              تعذّر تحميل المزيد. حاول مجددًا.
+              {t('loadMoreFailed')}
             </p>
           ) : null}
         </div>

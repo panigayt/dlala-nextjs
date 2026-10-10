@@ -98,6 +98,26 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     condGood: 'جيد',
     loadMoreFailed: 'تعذر تحميل المزيد', // port-added (load-more error)
     follow: 'متابعة', loginToFollow: 'سجّل الدخول للمتابعة',
+    // Search page (Round 109) — verbatim js/i18n.ar.js unless noted.
+    noResults: 'لا توجد إعلانات مطابقة',
+    noResultsHint: 'جرّب كلمات أخرى أو وسّع الفلاتر',
+    searchTitle: 'البحث', // port-added (search page heading)
+    searchResultsFor: 'نتائج البحث', // port-added (heading with query)
+    searchEmpty: 'اكتب كلمة للبحث في الإعلانات.', // port-added (no-filter state)
+    searchFailed: 'تعذر البحث', // port-added (search error)
+    saving: 'جارٍ الحفظ...', // port-added (save-search button)
+    facetOs: 'نظام التشغيل', facetBrand: 'الماركة',
+    facetFuel: 'الوقود', facetGear: 'ناقل الحركة',
+    yearFrom: 'السنة من', yearTo: 'إلى',
+    mileageFrom: 'الكيلومترات من', mileageTo: 'إلى',
+    osAndroid: 'Android', osIos: 'iOS',
+    fuelPetrol: 'بنزين', fuelDiesel: 'ديزل',
+    fuelGas: 'غاز', fuelElectric: 'كهربائي',
+    gearManual: 'يدوي', gearAuto: 'أوتوماتيكي',
+    saveThisSearch: 'حفظ هذا البحث', searchSaved: 'تم حفظ البحث.',
+    maxSearchesReached: 'وصلت إلى الحد الأقصى (10 عمليات بحث).',
+    searchNeedsCriteria: 'أدخل كلمة أو اختر فئة أو ولاية أو سعرًا قبل حفظ البحث',
+    loginToSaveSearch: 'سجّل الدخول لحفظ هذا البحث',
     loginToFavorite: 'سجّل الدخول لإضافة الإعلان إلى المفضلة',
     discoverStore: 'اكتشف متجر',
     wantedBadge: 'مطلوب', sold: 'مباع', wholesale: 'الجملة',
@@ -230,6 +250,26 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     condGood: 'Bon état',
     loadMoreFailed: 'Impossible de charger la suite', // port-added (load-more error)
     follow: 'Suivre', loginToFollow: 'Connectez-vous pour suivre',
+    // Search page (Round 109) — verbatim js/i18n.fr.js unless noted.
+    noResults: 'Aucune annonce trouvée',
+    noResultsHint: 'Essayez d’autres mots ou élargissez les filtres',
+    searchTitle: 'Recherche', // port-added (search page heading)
+    searchResultsFor: 'Résultats de recherche', // port-added (heading with query)
+    searchEmpty: 'Tapez un mot pour rechercher dans les annonces.', // port-added (no-filter state)
+    searchFailed: 'Échec de la recherche', // port-added (search error)
+    saving: 'Enregistrement...', // port-added (save-search button)
+    facetOs: 'Système d\'exploitation', facetBrand: 'Marque',
+    facetFuel: 'Carburant', facetGear: 'Transmission',
+    yearFrom: 'Année min', yearTo: 'max',
+    mileageFrom: 'Kilométrage min', mileageTo: 'max',
+    osAndroid: 'Android', osIos: 'iOS',
+    fuelPetrol: 'Essence', fuelDiesel: 'Diesel',
+    fuelGas: 'GPL', fuelElectric: 'Électrique',
+    gearManual: 'Manuelle', gearAuto: 'Automatique',
+    saveThisSearch: 'Sauvegarder cette recherche', searchSaved: 'Recherche sauvegardée.',
+    maxSearchesReached: 'Limite atteinte (10 recherches).',
+    searchNeedsCriteria: 'Saisissez un mot-clé ou choisissez une catégorie, une wilaya ou un prix avant d\'enregistrer la recherche',
+    loginToSaveSearch: 'Connectez-vous pour enregistrer cette recherche',
     loginToFavorite: 'Connectez-vous pour ajouter cette annonce aux favoris',
     discoverStore: 'Découvrez la boutique',
     wantedBadge: 'Recherché', sold: 'Vendu', wholesale: 'Gros',
@@ -362,6 +402,26 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     condGood: 'Good',
     loadMoreFailed: 'Could not load more', // port-added (load-more error)
     follow: 'Follow', loginToFollow: 'Log in to follow',
+    // Search page (Round 109) — verbatim js/i18n.en.js unless noted.
+    noResults: 'No matching ads',
+    noResultsHint: 'Try other keywords or widen the filters',
+    searchTitle: 'Search', // port-added (search page heading)
+    searchResultsFor: 'Search results', // port-added (heading with query)
+    searchEmpty: 'Type a word to search the ads.', // port-added (no-filter state)
+    searchFailed: 'Search failed', // port-added (search error)
+    saving: 'Saving...', // port-added (save-search button)
+    facetOs: 'OS', facetBrand: 'Brand',
+    facetFuel: 'Fuel', facetGear: 'Gearbox',
+    yearFrom: 'Year from', yearTo: 'to',
+    mileageFrom: 'Mileage from', mileageTo: 'to',
+    osAndroid: 'Android', osIos: 'iOS',
+    fuelPetrol: 'Petrol', fuelDiesel: 'Diesel',
+    fuelGas: 'Gas', fuelElectric: 'Electric',
+    gearManual: 'Manual', gearAuto: 'Automatic',
+    saveThisSearch: 'Save this search', searchSaved: 'Search saved.',
+    maxSearchesReached: 'Limit reached (10 searches).',
+    searchNeedsCriteria: 'Enter a keyword or choose a category, wilaya or price before saving the search',
+    loginToSaveSearch: 'Sign in to save this search',
     loginToFavorite: 'Sign in to save this listing to your favorites',
     discoverStore: 'Discover the store',
     wantedBadge: 'Wanted', sold: 'Sold', wholesale: 'Wholesale',
