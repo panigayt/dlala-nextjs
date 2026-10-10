@@ -1,8 +1,10 @@
 'use client';
 
-// Follow/unfollow button for the public seller profile — mirrors
+// Follow/unfollow button — mirrors
 // js/app.js (onFollowBtnTap / toggleFollow / paintFollowBtn) and the
-// seller.html follow-btn behavior:
+// seller.html follow-btn behavior.
+// Used by the public seller page AND the listing-page seller card
+// (js/listing.js: the listing seller card carries a follow button).
 //
 // - Non-owner profiles get a Follow button; guests get the login nudge
 //   (toast, then /auth) — never a silent bounce.

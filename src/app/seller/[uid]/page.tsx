@@ -13,7 +13,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
-import FollowButton from './FollowButton';
+import FollowButton from '@/components/FollowButton';
 import SellerActions from './SellerActions';
 import RatingsList from './RatingsList';
 import SellerTabsSection from './SellerTabsSection';

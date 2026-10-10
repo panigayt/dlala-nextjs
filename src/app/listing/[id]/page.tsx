@@ -38,6 +38,7 @@ import {
 import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
+import FollowButton from '@/components/FollowButton';
 import Gallery from './Gallery';
 import TasteViewRecorder from './TasteViewRecorder';
 import ViewRecorder from './ViewRecorder';
@@ -356,31 +357,42 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
       <OwnerSellerCard sellerId={l.sellerId}>
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold">البائع</h2>
-        {(l as unknown as { sellerName?: string; sellerPhotoUrl?: string }).sellerName ? (
-          <div className="mt-2 flex items-center gap-3">
-            {(l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={(l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl}
-                alt=""
-                className="w-12 h-12 rounded-full object-cover"
-              />
-            )}
-            <Link
-              href={`/seller/${l.sellerId}`}
-              className="font-bold text-emerald-700 hover:underline"
-            >
-              {(l as unknown as { sellerName?: string }).sellerName}
-            </Link>
-          </div>
-        ) : (
-            <Link
-              href={`/seller/${l.sellerId}`}
-              className="mt-2 inline-block font-bold text-emerald-700 hover:underline"
-            >
-              عرض صفحة البائع
-            </Link>
-        )}
+        {/* js/listing.js parity: the listing seller card carries a follow
+            button next to the seller identity (legacy loadSeller full-card
+            row: name left, .follow-btn right). OwnerSellerCard swaps the
+            whole card for "✓ إعلانك" when the viewer owns the listing. */}
+        <div className="mt-2 flex items-center justify-between gap-3">
+          {(l as unknown as { sellerName?: string; sellerPhotoUrl?: string }).sellerName ? (
+            <div className="flex items-center gap-3 min-w-0">
+              {(l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={(l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl}
+                  alt=""
+                  className="w-12 h-12 rounded-full object-cover shrink-0"
+                />
+              )}
+              <Link
+                href={`/seller/${l.sellerId}`}
+                className="font-bold text-emerald-700 hover:underline truncate"
+              >
+                {(l as unknown as { sellerName?: string }).sellerName}
+              </Link>
+            </div>
+          ) : (
+              <Link
+                href={`/seller/${l.sellerId}`}
+                className="font-bold text-emerald-700 hover:underline truncate"
+              >
+                عرض صفحة البائع
+              </Link>
+          )}
+          {l.sellerId && (
+            <div className="shrink-0 min-w-[120px]">
+              <FollowButton storeUid={l.sellerId} />
+            </div>
+          )}
+        </div>
       </div>
       </OwnerSellerCard>
 
