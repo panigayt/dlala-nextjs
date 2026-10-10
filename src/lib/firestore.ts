@@ -622,6 +622,35 @@ export function matchFacets(d: ListingCard, f: SearchFilters): boolean {
   return true;
 }
 
+// 0.0.0.31 FIX-WEB-021: client relevance scoring for text search.
+// Verbatim port of js/home.js relevanceRank: exact title (100) > title
+// prefix (50) > title contains (30) > description contains (10);
+// recency breaks ties. Schwartzian transform — each doc normalized once.
+function relevanceRank(docs: ListingCard[], q: string): ListingCard[] {
+  const qn = normSearchText(q);
+  const decorated = new Array<{ d: ListingCard; score: number; ts: number }>(docs.length);
+  for (let i = 0; i < docs.length; i++) {
+    const d = docs[i];
+    const title = normSearchText(
+      d.title && typeof d.title === 'object'
+        ? (d.title as Record<string, string>).ar || ''
+        : ''
+    );
+    const desc = normSearchText(d.description?.ar || '');
+    const c = d.createdAt;
+    decorated[i] = {
+      d,
+      score: title === qn ? 100 : title.startsWith(qn) ? 50
+        : title.includes(qn) ? 30 : desc.includes(qn) ? 10 : 0,
+      ts: c instanceof Date && !isNaN(c.getTime()) ? c.getTime() : 0,
+    };
+  }
+  decorated.sort((a, b) => (b.score - a.score) || (b.ts - a.ts));
+  const out = new Array<ListingCard>(decorated.length);
+  for (let i = 0; i < decorated.length; i++) out[i] = decorated[i].d;
+  return out;
+}
+
 // Server-side search: structured Firestore filters + client-side text match
 // (mirrors js/home.js renderFeed text-query branch).
 export async function searchListings(f: SearchFilters, limit = 24): Promise<ListingCard[]> {
@@ -812,7 +841,12 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
       const desc = normSearchText(d.description?.ar || '');
       if (title.includes(q) || desc.includes(q)) matched.push(d);
     }
-    docs = matched.slice(0, limit);
+    // FIX-WEB-021: with a text query, relevance leads (exact title first) —
+    // recency only breaks ties. Price sorts keep their own order instead
+    // (legacy renderFeed sort branch).
+    docs = (!f.sort || f.sort === 'recent')
+      ? relevanceRank(matched, f.q).slice(0, limit)
+      : matched.slice(0, limit);
   } else if (hasFacetFilter(f)) {
     docs = docs.slice(0, limit);
   }
