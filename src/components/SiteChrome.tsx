@@ -582,12 +582,12 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
           <div className="footer-guides">
             <strong>📚 {t('guidesTitle')}</strong>
             <br />
-            <Link href="/guides/acheter-voiture-occasion">{t('guideCar')}</Link> ·{' '}
-            <Link href={`/guides/prix-voitures-occasion-${year}`}>
+            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/acheter-voiture-occasion`}>{t('guideCar')}</Link> ·{' '}
+            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/prix-voitures-occasion-${year}`}>
               {t('guidePrices').replace(/ ?20\d\d/g, '').trim() + ' ' + year}
             </Link> ·{' '}
-            <Link href="/guides/controler-telephone-occasion">{t('guidePhone')}</Link> ·{' '}
-            <Link href="/guides/eviter-arnaques">{t('guideScam')}</Link>
+            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/controler-telephone-occasion`}>{t('guidePhone')}</Link> ·{' '}
+            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/eviter-arnaques`}>{t('guideScam')}</Link>
           </div>
         </div>
       </footer>

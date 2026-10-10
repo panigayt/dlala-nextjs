@@ -24,6 +24,18 @@ export function proxy(req: NextRequest) {
       return NextResponse.redirect(url, 301);
     }
   }
+  // Round 134: French UI users get the French guides. /guides is the Arabic
+  // canonical; /fr/guides is the French one. The dlala_lang cookie (set by
+  // the client on language switch) drives the redirect at request time.
+  const langCookie = req.cookies.get('dlala_lang')?.value;
+  if (langCookie === 'fr') {
+    const gm = req.nextUrl.pathname.match(/^\/guides(\/.*)?$/);
+    if (gm) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/fr/guides${gm[1] || ''}`;
+      return NextResponse.redirect(url, 307);
+    }
+  }
   return NextResponse.next();
 }
 
@@ -31,5 +43,7 @@ export const config = {
   matcher: [
     '/guides/prix-voitures-occasion-:year(\\d+)',
     '/fr/guides/prix-voitures-occasion-:year(\\d+)',
+    '/guides',
+    '/guides/:slug*',
   ],
 };

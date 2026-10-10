@@ -217,7 +217,8 @@ html[lang="fr"] .cta-top .h{font-size:15px}
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>
 </head>
 <body>
-<nav aria-label="breadcrumb"><a href="${SITE}/">الرئيسية</a> ‹ <a href="${carsCategoryUrl()}">سيارات</a> ‹ ${escHtml(modelInfo.ar)}</nav>
+<nav aria-label="breadcrumb"><a href="${SITE}/">${isFr ? 'Accueil' : 'الرئيسية'}</a> ‹ <a href="${isFr ? `${SITE}/fr/voitures` : carsCategoryUrl()}">${isFr ? 'Voitures' : 'سيارات'}</a> ‹ ${escHtml(isFr ? `${modelInfo.brand} ${modelInfo.model}` : modelInfo.ar)}</nav>
+<div style="text-align:${isFr ? 'right' : 'left'};margin:8px 0"><a href="${isFr ? modelUrl(modelInfo.slug) : `${SITE}/fr/voitures/modeles/${modelInfo.slug}`}">${isFr ? 'العربية' : 'Français'}</a></div>
 <h1>${escHtml(title.replace(' | دلالة', '').replace(' | DLALA', ''))}</h1>
 <p>${escHtml(description)}</p>
 ${ctaTopHtml(lang)}

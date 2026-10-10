@@ -43,7 +43,7 @@ const CTL =
 // yearTo/mileageFrom/mileageTo). Lives inside the FilterBar GET form so
 // facets submit as URL params alongside the other filters.
 function FacetBar({ filters }: { filters: SearchFilters }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   if (filters.cat === 'phones') {
     return (
       <>
@@ -67,7 +67,7 @@ function FacetBar({ filters }: { filters: SearchFilters }) {
           <option value="">{t('facetBrand')}</option>
           {facetPhoneBrandsForOs(filters.fOs || '').map((b) => (
             <option key={b} value={b}>
-              {brandLatinName(b)}
+              {brandLatinName(b, lang)}
             </option>
           ))}
         </select>
@@ -89,7 +89,7 @@ function FacetBar({ filters }: { filters: SearchFilters }) {
           <option value="">{t('facetBrand')}</option>
           {FACET_CAR_BRANDS.map((b) => (
             <option key={b} value={b}>
-              {brandLatinName(b)}
+              {brandLatinName(b, lang)}
             </option>
           ))}
         </select>

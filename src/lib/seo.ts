@@ -64,9 +64,9 @@ const BRAND_LATIN: Record<string, string> = {
 };
 
 // Brand key (pb*/cb*) -> Latin proper-noun label for facet option lists.
-// Keys ending in "Other" read as Arabic "أخرى" in i18n (0.0.0.43).
-export function brandLatinName(key: string): string {
-  if (/Other$/.test(key)) return 'أخرى';
+// Keys ending in "Other" are localized (AR أخرى / FR Autres / EN Other).
+export function brandLatinName(key: string, lang: Lang = 'ar'): string {
+  if (/Other$/.test(key)) return lang === 'fr' ? 'Autres' : lang === 'en' ? 'Other' : 'أخرى';
   return BRAND_LATIN[key] || key;
 }
 
