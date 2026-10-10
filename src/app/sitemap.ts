@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { cacheLife } from 'next/cache';
 import { fetchFeed } from '@/lib/firestore';
+import { GUIDE_SLUGS } from '@/lib/guides';
 
 const BASE = 'https://dlala-nextjs.vercel.app';
 
@@ -38,6 +39,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/auth`, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${BASE}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${BASE}/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    // Round 129: SEO guides (production parity — the production sitemap
+    // lists the guide articles weekly/0.7; the index pages are real crawlable
+    // routes served by the production guides function, included here).
+    // The dynamic price guide + model/category pages are Round 130.
+    { url: `${BASE}/guides`, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${BASE}/fr/guides`, changeFrequency: 'weekly', priority: 0.7 },
+    ...GUIDE_SLUGS.map((slug) => ({
+      url: `${BASE}/guides/${slug}`,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
+    ...GUIDE_SLUGS.map((slug) => ({
+      url: `${BASE}/fr/guides/${slug}`,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
   ];
 
   try {

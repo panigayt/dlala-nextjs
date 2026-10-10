@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import "./globals.css";
 import "./chrome.css";
 import "./vitrine.css";
+import "./guides.css";
 import SiteChrome from "@/components/SiteChrome";
 import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
