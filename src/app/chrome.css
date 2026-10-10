@@ -73,6 +73,9 @@
 [dir="rtl"] .drawer { right: 0; transform: translateX(100%); }
 [dir="ltr"] .drawer { left: 0; transform: translateX(-100%); }
 .drawer.open { transform: none; }
+/* Round 140 (10 Oct 2026): instant close on drawer navigation-link tap —
+   disables the 250ms slide so the menu never glitches mid-transition. */
+.drawer.no-anim, .drawer-overlay.no-anim { transition: none !important; }
 .drawer-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 14px; background: var(--emerald);

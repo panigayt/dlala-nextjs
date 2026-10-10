@@ -220,6 +220,21 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   // body class locks scroll, focus returns to the opener on close.
   // (0.0.0.21 A-14 focus containment + FD-007 inert parity.)
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  // Round 140 (Zak, 10 Oct 2026): tapping a drawer NAVIGATION link must close
+  // the drawer INSTANTLY (no 250ms slide-out) — otherwise the slide animation
+  // races the client-side page transition and the menu glitches mid-screen
+  // on mobile. Non-navigating closes (✕, Escape, overlay) keep the animation.
+  const [drawerInstant, setDrawerInstant] = useState(false);
+  const closeDrawerInstant = useCallback(() => {
+    setDrawerInstant(true);
+    setDrawerOpen(false);
+  }, []);
+  // Restore the slide animation when the drawer is opened again (the
+  // hamburger is the only opener).
+  const openDrawer = useCallback(() => {
+    setDrawerInstant(false);
+    setDrawerOpen(true);
+  }, []);
   useEffect(() => {
     if (!drawerOpen) return;
     try { prevFocus.current = document.activeElement; } catch { prevFocus.current = null; }
@@ -276,7 +291,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const doLogout = useCallback(async () => {
-    setDrawerOpen(false);
+    closeDrawerInstant();
     setAcctOpen(false);
     if (!client) return;
     try {
@@ -286,21 +301,21 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       return;
     }
     router.push('/');
-  }, [client, router, showToast, t]);
+  }, [client, router, showToast, t, closeDrawerInstant]);
 
   // Drawer "Aide" actions (js/app.js wireDrawerActions parity):
   // "Nous contacter" opens the support thread; "Signaler un problème"
   // deep-links to the ticket dialog in Settings (#report).
   const openSupportThread = useCallback(() => {
-    setDrawerOpen(false);
+    closeDrawerInstant();
     if (!user) { router.push('/auth?return=' + encodeURIComponent('/settings')); return; }
     router.push('/chat/supp_' + user.uid);
-  }, [user, router]);
+  }, [user, router, closeDrawerInstant]);
   const openReportDialog = useCallback(() => {
-    setDrawerOpen(false);
+    closeDrawerInstant();
     if (!user) { router.push('/auth?return=' + encodeURIComponent('/settings#report')); return; }
     router.push('/settings#report');
-  }, [user, router]);
+  }, [user, router, closeDrawerInstant]);
 
   // Legacy chat.html ships its own custom header and NO site chrome — but it
   // DOES include js/banner-early.js, so the platform banner shows there too.
@@ -380,7 +395,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   ) : (
-    <Link className="drawer-identity" href="/account" onClick={closeDrawer}>
+    <Link className="drawer-identity" href="/account" onClick={closeDrawerInstant}>
       <div className="drawer-avatar">
         {profile?.photoPath ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -406,7 +421,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
         href={'/auth' + returnParam}
         className={!isAuthPage || signupMode ? '' : 'active'}
         aria-current={!isAuthPage || signupMode ? undefined : 'page'}
-        onClick={closeDrawer}
+        onClick={closeDrawerInstant}
       >
         {t('login')}
       </Link>
@@ -414,7 +429,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
         href="/auth?mode=signup"
         className={signupMode ? 'active' : ''}
         aria-current={signupMode ? 'page' : undefined}
-        onClick={closeDrawer}
+        onClick={closeDrawerInstant}
       >
         {t('signup')}
       </Link>
@@ -422,16 +437,16 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   ) : (
     <>
       <div className="drawer-group-label">{t('navMain')}</div>
-      {PUBLIC_ENTRIES.filter((e) => e.key !== 'favorites').map((e) => navLink(e, closeDrawer))}
+      {PUBLIC_ENTRIES.filter((e) => e.key !== 'favorites').map((e) => navLink(e, closeDrawerInstant))}
       <div className="drawer-group-label">{t('navSpace')}</div>
       {accountEntries
         .filter((e) => e.key !== 'settings' && e.key !== 'alerts')
-        .map((e) => navLink(e, closeDrawer))}
+        .map((e) => navLink(e, closeDrawerInstant))}
       <div className="drawer-group-label">{t('navHelp')}</div>
       <button className="drawer-link" onClick={openSupportThread}>{t('contactSupport')}</button>
       <button className="drawer-link" onClick={openReportDialog}>{t('reportProblem')}</button>
       <div className="drawer-sep" role="separator" aria-hidden="true" />
-      {navLink(ACCOUNT_ENTRIES.find((e) => e.key === 'settings')!, closeDrawer)}
+      {navLink(ACCOUNT_ENTRIES.find((e) => e.key === 'settings')!, closeDrawerInstant)}
     </>
   );
 
@@ -452,7 +467,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
             aria-label={t('menu')}
             aria-expanded={drawerOpen ? 'true' : 'false'}
             aria-controls="drawer"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
           >
             ☰
           </button>
@@ -534,12 +549,12 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       </header>
 
       <div
-        className={'drawer-overlay' + (drawerOpen ? ' open' : '')}
+        className={'drawer-overlay' + (drawerOpen ? ' open' : '') + (drawerInstant ? ' no-anim' : '')}
         id="drawerOverlay"
         onClick={closeDrawer}
       />
       <aside
-        className={'drawer' + (drawerOpen ? ' open' : '')}
+        className={'drawer' + (drawerOpen ? ' open' : '') + (drawerInstant ? ' no-anim' : '')}
         id="drawer"
         ref={drawerRef}
         aria-label={t('menu')}
@@ -548,7 +563,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
         inert={!drawerOpen}
       >
         <div className="drawer-head">
-          <Link className="logo" href="/" onClick={closeDrawer}>
+          <Link className="logo" href="/" onClick={closeDrawerInstant}>
             <span className="logo-d">D</span>
             <span className="logo-dot">.</span>
             <span className="logo-name">{t('appName')}</span>
