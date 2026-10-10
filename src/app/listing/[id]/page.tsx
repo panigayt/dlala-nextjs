@@ -13,6 +13,7 @@ import { Suspense, Fragment } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import {
   fetchListing,
   fetchSimilarListings,
@@ -24,6 +25,16 @@ import {
 } from '@/lib/firestore';
 import { answerRows } from '@/lib/answers';
 import { WILAYAS } from '@/lib/wilayas';
+import {
+  SITE,
+  SITE_TAGLINE,
+  listingSeoText,
+  listingJsonLd,
+  listingBrandName,
+  isConditionExempt,
+  condLabelAr,
+  fmtPriceText,
+} from '@/lib/seo';
 import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
@@ -39,6 +50,82 @@ function wilayaName(code: number | undefined): string {
   if (!code) return '';
   const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
   return w ? `${w.code} - ${w.ar}` : '';
+}
+
+// Per-listing SEO — mirrors js/listing.js applyListingSeoHead() +
+// js/seo.js applyListingSeo(): dynamic title, meta description, OG tags,
+// Twitter cards (via generateMetadata) and JSON-LD (script tag in the page).
+// SEO must never break the page: any failure falls back to a bare title.
+function seoForListing(
+  l: ListingDetail,
+  id: string
+): { metadata: Metadata; jsonLd: Record<string, unknown> } {
+  const title = cardTitle(l).trim();
+  // js/listing.js applyListingSeoHead: priceLabel + negotiable suffix,
+  // wilayaLabel (allWilayas fallback), condLabel unless condition-exempt
+  // (C-R24-1 — the label must not leak into meta for exempt categories).
+  const priceLabel =
+    fmtPriceText(l.price) + (l.negotiable ? ' · قابل للتفاوض' : '');
+  const wilayaLabel = l.wilayaCode ? wilayaName(l.wilayaCode) : 'كل الولايات';
+  const condLabel =
+    l.condition && !isConditionExempt(l.categoryId, l.answers)
+      ? condLabelAr(l.condition)
+      : '';
+  const seo = listingSeoText({
+    title,
+    priceLabel,
+    wilayaLabel,
+    condLabel,
+    siteTagline: SITE_TAGLINE,
+  });
+  const url = `${SITE}/listing/${encodeURIComponent(id)}`;
+  const image = cardImage(l) || `${SITE}/icon-512.png`;
+  const jsonLd = listingJsonLd({
+    title: title || 'DLALA',
+    description: seo.description,
+    image: cardImage(l) || null,
+    brand: listingBrandName(l.answers),
+    url,
+    price: Number(l.price) || 0,
+    condition: l.condition,
+    status: l.status,
+  });
+  const metadata: Metadata = {
+    title: seo.title,
+    description: seo.description,
+    openGraph: {
+      // 'product' is not in Next.js's Metadata OpenGraph type union, but the
+      // runtime renders og:type verbatim — the cast keeps the legacy value.
+      type: 'product' as 'website',
+      siteName: 'DLALA',
+      title: seo.title,
+      description: seo.description,
+      url,
+      images: [image],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: seo.title,
+      description: seo.description,
+      images: [image],
+    },
+  };
+  return { metadata, jsonLd };
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  try {
+    const { id } = await params;
+    const listing = await getListing(id);
+    if (!listing) return { title: 'DLALA' };
+    return seoForListing(listing, id).metadata;
+  } catch {
+    return { title: 'DLALA' };
+  }
 }
 
 function description(l: ListingDetail, lang = 'ar'): string {
@@ -156,6 +243,18 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   const l = listing;
   const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
   const title = cardTitle(l);
+  // Per-listing JSON-LD (js/seo.js listingJsonLd parity). Rendered as a
+  // script tag — crawlers read JSON-LD anywhere in the HTML. '<' is
+  // escaped (\u003c) so user content can never break out of the script.
+  let jsonLdScript = '';
+  try {
+    jsonLdScript = JSON.stringify(seoForListing(l, id).jsonLd).replace(
+      /</g,
+      '\\u003c'
+    );
+  } catch {
+    jsonLdScript = '';
+  }
   // js/app.js renderAnswers parity: structured category Q&A.
   const rows = answerRows(l.answers);
   // js/listing.js loadMatches parity: similar ads (same category, max 12).
@@ -171,6 +270,12 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
+      {jsonLdScript && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript }}
+        />
+      )}
       {/* Gallery — clickable thumbnails + fullscreen lightbox
           (client component; mirrors js/listing.js LIS-8 gallery). */}
       <Gallery photos={photos} fallback={cardImage(l)} title={title} />
