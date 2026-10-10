@@ -16,6 +16,7 @@
 // exactly like the previous server-rendered version.
 
 import Link from 'next/link';
+import { useRef } from 'react';
 import { useLang } from '@/lib/i18n';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES, catName } from '@/lib/categories';
@@ -26,7 +27,6 @@ import {
   type SearchFilters,
   type SearchResult,
 } from '@/lib/firestore';
-import SaveSearchButton from '@/app/search/SaveSearchButton';
 import SearchResultsGrid from '@/app/search/SearchResultsGrid';
 
 type Wilaya = { code: number; ar: string; fr: string; en: string };
@@ -179,9 +179,30 @@ function FacetBar({ filters }: { filters: SearchFilters }) {
 // is preserved in a hidden input.
 function FilterBar({ filters }: { filters: SearchFilters }) {
   const { t, lang } = useLang();
+  const formRef = useRef<HTMLFormElement>(null);
   const q = filters.q || '';
   return (
-    <form action="/search" method="get" className="flex flex-wrap items-center gap-2 mb-4">
+    <form
+      ref={formRef}
+      action="/search"
+      method="get"
+      // Round 155 — 0.0.0.43 parity (Zak «في كل الفلاتر»): every dropdown
+      // (category, wilaya, sort, phone OS/brand, car brand/fuel/gearbox)
+      // applies instantly on change. Text inputs (min/max, year, mileage)
+      // still use the Apply button. Delegated like legacy's document-level
+      // change listener (js/home.js:2606-2612); this also covers the
+      // FacetBar selects rendered inside this form.
+      onChange={(e) => {
+        if ((e.target as HTMLElement).tagName === 'SELECT') {
+          const f = formRef.current;
+          if (f) {
+            if (typeof f.requestSubmit === 'function') f.requestSubmit();
+            else f.submit();
+          }
+        }
+      }}
+      className="flex flex-wrap items-center gap-2 mb-4"
+    >
       {q ? <input type="hidden" name="q" value={q} /> : null}
       <label htmlFor="search-cat" className="sr-only">
         {t('allCategories')}
@@ -276,7 +297,6 @@ export default function SearchPage({
           {filters.q ? `${t('searchResultsFor')}: "${filters.q}"` : t('searchTitle')}
         </h2>
         <FilterBar filters={filters} />
-        {hasFilter ? <SaveSearchButton filters={filters} /> : null}
         {hasFilter ? (
           error || !data ? (
             <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">

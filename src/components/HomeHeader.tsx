@@ -16,6 +16,7 @@
 //   min/max price, sort, apply/reset) with data-i18n keys verbatim.
 
 import Link from 'next/link';
+import { useRef } from 'react';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
 import { useLang } from '@/lib/i18n';
@@ -79,10 +80,29 @@ function CategoryChips() {
 
 function HomeFilters() {
   const { t, lang } = useLang();
+  const formRef = useRef<HTMLFormElement>(null);
   const ctl =
     'rounded-lg border border-[#e5e7eb] bg-white px-2.5 py-[9px] text-base text-zinc-900';
   return (
-    <form action="/search" method="get" className="flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#e5e7eb] rounded-xl p-3">
+    <form
+      ref={formRef}
+      action="/search"
+      method="get"
+      // Round 155 — 0.0.0.43 parity (Zak «في كل الفلاتر»): dropdowns apply
+      // instantly on change, no Apply tap needed. Price text inputs still
+      // use the Apply button. Delegated like legacy's document-level change
+      // listener (js/home.js:2606-2612).
+      onChange={(e) => {
+        if ((e.target as HTMLElement).tagName === 'SELECT') {
+          const f = formRef.current;
+          if (f) {
+            if (typeof f.requestSubmit === 'function') f.requestSubmit();
+            else f.submit();
+          }
+        }
+      }}
+      className="flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#e5e7eb] rounded-xl p-3"
+    >
       <label htmlFor="home-wilaya" className="sr-only">
         {t('wilaya')}
       </label>
