@@ -437,7 +437,13 @@ export default function AuthPage() {
         }
       }
       if (mounted.current) {
-        setError(authErrorMessage(e, t, 'signupError'));
+        // Round 147 (Zak, 10 Oct 2026): always show the raw Firebase error
+        // code alongside the localized message so the real cause is visible.
+        const eCode = (e as { code?: string } | null)?.code;
+        const eMsg = (e as Error | null)?.message;
+        setError(
+          authErrorMessage(e, t, 'signupError') + ' [' + (eCode || eMsg || 'unknown') + ']'
+        );
         setLoading(false);
       }
     }
