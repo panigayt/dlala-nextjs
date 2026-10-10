@@ -147,6 +147,117 @@ function ListingCardView({ l }: { l: ListingCard }) {
   );
 }
 
+// ---------- pro-store hero helpers (js/seller.js renderStoreHero parity) ----------
+
+// Cover URLs are injected into a style attribute — allow https:// only and
+// strip quotes (cssSafeUrl parity from js/seller.js).
+function cssSafeUrl(u: string | undefined): string {
+  const s = String(u || '');
+  if (!/^https:\/\//i.test(s)) return '';
+  return s.replace(/["']/g, '');
+}
+
+// js/seller.js storeLogoSrc parity: store logo, else account photo, else ''.
+function storeLogoSrc(s: SellerProfile): string {
+  const logo = String(s.storeLogoUrl || '');
+  if (logo && /^https:\/\//i.test(logo)) return logo;
+  const photo = String(s.photoUrl || s.photoPath || '');
+  if (photo && /^https:\/\//i.test(photo)) return photo;
+  return '';
+}
+
+function StoreHero({ s, uid }: { s: SellerProfile; uid: string }) {
+  const displayName = s.storeName || s.name || s.username || '';
+  const logo = storeLogoSrc(s);
+  const cover = cssSafeUrl(s.storeCoverUrl);
+  const bio = String(s.storeBio || '');
+  const isVerified = s.verified === true || s.emailVerified === true;
+  const ratingNum = Number(s.rating);
+  const ratingTxt = s.ratingCount
+    ? isFinite(ratingNum)
+      ? ratingNum.toFixed(1)
+      : '—'
+    : '—';
+  const deals = Number(s.confirmedDeals) || 0;
+  const followersCount = Number(s.followerCount) || 0;
+  const memberSince =
+    s.createdAt instanceof Date && !isNaN(s.createdAt.getTime())
+      ? s.createdAt.toLocaleDateString('ar-DZ', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : '';
+
+  return (
+    <div className="rounded-xl bg-white shadow-sm overflow-hidden" dir="rtl">
+      {cover && (
+        <div
+          className="h-36 sm:h-44 bg-zinc-200 bg-cover bg-center"
+          style={{ backgroundImage: `url("${cover}")` }}
+          role="img"
+          aria-label={displayName}
+        />
+      )}
+      <div className={`p-6${cover ? ' -mt-12 relative' : ''}`}>
+        <div className="flex items-start gap-4">
+          {logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logo}
+              alt={displayName}
+              className="w-20 h-20 rounded-full object-cover shrink-0 border-4 border-white shadow"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold shrink-0 border-4 border-white shadow">
+              {displayName ? displayName.charAt(0) : '?'}
+            </div>
+          )}
+          <div className="min-w-0 pt-1">
+            <h1 className="text-2xl font-bold text-zinc-900 truncate">
+              {displayName}
+              {isVerified && (
+                <span className="text-emerald-600 text-xl mr-1" title="موثّق">✓</span>
+              )}
+            </h1>
+            <p className="mt-1">
+              <span className="inline-block rounded-full bg-amber-100 text-amber-800 text-sm font-bold px-3 py-0.5">
+                ★ تاجر محترف
+              </span>
+            </p>
+            {bio && <p className="mt-2 text-zinc-700">{bio}</p>}
+            <p className="mt-1 text-sm text-zinc-600">🚚 توصيل لجميع الولايات</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-600 border-t border-zinc-100 pt-4">
+          <span>
+            ★ <b className="text-zinc-900">{ratingTxt}</b> التقييم
+          </span>
+          <span>
+            🤝 <b className="text-zinc-900">{deals}</b> صفقات مؤكدة
+          </span>
+          <span>
+            👥 <b className="text-zinc-900">{followersCount}</b> متابع
+          </span>
+          {memberSince && (
+            <span>
+              عضو منذ: <b className="text-zinc-900">{memberSince}</b>
+            </span>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3 items-stretch">
+          <div className="flex-1 min-w-[220px]">
+            <FollowButton storeUid={uid} />
+          </div>
+          <SellerActions uid={uid} storeName={displayName} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SellerProfileCard({ s }: { s: SellerProfile }) {
   const ratingNum = Number(s.rating);
   const hasRating = isFinite(ratingNum) && ratingNum > 0;
@@ -297,17 +408,28 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
     seller.storeTier === 'verified' && seller.storeName
       ? seller.storeName
       : seller.name || seller.username || '';
+  // js/seller.js parity: for pro stores the boutique hero sits above the
+  // tabs and replaces the ordinary profile card (its content moved into
+  // the hero + Infos). The hero carries the follow/share actions, so the
+  // standalone actions row below is rendered for non-pro sellers only.
+  const isPro = seller.storeTier === 'verified';
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6" dir="rtl">
-      <SellerProfileCard s={seller} />
+      {isPro ? (
+        <StoreHero s={seller} uid={uid} />
+      ) : (
+        <SellerProfileCard s={seller} />
+      )}
 
-      <div className="mt-4 flex flex-wrap gap-3 items-stretch">
-        <div className="flex-1 min-w-[220px]">
-          <FollowButton storeUid={uid} />
+      {!isPro && (
+        <div className="mt-4 flex flex-wrap gap-3 items-stretch">
+          <div className="flex-1 min-w-[220px]">
+            <FollowButton storeUid={uid} />
+          </div>
+          <SellerActions uid={uid} storeName={shareName} />
         </div>
-        <SellerActions uid={uid} storeName={shareName} />
-      </div>
+      )}
 
       <SellerTabs
         uid={uid}

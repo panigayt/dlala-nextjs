@@ -224,6 +224,10 @@ export interface SellerProfile {
   photoPath?: string;
   storeTier?: string;
   storeName?: string;
+  storeBio?: string;
+  storeCoverUrl?: string;
+  storeLogoUrl?: string;
+  confirmedDeals?: number;
   followerCount?: number;
   bio?: string;
   createdAt?: Date;
