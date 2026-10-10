@@ -13,6 +13,8 @@ export type Lang = 'ar' | 'fr' | 'en';
 const STRINGS: Record<Lang, Record<string, string>> = {
   ar: {
     account: 'حسابي', settings: 'الإعدادات', myAds: 'إعلاناتي', myFollows: 'متابعاتي',
+    dismiss: 'إغلاق', comingSoon: 'سيتوفر قريبًا',
+    downloadAppTitle: 'حمّل تطبيق دلالة على موبايلك',
     newFromFollows: 'جديد من متابَعيك',
     favorites: 'المفضلة', editProfile: 'تعديل الملف الشخصي', saveProfile: 'حفظ الملف',
     profileSaved: 'تم حفظ الملف الشخصي', loading: 'جارٍ التحميل...', retry: 'إعادة المحاولة',
@@ -84,6 +86,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
   },
   fr: {
     account: 'Mon compte', settings: 'Paramètres', myAds: 'Mes annonces', myFollows: 'Mes abonnements',
+    dismiss: 'Fermer', comingSoon: 'Bientôt disponible',
+    downloadAppTitle: 'Téléchargez l’app Dlala sur votre mobile',
     newFromFollows: 'Nouveautés de vos abonnements',
     favorites: 'Favoris', editProfile: 'Modifier le profil', saveProfile: 'Enregistrer',
     profileSaved: 'Profil enregistré', loading: 'Chargement...', retry: 'Réessayer',
@@ -155,6 +159,8 @@ const STRINGS: Record<Lang, Record<string, string>> = {
   },
   en: {
     account: 'My account', settings: 'Settings', myAds: 'My ads', myFollows: 'My follows',
+    dismiss: 'Dismiss', comingSoon: 'Coming soon',
+    downloadAppTitle: 'Get the Dlala app on your mobile',
     newFromFollows: 'New from your follows',
     favorites: 'Favorites', editProfile: 'Edit profile', saveProfile: 'Save profile',
     profileSaved: 'Profile saved', loading: 'Loading...', retry: 'Try again',

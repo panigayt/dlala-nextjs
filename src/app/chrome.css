@@ -271,3 +271,68 @@ button.drawer-link:hover { background: #eef3f0; }
   .skel, .skel::after { animation: none; }
   .drawer, .drawer-overlay { transition: none; }
 }
+
+/* ===== platform banner (Android/iOS) — js/app.js renderPlatformBanner parity ===== */
+/* Legacy: css/style.css — verbatim. Requires i18n keys: downloadAppTitle, comingSoon, dismiss. */
+
+#appBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--emerald);
+  color: #fff;
+  padding: 10px 12px;
+}
+#appBanner .appb-logo { display: inline-flex; align-items: center; }
+#appBanner .appb-logo .logo-d { width: 30px; height: 30px; font-size: 18px; }
+#appBanner .appb-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+#appBanner .appb-text strong { font-size: 14px; }
+#appBanner .appb-badges { display: inline-flex; gap: 8px; flex-shrink: 0; }
+#appBanner .appb-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; font-size: 13px; font-weight: 600;
+  background: #fff; color: var(--emerald);
+  border: 0; border-radius: 8px; cursor: pointer;
+  text-decoration: none; white-space: nowrap;
+  min-height: 44px; /* FM-007 (0.0.0.1w): banner controls >=44px */
+}
+#appBanner .appb-badge:hover { background: #f0f0f0; }
+#appBanner .appb-badge svg { flex-shrink: 0; }
+.appb-x {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-size: 16px;
+  /* FM-007 (0.0.0.1w): 44x44 dismiss target — the only way to
+     dismiss a banner that otherwise breaks the 320px layout. */
+  min-width: 44px; min-height: 44px; padding: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+.appb-x:hover { opacity: 1; }
+/* FM-002 (0.0.0.1w): at <=480px reflow into two rows: row 1 = logo + text +
+   close, row 2 = centered store badges. Grid areas follow `direction`, so
+   RTL keeps logo-first at the inline start, same as the flex row. */
+@media (max-width: 480px) {
+  #appBanner {
+    display: grid;
+    grid-template-columns: auto 1fr 44px;
+    grid-template-areas: "logo text x" "badges badges badges";
+    align-items: center; row-gap: 8px;
+  }
+  #appBanner .appb-logo { grid-area: logo; }
+  #appBanner .appb-text { grid-area: text; }
+  #appBanner .appb-x { grid-area: x; }
+  #appBanner .appb-badges { grid-area: badges; justify-content: center; }
+}
+/* legacy css/style.css:982 — hidden while the drawer is open */
+body.drawer-open #appBanner { display: none; }

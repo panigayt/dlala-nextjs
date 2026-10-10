@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthState, type CompatUser, type FirebaseClient } from '@/lib/firebase-client';
 import { useLang, type Lang } from '@/lib/i18n';
+import PlatformBanner from './PlatformBanner';
 
 // Version shown in the footer (legacy: APP_VERSION).
 const APP_VERSION = '0.1.0';
@@ -301,7 +302,9 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
     router.push('/settings#report');
   }, [user, router]);
 
-  if (isChat) return <>{children}</>;
+  // Legacy chat.html ships its own custom header and NO site chrome — but it
+  // DOES include js/banner-early.js, so the platform banner shows there too.
+  if (isChat) return <><PlatformBanner onToast={showToast} />{children}</>;
 
   const isPro = profile?.storeTier === 'verified';
   // 20 Sep 2026 (Zak): entries are pro-conditional — «متجري» replaces
@@ -436,6 +439,8 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      {/* Legacy body.prepend parity: banner sits above the sticky header */}
+      <PlatformBanner onToast={showToast} />
       <a className="skip-link" href="#main-content" onClick={onSkipLink}>
         {t('skipToContent')}
       </a>
