@@ -21,81 +21,17 @@ import { formatPrice, timeAgo } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 
-// Verbatim from js/i18n.ar.js
-const STR = {
-  alerts: 'التنبيهات',
-  newMatches: 'مطابقات جديدة',
-  notificationsTitle: 'الإشعارات',
-  markAllRead: 'تحديد الكل كمقروء',
-  savedSearches: 'عمليات البحث المحفوظة',
-  newSavedSearch: 'حفظ بحث جديد',
-  searchKeyword: 'الكلمة المفتاحية',
-  searchCategory: 'الفئة',
-  searchWilaya: 'الولاية',
-  searchMinPrice: 'السعر الأدنى',
-  searchMaxPrice: 'السعر الأقصى',
-  createSearch: 'حفظ البحث',
-  updateSearch: 'تحديث البحث',
-  cancelEdit: 'إلغاء التعديل',
-  searchEnabled: 'مفعّل',
-  searchDisabled: 'معطّل',
-  enableSearch: 'تفعيل',
-  disableSearch: 'إيقاف',
-  editSearch: 'تعديل البحث',
-  delete: 'حذف',
-  deleteSearchConfirm: 'حذف هذا البحث المحفوظ؟',
-  searchUpdated: 'تم تحديث البحث',
-  maxSearchesReached: 'وصلت إلى الحد الأقصى (10 عمليات بحث).',
-  searchNeedsCriteria: 'أدخل كلمة أو اختر فئة أو ولاية أو سعرًا قبل حفظ البحث',
-  noSavedSearches: 'لا توجد عمليات بحث محفوظة بعد.',
-  noNotifications: 'لا توجد إشعارات.',
-  noNewMatches: 'لا توجد إعلانات جديدة مطابقة لبحوثك.',
-  allCategories: 'كل الأقسام',
-  allWilayas: 'كل الولايات',
-  loading: 'جارٍ التحميل...',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  retry: 'إعادة المحاولة',
-  followedYou: '{name} بدأ بمتابعتك',
-  // Verbatim js/i18n.ar.js 'notif.price_drop' (read-time template — the
-  // writer stores title:'' and the sentence renders in the reader's
-  // language, per 0.0.0.31 D-2).
-  notifPriceDrop: 'انخفض سعر {title}: من {oldPrice} إلى {newPrice}',
-};
+import { CATEGORIES, catName } from '@/lib/categories';
+import { useLang, type Lang } from '@/lib/i18n';
 
-// Verbatim from js/categories.js
-const CATEGORIES = [
-  { id: 'phones', ar: 'هواتف' },
-  { id: 'cars', ar: 'سيارات' },
-  { id: 'moto', ar: 'دراجات نارية' },
-  { id: 'electronics', ar: 'إلكترونيات' },
-  { id: 'phone_acc', ar: 'إكسسوارات هواتف' },
-  { id: 'realestate', ar: 'عقارات' },
-  { id: 'furniture', ar: 'أثاث' },
-  { id: 'home', ar: 'المنزل' },
-  { id: 'clothes', ar: 'ملابس' },
-  { id: 'shoes', ar: 'أحذية' },
-  { id: 'kids', ar: 'مستلزمات الأطفال' },
-  { id: 'sports', ar: 'رياضة' },
-  { id: 'velos', ar: 'دراجات هوائية' },
-  { id: 'trottinettes', ar: 'تروتينات' },
-  { id: 'books', ar: 'كتب' },
-  { id: 'animals', ar: 'حيوانات' },
-  { id: 'services', ar: 'خدمات' },
-  { id: 'machines', ar: 'آلات ومعدات' },
-  { id: 'spareparts', ar: 'قطع غيار' },
-  { id: 'jobs', ar: 'وظائف' },
-  { id: 'beauty', ar: 'عطور وعناية وتجميل' },
-  { id: 'other', ar: 'أخرى' },
-];
+// Round 114: trilingual AR/FR/EN (js/i18n.js + js/alerts.js parity) —
+// user-facing strings now come from the shared i18n store via useLang().
+// Category names use the shared trilingual CATEGORIES (js/categories.js).
 
-function catName(id: string): string {
-  return CATEGORIES.find((c) => c.id === id)?.ar || id;
-}
-
-function wilayaName(code: number | null | undefined): string {
+function wilayaName(code: number | null | undefined, lang: Lang = 'ar'): string {
   if (code == null) return '';
   const w = WILAYAS.find((x) => x.code === code);
-  return w ? `${w.code} - ${w.ar}` : String(code);
+  return w ? `${w.code} - ${w[lang] || w.ar}` : String(code);
 }
 
 function tsMs(v: unknown): number {
@@ -116,12 +52,13 @@ function tsMs(v: unknown): number {
   return 0;
 }
 
-function localizedTitle(title: unknown): string {
+// Round 114: follows the UI language (trilingual parity).
+function localizedTitle(title: unknown, lang: Lang = 'ar'): string {
   if (!title) return '';
   if (typeof title === 'string') return title;
   if (typeof title === 'object') {
     const o = title as Record<string, string>;
-    return o.ar || o.fr || o.en || '';
+    return o[lang] || o.ar || o.fr || o.en || '';
   }
   return '';
 }
@@ -270,9 +207,9 @@ function notifTarget(n: Notif): string | null {
   return null;
 }
 
-function notifTitle(n: Notif): string {
+function notifTitle(n: Notif, t: (k: string) => string): string {
   if (n.type === 'follow') {
-    return STR.followedYou.replace(
+    return t('followedYou').replace(
       '{name}',
       String((n.data && n.data.followerName) || '')
     );
@@ -282,7 +219,7 @@ function notifTitle(n: Notif): string {
   if (n.type === 'price_drop') {
     const d = n.data || {};
     const str = (v: unknown) => String(v == null ? '' : v);
-    return STR.notifPriceDrop
+    return t('notifPriceDrop')
       .split('{title}')
       .join(str(d.title))
       .split('{oldPrice}')
@@ -293,10 +230,10 @@ function notifTitle(n: Notif): string {
   return n.title || '';
 }
 
-function searchMeta(s: SavedSearch): string {
+function searchMeta(s: SavedSearch, lang: Lang): string {
   const bits: string[] = [];
-  if (s.categoryId) bits.push(catName(s.categoryId));
-  if (s.wilayaCode != null) bits.push(wilayaName(s.wilayaCode));
+  if (s.categoryId) bits.push(catName(s.categoryId, lang));
+  if (s.wilayaCode != null) bits.push(wilayaName(s.wilayaCode, lang));
   if (s.minPrice != null)
     bits.push(`≥ ${Number(s.minPrice).toLocaleString('en-US')}`);
   if (s.maxPrice != null)
@@ -314,6 +251,7 @@ function listingThumb(l: FreshListing): string {
 }
 
 export default function AlertsPage() {
+  const { t, lang } = useLang();
   const authState = useRequireAuth();
   const router = useRouter();
   const [searches, setSearches] = useState<SavedSearch[]>([]);
@@ -480,12 +418,12 @@ export default function AlertsPage() {
           /* best-effort */
         }
       } catch {
-        setError(STR.errorGeneric);
+        setError(t('errorGeneric'));
       } finally {
         setLoading(false);
       }
     },
-    []
+    [t]
   );
 
   useEffect(() => {
@@ -542,7 +480,7 @@ export default function AlertsPage() {
     const hasCriteria =
       fQ.trim() || fCat || fWilaya !== '' || fMin !== '' || fMax !== '';
     if (!hasCriteria) {
-      showToast(STR.searchNeedsCriteria);
+      showToast(t('searchNeedsCriteria'));
       return;
     }
     setSaving(true);
@@ -557,12 +495,12 @@ export default function AlertsPage() {
       const col = client.db.collection(`users/${user.uid}/savedSearches`);
       if (editingId) {
         await col.doc(editingId).update(payload);
-        showToast(STR.searchUpdated);
+        showToast(t('searchUpdated'));
         resetForm();
       } else {
         const existing = await col.get();
         if (existing.size >= 10) {
-          showToast(STR.maxSearchesReached);
+          showToast(t('maxSearchesReached'));
           setSaving(false);
           return;
         }
@@ -576,7 +514,7 @@ export default function AlertsPage() {
       }
       await loadAll(client, user);
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(t('errorGeneric'));
     } finally {
       setSaving(false);
     }
@@ -593,7 +531,7 @@ export default function AlertsPage() {
         .update({ enabled: !s.enabled });
       await loadAll(client, user);
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(t('errorGeneric'));
     }
   }
 
@@ -601,7 +539,7 @@ export default function AlertsPage() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user) return;
-    if (!window.confirm(STR.deleteSearchConfirm)) return;
+    if (!window.confirm(t('deleteSearchConfirm'))) return;
     if (s.id === editingId) resetForm();
     try {
       await client.db
@@ -610,7 +548,7 @@ export default function AlertsPage() {
         .delete();
       await loadAll(client, user);
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(t('errorGeneric'));
     }
   }
 
@@ -627,7 +565,7 @@ export default function AlertsPage() {
       await batch.commit();
       await loadAll(client, user);
     } catch {
-      showToast(STR.errorGeneric);
+      showToast(t('errorGeneric'));
     }
   }
 
@@ -652,22 +590,22 @@ export default function AlertsPage() {
   }
 
   if (authState.status !== 'signed-in') {
-    return <LoadingSpinner label={STR.loading} />;
+    return <LoadingSpinner label={t('loading')} />;
   }
 
   const hasUnread = notifs.some((n) => !n.read);
 
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-5">
-          🔔 {STR.alerts}
+          🔔 {t('alerts')}
         </h1>
 
         {loading && (
           <div className="text-center py-10">
             <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-700" />
-            <p className="mt-4 text-zinc-600">{STR.loading}</p>
+            <p className="mt-4 text-zinc-600">{t('loading')}</p>
           </div>
         )}
 
@@ -684,7 +622,7 @@ export default function AlertsPage() {
                 }
               }}
             >
-              {STR.retry}
+              {t('retry')}
             </button>
           </div>
         )}
@@ -692,20 +630,20 @@ export default function AlertsPage() {
         {!loading && !error && (
           <>
             <h2 className="font-bold text-zinc-900 mt-2 mb-3">
-              {STR.newMatches}
+              {t('newMatches')}
             </h2>
             <div className="space-y-4">
               {matches.length === 0 && (
                 <div className="rounded-xl bg-white shadow-sm p-6 text-center text-sm text-zinc-500">
                   {searches.filter((s) => s.enabled).length === 0
-                    ? STR.noSavedSearches
-                    : STR.noNewMatches}
+                    ? t('noSavedSearches')
+                    : t('noNewMatches')}
                 </div>
               )}
               {matches.map(({ search, hits }) => (
                 <div key={search.id}>
                   <h3 className="text-sm font-bold text-zinc-700 my-2">
-                    🔎 {search.query || searchMeta(search) || '—'}
+                    🔎 {search.query || searchMeta(search, lang) || '—'}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
                     {hits.map((h) => {
@@ -734,7 +672,7 @@ export default function AlertsPage() {
                         )}
                         <div className="p-2">
                           <div className="text-xs font-medium text-zinc-900 truncate">
-                            {localizedTitle(h.title)}
+                            {localizedTitle(h.title, lang)}
                           </div>
                           <div className="text-sm font-bold text-emerald-700">
                             {formatPrice(h.price || 0)}
@@ -749,7 +687,7 @@ export default function AlertsPage() {
             </div>
 
             <h2 className="font-bold text-zinc-900 mt-8 mb-3">
-              {STR.notificationsTitle}
+              {t('notificationsTitle')}
             </h2>
             <div className="mb-3">
               <button
@@ -757,13 +695,13 @@ export default function AlertsPage() {
                 onClick={markAllRead}
                 disabled={!hasUnread}
               >
-                {STR.markAllRead}
+                {t('markAllRead')}
               </button>
             </div>
             <div className="space-y-2">
               {notifs.length === 0 && (
                 <div className="rounded-xl bg-white shadow-sm p-6 text-center text-sm text-zinc-500">
-                  📭 {STR.noNotifications}
+                  📭 {t('noNotifications')}
                 </div>
               )}
               {notifs.map((n) => {
@@ -771,7 +709,7 @@ export default function AlertsPage() {
                 const inner = (
                   <>
                     <div className="font-bold text-zinc-900 text-sm">
-                      {notifTitle(n)}
+                      {notifTitle(n, t)}
                     </div>
                     {n.body && (
                       <div className="text-sm text-zinc-600">{n.body}</div>
@@ -780,12 +718,13 @@ export default function AlertsPage() {
                       {timeAgo(
                         tsMs(n.createdAt)
                           ? new Date(tsMs(n.createdAt))
-                          : undefined
+                          : undefined,
+                        lang
                       )}
                     </div>
                   </>
                 );
-                const cls = `rounded-xl shadow-sm p-3 bg-white ${n.read ? '' : 'border-r-4 border-r-emerald-600'}`;
+                const cls = `rounded-xl shadow-sm p-3 bg-white ${n.read ? '' : 'border-s-4 border-s-emerald-600'}`;
                 return target ? (
                   <a
                     key={n.id}
@@ -807,12 +746,12 @@ export default function AlertsPage() {
             </div>
 
             <h2 className="font-bold text-zinc-900 mt-8 mb-3">
-              {STR.savedSearches}
+              {t('savedSearches')}
             </h2>
             <div className="space-y-2">
               {searches.length === 0 && (
                 <div className="rounded-xl bg-white shadow-sm p-6 text-center text-sm text-zinc-500">
-                  🔔 {STR.noSavedSearches}
+                  🔔 {t('noSavedSearches')}
                 </div>
               )}
               {searches.map((s) => (
@@ -825,12 +764,12 @@ export default function AlertsPage() {
                       {s.query || '—'}
                     </strong>
                     <span className="text-xs text-zinc-400">
-                      {s.enabled ? STR.searchEnabled : STR.searchDisabled}
+                      {s.enabled ? t('searchEnabled') : t('searchDisabled')}
                     </span>
                   </div>
-                  {searchMeta(s) && (
+                  {searchMeta(s, lang) && (
                     <div className="text-xs text-zinc-500 mt-1">
-                      {searchMeta(s)}
+                      {searchMeta(s, lang)}
                     </div>
                   )}
                   <div className="flex gap-2 mt-2 flex-wrap">
@@ -838,19 +777,19 @@ export default function AlertsPage() {
                       className={btnSecondaryCls + ' !py-1.5 !px-3 text-sm'}
                       onClick={() => toggleSearch(s)}
                     >
-                      {s.enabled ? STR.disableSearch : STR.enableSearch}
+                      {s.enabled ? t('disableSearch') : t('enableSearch')}
                     </button>
                     <button
                       className={btnSecondaryCls + ' !py-1.5 !px-3 text-sm'}
                       onClick={() => startEdit(s)}
                     >
-                      {STR.editSearch}
+                      {t('editSearch')}
                     </button>
                     <button
                       className={btnSecondaryCls + ' !py-1.5 !px-3 text-sm !text-red-600'}
                       onClick={() => deleteSearch(s)}
                     >
-                      {STR.delete}
+                      {t('delete')}
                     </button>
                   </div>
                 </div>
@@ -864,13 +803,13 @@ export default function AlertsPage() {
               noValidate
             >
               <h3 className="font-bold text-zinc-900 mb-3">
-                {STR.newSavedSearch}
+                {t('newSavedSearch')}
               </h3>
               <label
                 htmlFor="sQ"
                 className="block text-sm font-medium text-zinc-700 mb-1"
               >
-                {STR.searchKeyword}
+                {t('searchKeyword')}
               </label>
               <input
                 id="sQ"
@@ -885,7 +824,7 @@ export default function AlertsPage() {
                     htmlFor="sCat"
                     className="block text-sm font-medium text-zinc-700 mb-1"
                   >
-                    {STR.searchCategory}
+                    {t('searchCategory')}
                   </label>
                   <select
                     id="sCat"
@@ -893,10 +832,10 @@ export default function AlertsPage() {
                     value={fCat}
                     onChange={(e) => setFCat(e.target.value)}
                   >
-                    <option value="">{STR.allCategories}</option>
+                    <option value="">{t('allCategories')}</option>
                     {CATEGORIES.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.ar}
+                        {c[lang] || c.ar}
                       </option>
                     ))}
                   </select>
@@ -906,7 +845,7 @@ export default function AlertsPage() {
                     htmlFor="sWilaya"
                     className="block text-sm font-medium text-zinc-700 mb-1"
                   >
-                    {STR.searchWilaya}
+                    {t('searchWilaya')}
                   </label>
                   <select
                     id="sWilaya"
@@ -914,10 +853,10 @@ export default function AlertsPage() {
                     value={fWilaya}
                     onChange={(e) => setFWilaya(e.target.value)}
                   >
-                    <option value="">{STR.allWilayas}</option>
+                    <option value="">{t('allWilayas')}</option>
                     {WILAYAS.map((w) => (
                       <option key={w.code} value={w.code}>
-                        {w.code} - {w.ar}
+                        {w.code} - {w[lang] || w.ar}
                       </option>
                     ))}
                   </select>
@@ -927,7 +866,7 @@ export default function AlertsPage() {
                     htmlFor="sMin"
                     className="block text-sm font-medium text-zinc-700 mb-1"
                   >
-                    {STR.searchMinPrice}
+                    {t('searchMinPrice')}
                   </label>
                   <input
                     id="sMin"
@@ -944,7 +883,7 @@ export default function AlertsPage() {
                     htmlFor="sMax"
                     className="block text-sm font-medium text-zinc-700 mb-1"
                   >
-                    {STR.searchMaxPrice}
+                    {t('searchMaxPrice')}
                   </label>
                   <input
                     id="sMax"
@@ -959,7 +898,7 @@ export default function AlertsPage() {
               </div>
               <div className="mt-4 flex gap-2">
                 <button type="submit" className={btnCls + ' !w-auto !px-6'} disabled={saving}>
-                  {editingId ? STR.updateSearch : STR.createSearch}
+                  {editingId ? t('updateSearch') : t('createSearch')}
                 </button>
                 {editingId && (
                   <button
@@ -967,7 +906,7 @@ export default function AlertsPage() {
                     className={btnSecondaryCls}
                     onClick={resetForm}
                   >
-                    {STR.cancelEdit}
+                    {t('cancelEdit')}
                   </button>
                 )}
               </div>
