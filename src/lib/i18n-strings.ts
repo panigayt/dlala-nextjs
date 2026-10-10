@@ -150,7 +150,6 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     fuelPetrol: 'بنزين', fuelDiesel: 'ديزل',
     fuelGas: 'غاز', fuelElectric: 'كهربائي',
     gearManual: 'يدوي', gearAuto: 'أوتوماتيكي',
-    saveThisSearch: 'حفظ هذا البحث', searchSaved: 'تم حفظ البحث.',
     maxSearchesReached: 'وصلت إلى الحد الأقصى (10 عمليات بحث).',
     searchNeedsCriteria: 'أدخل كلمة أو اختر فئة أو ولاية أو سعرًا قبل حفظ البحث',
     // Alerts center (Round 114) — verbatim js/i18n.{ar,fr,en}.js.
@@ -179,7 +178,6 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noNewMatches: 'لا توجد إعلانات جديدة مطابقة لبحوثك.',
     followedYou: '{name} بدأ بمتابعتك',
     notifPriceDrop: 'انخفض سعر {title}: من {oldPrice} إلى {newPrice}',
-    loginToSaveSearch: 'سجّل الدخول لحفظ هذا البحث',
     loginToFavorite: 'سجّل الدخول لإضافة الإعلان إلى المفضلة',
     discoverStore: 'اكتشف متجر',
     wantedBadge: 'مطلوب', sold: 'مباع', wholesale: 'الجملة',
@@ -494,7 +492,6 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     fuelPetrol: 'Essence', fuelDiesel: 'Diesel',
     fuelGas: 'GPL', fuelElectric: 'Électrique',
     gearManual: 'Manuelle', gearAuto: 'Automatique',
-    saveThisSearch: 'Sauvegarder cette recherche', searchSaved: 'Recherche sauvegardée.',
     maxSearchesReached: 'Limite atteinte (10 recherches).',
     searchNeedsCriteria: 'Saisissez un mot-clé ou choisissez une catégorie, une wilaya ou un prix avant d\'enregistrer la recherche',
     // Alerts center (Round 114) — verbatim js/i18n.{ar,fr,en}.js.
@@ -523,7 +520,6 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noNewMatches: 'Aucune nouvelle annonce pour vos recherches.',
     followedYou: '{name} a commencé à vous suivre',
     notifPriceDrop: 'Prix en baisse pour {title} : de {oldPrice} à {newPrice}',
-    loginToSaveSearch: 'Connectez-vous pour enregistrer cette recherche',
     loginToFavorite: 'Connectez-vous pour ajouter cette annonce aux favoris',
     discoverStore: 'Découvrez la boutique',
     wantedBadge: 'Recherché', sold: 'Vendu', wholesale: 'Gros',
@@ -840,7 +836,6 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     fuelPetrol: 'Petrol', fuelDiesel: 'Diesel',
     fuelGas: 'Gas', fuelElectric: 'Electric',
     gearManual: 'Manual', gearAuto: 'Automatic',
-    saveThisSearch: 'Save this search', searchSaved: 'Search saved.',
     maxSearchesReached: 'Limit reached (10 searches).',
     searchNeedsCriteria: 'Enter a keyword or choose a category, wilaya or price before saving the search',
     // Alerts center (Round 114) — verbatim js/i18n.{ar,fr,en}.js.
@@ -869,7 +864,6 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noNewMatches: 'No new listings match your searches.',
     followedYou: '{name} started following you',
     notifPriceDrop: 'Price drop on {title}: from {oldPrice} to {newPrice}',
-    loginToSaveSearch: 'Sign in to save this search',
     loginToFavorite: 'Sign in to save this listing to your favorites',
     discoverStore: 'Discover the store',
     wantedBadge: 'Wanted', sold: 'Sold', wholesale: 'Wholesale',
