@@ -416,7 +416,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
 
   const drawerLinks = !user ? (
     <>
-      {PUBLIC_ENTRIES.map((e) => navLink(e))}
+      {PUBLIC_ENTRIES.map((e) => navLink(e, closeDrawerInstant))}
       <Link
         href={'/auth' + returnParam}
         className={!isAuthPage || signupMode ? '' : 'active'}
