@@ -277,25 +277,11 @@ export default function ConversationsPage() {
       const onErr = () => {
         setError(convSt(lang, 'errorGeneric'));
       };
-      try {
-        // Ordered live query; falls back to unordered + client sort when
-        // the composite index is missing.
-        unsubRef.current = base
-          .orderBy('updatedAt', 'desc')
-          .limit(60)
-          .onSnapshot(onSnap, () => {
-            if (unsubRef.current) {
-              try {
-                unsubRef.current();
-              } catch {
-                /* noop */
-              }
-            }
-            unsubRef.current = base.limit(60).onSnapshot(onSnap, onErr);
-          });
-      } catch {
-        unsubRef.current = base.limit(60).onSnapshot(onSnap, onErr);
-      }
+      // Round 153: removed Firestore orderBy('updatedAt') — it requires a
+      // composite index (participants array-contains + updatedAt desc) that
+      // may not exist, causing the list to appear empty. onSnap already
+      // sorts client-side via tsMs(), so the server-side orderBy is redundant.
+      unsubRef.current = base.limit(60).onSnapshot(onSnap, onErr);
     },
     // lang is passed as an argument (not closed over); the effect lists it
     // in deps so a language switch re-subscribes with the new lang
