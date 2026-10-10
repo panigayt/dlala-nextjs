@@ -11,6 +11,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { useAuthState } from '@/lib/firebase-client';
+import { useLang } from '@/lib/i18n';
 
 export default function SellerTabs({
   uid,
@@ -27,8 +28,14 @@ export default function SellerTabs({
 }) {
   const [tab, setTab] = useState<'listings' | 'infos'>('listings');
   const auth = useAuthState();
+  const { t } = useLang();
   const isOwner = auth.status === 'signed-in' && auth.user.uid === uid;
-  const listingsLabel = isPro ? '🏬 المتجر' : isOwner ? '📋 إعلاناتي' : '📋 الإعلانات';
+  // Round 111: tab labels follow the UI language (js/i18n.js parity).
+  const listingsLabel = isPro
+    ? `🏬 ${t('store')}`
+    : isOwner
+      ? `📋 ${t('myAds')}`
+      : t('storeListings');
 
   const tabCls = (active: boolean) =>
     `flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-colors ${
@@ -37,7 +44,7 @@ export default function SellerTabs({
 
   return (
     <div className="mt-6">
-      <div role="tablist" aria-label="أقسام البائع" className="flex gap-2">
+      <div role="tablist" aria-label={t('sellerSections')} className="flex gap-2">
         <button
           type="button"
           role="tab"
@@ -54,7 +61,7 @@ export default function SellerTabs({
           onClick={() => setTab('infos')}
           className={tabCls(tab === 'infos')}
         >
-          المعلومات
+          {t('infosTab')}
         </button>
       </div>
       <div role="tabpanel" hidden={tab !== 'listings'} className="mt-4">

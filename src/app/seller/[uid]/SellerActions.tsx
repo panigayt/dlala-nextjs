@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
+import { useLang } from '@/lib/i18n';
 import { withTimeout } from '@/lib/firebase-compat';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
@@ -30,21 +31,9 @@ import ReportUserButton from '@/components/ReportUserButton';
 const TOGGLE_BLOCK_URL =
   'https://europe-west3-dlala-85cea.cloudfunctions.net/toggleBlock';
 
-// Verbatim strings from js/i18n.ar.js
-const STR = {
-  shareStore: 'مشاركة المتجر',
-  loginToBlock: 'سجّل الدخول لحظر مستخدم',
-  blockFailed: 'تعذّر تحديث الحظر — حاول مجدداً.',
-  userBlocked: 'تم حظر المستخدم.',
-  userUnblocked: 'تم إلغاء حظر المستخدم.',
-  block: 'حظر',
-  unblock: 'إلغاء الحظر',
-  blockConfirm: 'حظر هذا المستخدم؟ لن تتمكنا من مراسلة بعضكما بعد الآن.',
-  copyLink: 'نسخ الرابط',
-  linkCopied: 'تم نسخ الرابط.',
-  close: 'إغلاق',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-};
+// Round 111: strings follow the UI language via useLang() (js/i18n.js
+// parity) — verbatim keys from js/i18n.{ar,fr,en}.js. The STR const is
+// gone; call sites use t('key') directly.
 
 // Canonical store share URL — verbatim js/market.js storeShareUrl.
 const storeShareUrl = (uid: string) =>
@@ -59,6 +48,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { t, lang } = useLang();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -69,7 +59,7 @@ function Modal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      dir="rtl"
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
       onClick={onClose}
     >
       <div
@@ -84,7 +74,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            aria-label={STR.close}
+            aria-label={t('close')}
             className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100"
           >
             ✕
@@ -105,6 +95,8 @@ export default function SellerActions({
 }) {
   const router = useRouter();
   const auth = useAuthState();
+  // Round 111: strings follow the UI language (js/i18n.js parity).
+  const { t, lang } = useLang();
   const [toast, setToast] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   // null = checking (never a false 🚫/✓) — js/block.js paintBlockButton
@@ -179,13 +171,13 @@ export default function SellerActions({
   const onBlock = useCallback(async () => {
     if (auth.status === 'loading' || blockBusy) return;
     if (!user || !client) {
-      guestNudgeThenLogin(STR.loginToBlock);
+      guestNudgeThenLogin(t('loginToBlock'));
       return;
     }
     if (user.uid === uid) return;
     // js/block.js armBlockButton: unblocking never asks; blocking asks once.
     if (!blocked) {
-      if (!window.confirm(STR.blockConfirm)) return;
+      if (!window.confirm(t('blockConfirm'))) return;
     }
     setBlockBusy(true);
     try {
@@ -202,14 +194,14 @@ export default function SellerActions({
       }
       const nowBlocked = json.result.blocked as boolean;
       if (mounted.current) setBlocked(nowBlocked);
-      showToast(nowBlocked ? STR.userBlocked : STR.userUnblocked);
+      showToast(nowBlocked ? t('userBlocked') : t('userUnblocked'));
     } catch (e) {
       console.error(e);
-      showToast(STR.blockFailed);
+      showToast(t('blockFailed'));
     } finally {
       if (mounted.current) setBlockBusy(false);
     }
-  }, [auth.status, blockBusy, user, client, uid, blocked, guestNudgeThenLogin, showToast]);
+  }, [auth.status, blockBusy, user, client, uid, blocked, guestNudgeThenLogin, showToast, t]);
 
   // ---------- share ----------
   const shareUrl = storeShareUrl(uid);
@@ -231,22 +223,22 @@ export default function SellerActions({
     try {
       await window.navigator.clipboard.writeText(shareUrl);
       setShareOpen(false);
-      showToast(STR.linkCopied);
+      showToast(t('linkCopied'));
     } catch {
-      window.prompt(STR.copyLink, shareUrl);
+      window.prompt(t('copyLink'), shareUrl);
     }
-  }, [shareUrl, showToast]);
+  }, [shareUrl, showToast, t]);
 
 
 
   return (
-    <div className="flex flex-wrap gap-3 items-center" dir="rtl">
+    <div className="flex flex-wrap gap-3 items-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {/* Share — visible to everyone including the owner (legacy parity). */}
       <button
         type="button"
         onClick={onShare}
-        title={STR.shareStore}
-        aria-label={STR.shareStore}
+        title={t('shareStore')}
+        aria-label={t('shareStore')}
         className="rounded-lg px-4 py-3 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
       >
         🔗
@@ -263,12 +255,12 @@ export default function SellerActions({
           aria-pressed={blocked === true}
           className="rounded-lg px-4 py-3 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-red-300 disabled:opacity-50"
         >
-          {blocked === true ? `✓ ${STR.unblock}` : `🚫 ${STR.block}`}
+          {blocked === true ? `✓ ${t('unblock')}` : `🚫 ${t('block')}`}
         </button>
       )}
 
       {shareOpen && (
-        <Modal title={STR.shareStore} onClose={() => setShareOpen(false)}>
+        <Modal title={t('shareStore')} onClose={() => setShareOpen(false)}>
           <div className="flex flex-wrap gap-2">
             <a
               className="rounded-lg bg-emerald-700 text-white font-bold px-4 py-2"
@@ -291,7 +283,7 @@ export default function SellerActions({
               onClick={onCopyLink}
               className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
             >
-              {STR.copyLink}
+              {t('copyLink')}
             </button>
           </div>
         </Modal>

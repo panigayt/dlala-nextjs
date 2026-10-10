@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type ListingCard } from '@/lib/firestore';
 import { catName } from '@/lib/categories';
+import { useLang } from '@/lib/i18n';
 import ListingCardView from '@/components/ListingCardView';
 
 // js/seller.js storeSearchHaystack parity.
@@ -46,6 +47,8 @@ export default function StoreListingsGrid({
   const [activeCat, setActiveCat] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(false);
+  // Round 111: all strings follow the UI language (js/i18n.js parity).
+  const { t } = useLang();
 
   useEffect(() => {
     onCountChange?.(listings.length);
@@ -110,8 +113,8 @@ export default function StoreListingsGrid({
             type="search"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="ابحث في المتجر..."
-            aria-label="ابحث في المتجر"
+            placeholder={t('searchInStore')}
+            aria-label={t('searchInStore')}
             className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-600 focus:outline-none"
           />
         </div>
@@ -120,7 +123,7 @@ export default function StoreListingsGrid({
         <div
           className="mb-3 flex flex-wrap gap-2"
           role="group"
-          aria-label="فئات المتجر"
+          aria-label={t('storeCategories')}
         >
           <button
             type="button"
@@ -128,7 +131,7 @@ export default function StoreListingsGrid({
             aria-pressed={activeCat === ''}
             className={tabCls(activeCat === '')}
           >
-            الكل
+            {t('all')}
           </button>
           {cats.map((c) => (
             <button
@@ -146,8 +149,8 @@ export default function StoreListingsGrid({
       {filtered.length === 0 ? (
         <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
           {listings.length === 0
-            ? 'لا توجد إعلانات متاحة حاليا.'
-            : 'لا توجد نتائج مطابقة.'}
+            ? t('noAdsAvailable')
+            : t('noMatchingResults')}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -164,11 +167,11 @@ export default function StoreListingsGrid({
             disabled={loadingMore}
             className="rounded-lg bg-white text-emerald-700 border border-emerald-700 px-6 py-2.5 font-medium hover:bg-emerald-50 disabled:opacity-60"
           >
-            {loadingMore ? 'جارٍ التحميل...' : 'عرض المزيد'}
+            {loadingMore ? t('loading') : t('loadMore')}
           </button>
           {moreError && (
             <p className="mt-2 text-sm text-red-600">
-              تعذّر تحميل المزيد. حاول مجددًا.
+              {t('sellerLoadMoreFailed')}
             </p>
           )}
         </div>
