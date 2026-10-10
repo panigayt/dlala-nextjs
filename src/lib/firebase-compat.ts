@@ -105,19 +105,25 @@ let initP: Promise<WindowWithFirebase['firebase']> | null = null;
 export function getFirebase(): Promise<NonNullable<WindowWithFirebase['firebase']>> {
   if (initP) return initP as Promise<NonNullable<WindowWithFirebase['firebase']>>;
   initP = (async () => {
-    for (const src of SDK_SCRIPTS) {
-      await loadScript(src);
-    }
-    const w = window as unknown as WindowWithFirebase;
-    const fb = w.firebase;
-    if (!fb) throw new Error('sdk-load-failed');
-    if (fb.apps.length === 0) fb.initializeApp(FIREBASE_CONFIG);
     try {
-      await fb.auth().setPersistence(fb.auth.Auth.Persistence.LOCAL);
-    } catch {
-      // non-fatal (private mode etc.)
+      for (const src of SDK_SCRIPTS) {
+        await loadScript(src);
+      }
+      const w = window as unknown as WindowWithFirebase;
+      const fb = w.firebase;
+      if (!fb) throw new Error('sdk-load-failed');
+      if (fb.apps.length === 0) fb.initializeApp(FIREBASE_CONFIG);
+      try {
+        await fb.auth().setPersistence(fb.auth.Auth.Persistence.LOCAL);
+      } catch {
+        // non-fatal (private mode etc.)
+      }
+      return fb;
+    } catch (e) {
+      // Reset on failure so the next call retries (don't cache rejections)
+      initP = null;
+      throw e;
     }
-    return fb;
   })();
   return initP as Promise<NonNullable<WindowWithFirebase['firebase']>>;
 }
