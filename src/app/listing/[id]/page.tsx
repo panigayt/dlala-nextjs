@@ -3,7 +3,7 @@
 // Pattern (Next.js 16 Cache Components + Partial Prefetching):
 //   - The route shell prerenders instantly.
 //   - <Suspense> wraps the params-dependent fetch: first visit to an ID
-//     renders on demand, then the result is cached (ISR, 60s revalidate).
+//     renders on demand, then the result is cached (ISR, 300s revalidate).
 //     Subsequent visits serve from cache.
 //   - The listing document is fetched server-side via Firestore REST.
 //   - Public view renders without auth; sold/hidden docs (403 anonymous)
@@ -62,7 +62,8 @@ import ViewRecorder from './ViewRecorder';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
-  cacheLife({ revalidate: 60 });
+  // Round 150: listings rarely change — 5min ISR (was 60s).
+  cacheLife({ revalidate: 300 });
   return fetchListing(id);
 }
 
