@@ -343,11 +343,18 @@ export default function Gallery({
                 (i === sel ? 'ring-2 ring-emerald-700' : 'opacity-70 hover:opacity-100')
               }
             >
+              {/* Round 158: all strip thumbs eager — they are visible above the
+                  fold in the strip (small count), and lazy delayed 1+ thumbs
+                  on weak connections. fetchPriority stays low so the hero
+                  (fetchPriority="high") always wins the bandwidth race.
+                  src falls back to the full photo only when no dedicated
+                  thumb exists (legacy/pre-0.0.0.1w listings). */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={thumbs[i] || p}
                 alt=""
-                loading={i === 0 ? 'eager' : 'lazy'}
+                loading="eager"
+                fetchPriority="low"
                 decoding="async"
                 className="w-20 h-20 object-cover"
               />

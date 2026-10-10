@@ -221,6 +221,10 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
   // 0.0.0.1s per-index thumbnail preference (js/app.js detailInnerHtml):
   // photo_thumbs, then legacy thumbUrls, then the full photo.
+  // Round 158: the `|| p` fallback is the known slow path — only for
+  // legacy/pre-0.0.0.1w listings that have no dedicated thumb variant.
+  // For those listings the strip loads the full photo; current listings
+  // always have thumbs, so the fast path (thumb URL) is used.
   const thumbs = photos.map(
     (p, i) => (l.photo_thumbs && l.photo_thumbs[i]) || (l.thumbUrls && l.thumbUrls[i]) || p
   );
