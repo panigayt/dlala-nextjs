@@ -847,6 +847,59 @@ export async function searchListings(
   return (await searchListingsWithCount(f, limit)).listings;
 }
 
+// HOM-1 (16 Sep 2026, production parity): background fetch of all-wilayas
+// wanted ads (wilayaCode 0). Production js/home.js fetchWantedAllWilayas():
+// separate query for wilayaCode == 0 + status IN [available, negotiating],
+// then client-side filter by isWanted/cat/price. The raw pool is
+// filter-independent, so callers merge the filtered subset.
+async function fetchWantedZeroWilaya(f: SearchFilters): Promise<ListingCard[]> {
+  const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const wilayaEq = {
+    fieldFilter: {
+      field: { fieldPath: 'wilayaCode' }, op: 'EQUAL',
+      value: { integerValue: '0' },
+    },
+  };
+  const statusIn = {
+    fieldFilter: {
+      field: { fieldPath: 'status' }, op: 'IN',
+      value: { arrayValue: { values: [{ stringValue: 'available' }, { stringValue: 'negotiating' }] } },
+    },
+  };
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'listings' }],
+          where: { compositeFilter: { op: 'AND', filters: [wilayaEq, statusIn] } },
+          select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
+          limit: 100,
+        },
+      }),
+      cache: 'no-store',
+    });
+    if (!r.ok) return [];
+    const body = await r.json().catch(() => null);
+    const docs = (Array.isArray(body) ? body : [])
+      .filter((x) => x.document)
+      .map((x) => restDocToObj(x.document));
+    // fetchWantedAllWilayasFilter (js/home.js, verbatim logic)
+    const lo = f.min !== undefined && f.min !== '' ? Number(f.min) : -Infinity;
+    const hi = f.max !== undefined && f.max !== '' ? Number(f.max) : Infinity;
+    return docs.filter((d) => {
+      if (!d.isWanted) return false;
+      if (f.cat && d.categoryId !== f.cat) return false;
+      const p = Number(d.price || 0);
+      if (p < lo || p > hi) return false;
+      return true;
+    });
+  } catch {
+    return [];
+  }
+}
+
 // Internal pipeline: server pool → client refinements → matched docs
 // (pre-slice; the caller decides how many to paint).
 async function runSearchPipeline(
@@ -1016,6 +1069,24 @@ async function runSearchPipeline(
     }
   }
 
+  // HOM-1 (16 Sep 2026, production parity): keep all-wilayas wanted ads
+  // (wilayaCode 0) even under a wilaya filter — they are relevant everywhere
+  // by definition. (Sale ads can never carry wilayaCode 0: publish + rules
+  // forbid it.) Production fetches them in a separate background query and
+  // merges; same here.
+  if (f.wilaya) {
+    const wantedZero = await fetchWantedZeroWilaya(f);
+    if (wantedZero.length) {
+      const seen = new Set(docs.map((d) => d.id));
+      for (const w of wantedZero) {
+        if (!seen.has(w.id)) {
+          docs.push(w);
+          seen.add(w.id);
+        }
+      }
+    }
+  }
+
   // Facet refinement (js/home.js matchFacets, verbatim): the client-side
   // correctness layer under the server plan. Always runs when facets are
   // active — it is a no-op for facets the server already applied exactly,
@@ -1045,7 +1116,83 @@ async function runSearchPipeline(
     // (legacy renderFeed sort branch). No slice here — the caller paints.
     docs = (!f.sort || f.sort === 'recent') ? relevanceRank(matched, f.q) : matched;
   }
+
+  // 0.0.0.39 D-7 parity (Round 164): boosted/pro sellers lead the regular
+  // pool when there is no text query and sort is recent. Stable partition —
+  // the fetched ranking is preserved inside each group. Live 0.0.0.39
+  // verified: `if (!F.q) pool = feedBoostPartition(pool, feedBoostSeller)`
+  // inside the sort==='recent' branch. Taste ranking and follow boost stay
+  // default-feed-only (production isDefaultFilter parity — NOT applied
+  // here), and vitrine showcase cards are also default-feed-only
+  // (production insertVitrineCards early-returns on filters).
+  if ((!f.sort || f.sort === 'recent') && !(f.q && f.q.trim())) {
+    docs = await applyFeedBoostPartition(docs);
+  }
   return docs;
+}
+
+// Boosted/pro prioritization for filtered feeds (0.0.0.39 feedBoostPartition
+// parity). Stable: boosted/pro sellers' listings lead, every other card keeps
+// its relative order. Best-effort — a seller-fetch failure returns the pool
+// untouched (production's try/catch parity).
+async function applyFeedBoostPartition(docs: ListingCard[]): Promise<ListingCard[]> {
+  const regular = docs.filter((d) => !d.isWanted);
+  if (!regular.length) return docs;
+  const wanted = docs.filter((d) => d.isWanted);
+  let boostMap: Map<string, boolean>;
+  try {
+    boostMap = await fetchSellerBoostMap(regular);
+  } catch {
+    return docs;
+  }
+  const boosted: ListingCard[] = [];
+  const rest: ListingCard[] = [];
+  for (const d of regular) {
+    (boostMap.get(String(d.sellerId || '')) ? boosted : rest).push(d);
+  }
+  return boosted.concat(rest, wanted);
+}
+
+// Batch-fetch seller boost verdicts (storeTier + vitrineBoostUntil) for a
+// listing pool via a single :batchGet on users_public (guest-safe public
+// read — same collection the card pro-badges read in card-markers.ts).
+// Returns sellerId → boosted/pro.
+async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boolean>> {
+  const sids = [...new Set(docs.map((d) => String(d.sellerId || '')).filter(Boolean))];
+  const map = new Map<string, boolean>();
+  if (!sids.length) return map;
+  const url = FIRESTORE_REST_BASE + ':batchGet?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const nowMs = Date.now();
+  for (let i = 0; i < sids.length; i += 50) {
+    const chunk = sids.slice(i, i + 50);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        documents: chunk.map(
+          (id) => `${FIRESTORE_REST_BASE}/users_public/${encodeURIComponent(id)}`
+        ),
+        mask: { fieldPaths: ['storeTier', 'vitrineBoostUntil'] },
+      }),
+      cache: 'no-store',
+    });
+    if (!res.ok) continue;
+    const body = (await res.json().catch(() => null)) as unknown;
+    for (const row of Array.isArray(body) ? body : []) {
+      const found = (row as Record<string, unknown> | null)?.found as
+        | { name?: string; fields?: Record<string, unknown> }
+        | undefined;
+      if (!found) continue;
+      const uid = String(found.name || '').split('/').pop() || '';
+      if (!uid) continue;
+      const fields = found.fields || {};
+      const isPro = restValue(fields.storeTier) === 'verified';
+      const bu = restValue(fields.vitrineBoostUntil);
+      const ms = bu instanceof Date ? bu.getTime() : 0;
+      map.set(uid, !!isPro || (ms > nowMs));
+    }
+  }
+  return map;
 }
 
 // Helpers for card rendering (mirror client-side formatting)
