@@ -1128,7 +1128,8 @@ function PublishForm({
       window.location.href = dest;
     } catch (err) {
       console.error('publish failed', err);
-      fail(t('publishError'));
+      // DEBUG-TEMP: surface the real exception so we can diagnose publish failures.
+      fail(t('publishError') + ' [catch: ' + ((err as Error)?.message || String(err)) + ']');
     } finally {
       setProgress(null);
       setSubmitting(false);
