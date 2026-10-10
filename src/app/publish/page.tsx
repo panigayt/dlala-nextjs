@@ -30,6 +30,7 @@ import { CATEGORIES, dzPriceWords } from '@/lib/categories';
 import { pubT } from '@/lib/publish-strings';
 import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
+import { checkDuplicates } from '@/lib/duplicates';
 
 const t = (k: string) => pubT(k, 'ar');
 const MAX_PHOTOS = 10;
@@ -862,6 +863,28 @@ function PublishForm({
     }
 
     if (!validate()) return;
+
+    // Anti-duplicate pre-check (js/publish.js checkDuplicates parity):
+    // near-duplicate titles or already-used photos in the seller's OWN
+    // live listings of the same category block publish/edit before any
+    // upload happens. Fails open (checkDuplicates returns null) on timeout.
+    setProgress(t('progChecking'));
+    const dupT0 = Date.now();
+    const dup = await checkDuplicates({
+      db: client.db,
+      uid: user.uid,
+      title: title.trim(),
+      categoryId: cat,
+      newHashes: photos.map((p) => p.hash).filter(Boolean),
+      excludeId: editId || undefined,
+    });
+    console.log(`[pub] duplicate check: ${Date.now() - dupT0}ms`);
+    setProgress(null);
+    if (dup) {
+      fail(t(dup === 'photo' ? 'duplicatePhotoWarn' : 'duplicateTitleWarn'));
+      return;
+    }
+
     setSubmitting(true);
 
     try {
