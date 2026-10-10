@@ -5,7 +5,8 @@
 //     quantity/negotiable, budget label, default wanted image).
 //   - Category-specific questions (12 categories with custom fields).
 //   - Photo upload: max 10, client-side downscale (1600px), EXIF stripped
-//     via canvas, W320 WebP thumbnail, uploads to R2 (NOT Firebase Storage).
+//     via canvas, WM-1 DLALA logo watermark baked in (drawWatermark),
+//     W320 WebP thumbnail, uploads to R2 (NOT Firebase Storage).
 //   - Validation: title ≤80, desc ≤2000, price ≤100M, 2-min cooldown.
 //   - Publish via publishListing Cloud Function (CORS-simple POST).
 //   - Edit mode (?edit=id): pre-fills, saves via direct Firestore update.
@@ -30,6 +31,7 @@ import { pubT } from '@/lib/publish-strings';
 import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
 import { checkDuplicates } from '@/lib/duplicates';
+import { drawWatermark } from './watermark';
 
 const t = (k: string) => pubT(k, 'ar');
 const MAX_PHOTOS = 10;
@@ -140,6 +142,11 @@ async function processPhoto(file: File): Promise<ProcessedPhoto> {
   canvas.height = Math.round(bitmap.height * scale);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  // WM-1 (16 Sep 2026): DLALA logo watermark baked in at publish time —
+  // js/publish.js parity. Runs before the encode, so the main photo and all
+  // variants (cut below from this canvas) carry it. Must never break
+  // publishing: drawWatermark swallows its own failures.
+  drawWatermark(ctx, canvas.width, canvas.height);
   // aHash from the already-decoded bitmap (same decode pass — legacy perf opt)
   let hash = '';
   try { hash = ahashOfBitmap(bitmap); } catch { /* fail-open */ }
