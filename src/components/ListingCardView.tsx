@@ -10,6 +10,7 @@ import { WILAYAS } from '@/lib/wilayas';
 import { catName } from '@/lib/categories';
 import { dzPriceWords } from '@/lib/dz-price';
 import TimeAgo from '@/components/TimeAgo';
+import FavoriteToggle from '@/components/FavoriteToggle';
 
 function wilayaName(code: number | undefined): string {
   if (!code) return '';
@@ -83,18 +84,19 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
       </div>
       <div className="p-3">
         <div className="flex items-center gap-2">
-          {/* fav pill — Zak 21 Sep option B: white pill with ♡ + count next to
-              the price, pill first (right in RTL). Display-only on this SSR
-              home page: the interactive toggle needs a client component with
-              auth (follow-up parity block). */}
+          {/* Interactive favorite pill — Zak 21 Sep option B white-pill
+              model (inline heart + count next to the price, pill first in
+              RTL). Own listings and sold listings get no heart
+              (js/app.js listingCard / stripOwnHearts parity). */}
           {l.status !== 'sold' && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 shadow-sm"
-              aria-label={`المفضلة: ${favCount}`}
-            >
-              <span aria-hidden="true">♡</span>
-              <span>{favCount}</span>
-            </span>
+            <FavoriteToggle
+              listingId={l.id}
+              sellerId={l.sellerId || ''}
+              initialCount={favCount}
+              title={cardTitle(l)}
+              price={l.price || 0}
+              photoUrl={img}
+            />
           )}
           <p className="font-bold text-emerald-700 text-lg">
             <span dir="ltr">{formatPrice(l.price || 0)}</span>
