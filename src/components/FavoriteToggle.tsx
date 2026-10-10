@@ -296,10 +296,16 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         aria-pressed={fav === true}
         aria-busy={fav === null}
         aria-label={t('favorites')}
-        className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 shadow-sm"
+        // Round 137 (0.0.0.39 .fav-inline parity): white pill, heart left
+        // of count (direction ltr), 44px min touch target.
+        className="inline-flex min-h-[44px] min-w-[44px] flex-none cursor-pointer items-center gap-1.5 rounded-full border border-[#e6e6e6] bg-white px-3.5 text-sm font-bold text-[#555] shadow-[0_1px_3px_rgba(0,0,0,.14)]"
+        dir="ltr"
+        style={{ color: fav === true ? '#e0245e' : undefined }}
       >
-        <span aria-hidden="true">{fav === true ? '♥' : '♡'}</span>
-        <span>{count}</span>
+        <span aria-hidden="true" className="text-[20px] leading-none" style={{ color: fav === true ? '#e0245e' : '#6a6a6a' }}>
+          {fav === true ? '♥' : '♡'}
+        </span>
+        <span className="tabular-nums">{count}</span>
       </button>
       {toast && (
         <span

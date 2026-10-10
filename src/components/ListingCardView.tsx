@@ -33,15 +33,14 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
   const isOffer = jobType === 'jobOffer';
   const words = dzPriceWords(l.price || 0);
   const favCount = Number(l.favoriteCount) || 0;
-  // Round 107: condition + category follow the UI language (trilingual parity).
-  const cond =
-    l.condition === 'new' ? t('condNew') : l.condition === 'good' ? t('condGood') : l.condition === 'used' ? t('condUsed') : '';
+  // Round 137 (0.0.0.39 listingCard parity): meta is category + wilaya ONLY,
+  // no condition (legacy: `${catName} · ${wilayaName}`).
   const cat = catName(l.categoryId || '', lang);
   // js/market.js wantedCard: seekers keep their own blue badge, never stack
   // the orange wanted badge; wilayaCode 0 shows "كل الولايات".
   const showWantedBadge = !!l.isWanted && !isSeeker;
   const wilayaLabel = l.isWanted && !l.wilayaCode ? t('allWilayas') : wilayaName(l.wilayaCode, lang);
-  const metaBits = [cond, cat, wilayaLabel].filter(Boolean).join(' · ');
+  const metaBits = [cat, wilayaLabel].filter(Boolean).join(' · ');
   return (
     <a
       href={`/listing/${l.id}`}
@@ -93,7 +92,9 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
         )}
       </div>
       <div className="px-3 pt-[10px] pb-[10px]">
-        <div className="flex items-center gap-2">
+        {/* Round 137 (0.0.0.39 .card-price-row parity): flex space-between,
+            fav pill FIRST (right in RTL), price second. */}
+        <div className="flex items-center justify-between gap-2">
           {/* Interactive favorite pill — Zak 21 Sep option B white-pill
               model (inline heart + count next to the price, pill first in
               RTL). Own listings and sold listings get no heart

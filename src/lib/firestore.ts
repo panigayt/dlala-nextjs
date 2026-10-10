@@ -1071,9 +1071,9 @@ export function cardImage(l: ListingCard): string {
 
 export function formatPrice(n: number): string {
   if (!isFinite(n)) return '';
-  // Production format: LTR digits with thousand separators + " دج"
-  // (MEMORY.md: never "000150 دج", always "15000 دج").
-  return n.toLocaleString('en-US').replace(/,/g, ' ') + ' دج';
+  // 0.0.0.39 fmtPrice parity: LTR digits with COMMA thousand separators
+  // + " دج", e.g. "1,650,000 دج" (MEMORY.md: never "000150 دج").
+  return n.toLocaleString('en-US') + ' دج';
 }
 
 // --- Announcements (public, read-only) -----------------------------------
