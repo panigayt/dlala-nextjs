@@ -16,6 +16,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl">
+      <head>
+        {/* Round 160 — 0.0.0.39 index.html parity: preconnect to the image
+            and data hosts so the first card image / Firestore fetch skips
+            DNS+TCP+TLS setup (saves ~200-500ms on mobile). */}
+        <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
+      </head>
       <body className="min-h-screen antialiased">
         <SiteChrome>{children}</SiteChrome>
         {/* R3 (Zak ordered): applies a pending favorite saved before login —

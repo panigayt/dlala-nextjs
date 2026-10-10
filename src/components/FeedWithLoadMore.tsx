@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ListingCardView from '@/components/ListingCardView';
 import VitrineShowcase from '@/components/VitrineShowcase';
-import { interleaveWanted, resultsCountText, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
+import { interleaveWanted, resultsCountText, cardImage, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
 import { useAuthState } from '@/lib/firebase-client';
 import { useLang } from '@/lib/i18n';
@@ -93,6 +93,16 @@ export default function FeedWithLoadMore({
   const followedRef = useRef<Set<string> | null>(null);
   // «جديد من متابَعيك» strip cards.
   const [stripCards, setStripCards] = useState<ListingCard[]>([]);
+  // Round 160: prefetched next page — { offset, page } when the upcoming
+  // /api/feed?offset=N JSON (plus its card images) was warmed in the
+  // background. loadMore() consumes it instead of fetching, so the new
+  // cards paint with their images already in the browser cache.
+  const prefetchRef = useRef<{ offset: number; page: FeedPage } | null>(null);
+  const prefetchingRef = useRef<number | null>(null); // offset currently warming
+  const loadMoreWrapRef = useRef<HTMLDivElement | null>(null);
+  // Live copy of regularOffset for the prefetch observer (avoids a stale
+  // closure — the observer effect runs once on mount).
+  const regularOffsetRef = useRef(initialRegularOffset);
   const { t, lang } = useLang();
   const auth = useAuthState();
   const refreshedUid = useRef<string | null>(null);
@@ -239,32 +249,73 @@ export default function FeedWithLoadMore({
     })();
   }, []);
 
+  // Round 160: fetch one feed page + revive the createdAt Date contract
+  // (Round 139 fix, extracted so both click-load and background prefetch
+  // share the exact same shaping).
+  async function fetchFeedPage(offset: number): Promise<FeedPage> {
+    const res = await fetch(`/api/feed?offset=${offset}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`feed-${res.status}`);
+    const page: FeedPage = await res.json();
+    const freshRegular: ListingCard[] = (page.regular || []).map((c) => {
+      const ca = (c as { createdAt?: unknown }).createdAt;
+      if (ca && !(ca instanceof Date)) {
+        const d = new Date(String(ca));
+        return { ...c, createdAt: isNaN(d.getTime()) ? undefined : d };
+      }
+      return c;
+    });
+    return { regular: freshRegular, hasMore: page.hasMore };
+  }
+
+  // Round 160: warm the next page in the background (data + card images)
+  // so tapping «عرض المزيد» paints instantly. Only fires when the button
+  // is near the viewport (strong tap intent) — no wasted Firestore reads
+  // for users who never scroll that far.
+  function prefetchNextPage(offset: number) {
+    if (prefetchRef.current?.offset === offset) return; // already warm
+    if (prefetchingRef.current === offset) return; // warming in flight
+    prefetchingRef.current = offset;
+    fetchFeedPage(offset)
+      .then((page) => {
+        prefetchRef.current = { offset, page };
+        // Prewarm card images: the thumb URLs land in the browser HTTP
+        // cache now, so the appended cards paint their images instantly
+        // instead of trickling in one slow TTFB at a time.
+        try {
+          for (const c of page.regular) {
+            const u = cardImage(c);
+            if (u) {
+              const im = new Image();
+              im.decoding = 'async';
+              im.src = u;
+            }
+          }
+        } catch {
+          /* prewarm is best-effort */
+        }
+      })
+      .catch(() => {
+        /* prefetch failure is silent — the click path fetches normally */
+      })
+      .finally(() => {
+        if (prefetchingRef.current === offset) prefetchingRef.current = null;
+      });
+  }
+
   async function loadMore() {
     if (loading || !hasMore) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/feed?offset=${regularOffset}`,
-        { cache: 'no-store' }
-      );
-      if (!res.ok) throw new Error(`feed-${res.status}`);
-      const page: FeedPage = await res.json();
-      // Root-cause fix (Round 139): /api/feed returns plain JSON, so
-      // createdAt arrives as an ISO *string*, breaking the
-      // ListingCard.createdAt?: Date contract. The card render calls
-      // l.createdAt.toISOString(), which throws on a string and trips
-      // the page error boundary ("This page couldn't load"). Revive
-      // Dates here at the boundary. (First-page cards are unaffected:
-      // React Flight serialization preserves Date objects.)
-      const freshRegular: ListingCard[] = (page.regular || []).map((c) => {
-        const ca = (c as { createdAt?: unknown }).createdAt;
-        if (ca && !(ca instanceof Date)) {
-          const d = new Date(String(ca));
-          return { ...c, createdAt: isNaN(d.getTime()) ? undefined : d };
-        }
-        return c;
-      });
+      // Round 160: consume the warmed page when it matches this offset.
+      let page: FeedPage;
+      if (prefetchRef.current && prefetchRef.current.offset === regularOffset) {
+        page = prefetchRef.current.page;
+        prefetchRef.current = null;
+      } else {
+        page = await fetchFeedPage(regularOffset);
+      }
+      const freshRegular: ListingCard[] = page.regular;
       // Taste append path (js/taste.js tasteRankDefault append): the FULL
       // regular pool (displayed + newly fetched) goes in; the frozen
       // arrangement is preserved and only the fresh docs are ranked and
@@ -298,15 +349,56 @@ export default function FeedWithLoadMore({
       const newCards = interleaveWanted(boostedFresh, wantedPool.slice(wantedOffset));
       const wantedUsed = newCards.filter((c) => c.isWanted).length;
       setCards((prev) => [...prev, ...newCards]);
-      setRegularOffset((prev) => prev + PAGE_SIZE);
+      const nextOffset = regularOffset + PAGE_SIZE;
+      setRegularOffset(nextOffset);
+      regularOffsetRef.current = nextOffset;
       setWantedOffset((prev) => prev + wantedUsed);
-      setHasMore(page.hasMore && newCards.length > 0);
+      const more = page.hasMore && newCards.length > 0;
+      setHasMore(more);
+      // Round 160: stay one page ahead — warm the following page while the
+      // user looks at the fresh cards, so the next tap is instant too.
+      if (more) {
+        try {
+          const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
+          if (idle) idle(() => prefetchNextPage(nextOffset));
+          else setTimeout(() => prefetchNextPage(nextOffset), 1500);
+        } catch {
+          /* best-effort */
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'feed-error');
     } finally {
       setLoading(false);
     }
   }
+
+  // Round 160: when the «عرض المزيد» button scrolls near the viewport,
+  // warm the next page (data + images) — strong tap-intent signal, so the
+  // click itself needs no network round trip for data and the images are
+  // already cached.
+  useEffect(() => {
+    const el = loadMoreWrapRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    let done = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (done) return;
+        for (const en of entries) {
+          if (en.isIntersecting) {
+            done = true;
+            io.disconnect();
+            prefetchNextPage(regularOffsetRef.current);
+            break;
+          }
+        }
+      },
+      { rootMargin: '600px' }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Build the render list: cards interleaved with vitrine showcases.
   // Slots (legacy): after card 2, then every 8, max VITRINE_MAX.
@@ -357,15 +449,26 @@ export default function FeedWithLoadMore({
         </section>
       )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {renderItems.map((item, idx) =>
-          item.type === 'card' ? (
-            <ListingCardView key={item.card.id} l={item.card} />
-          ) : (
-            <div key={`vitrine-${item.showcase.seller.id}-${idx}`} className="col-span-full">
-              <VitrineShowcase showcase={item.showcase} />
-            </div>
-          )
-        )}
+        {(() => {
+          // Round 160: the first 4 cards sit above the fold (2-col mobile =
+          // 2 rows) — load them eagerly instead of lazy, and give the very
+          // first card's upgrade preload high fetch priority.
+          let cardOrdinal = 0;
+          return renderItems.map((item, idx) =>
+            item.type === 'card' ? (
+              <ListingCardView
+                key={item.card.id}
+                l={item.card}
+                eager={cardOrdinal < 4}
+                priority={cardOrdinal++ === 0}
+              />
+            ) : (
+              <div key={`vitrine-${item.showcase.seller.id}-${idx}`} className="col-span-full">
+                <VitrineShowcase showcase={item.showcase} />
+              </div>
+            )
+          );
+        })()}
       </div>
       {error && (
         <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4 text-center text-red-700 text-sm">
@@ -380,7 +483,7 @@ export default function FeedWithLoadMore({
         </div>
       )}
       {hasMore && !error && (
-        <div className="text-center py-6">
+        <div ref={loadMoreWrapRef} className="text-center py-6">
           <button
             type="button"
             onClick={loadMore}

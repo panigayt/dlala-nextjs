@@ -24,7 +24,7 @@ function wilayaName(code: number | undefined, lang: Lang): string {
   return w ? `${w.code} - ${w[lang]}` : '';
 }
 
-export default function ListingCardView({ l }: { l: ListingCard }) {
+export default function ListingCardView({ l, eager, priority }: { l: ListingCard; eager?: boolean; priority?: boolean }) {
   const { t, lang } = useLang();
   const img = cardImage(l);
   const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
@@ -57,6 +57,8 @@ export default function ListingCardView({ l }: { l: ListingCard }) {
             listing={l}
             img={img}
             alt={cardTitle(l)}
+            eager={eager}
+            priority={priority}
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
