@@ -20,24 +20,11 @@ import {
   inputCls,
   btnCls,
 } from '@/lib/firebase-client';
+import { useLang } from '@/lib/i18n';
 
-// Verbatim from js/i18n.ar.js
-const STR = {
-  actionLinkInvalid: 'هذا الرابط غير صالح أو انتهت صلاحيته — اطلب رابطاً جديداً',
-  verifyEmailDone: 'تم التحقق من بريدك الإلكتروني — يمكنك الآن تسجيل الدخول',
-  newPasswordTitle: 'اختر كلمة مرور جديدة',
-  newPassword: 'كلمة المرور الجديدة',
-  confirmNewPassword: 'تأكيد كلمة المرور الجديدة',
-  saveNewPassword: 'حفظ كلمة المرور الجديدة',
-  passwordChanged: 'تم تغيير كلمة المرور — سجّل الدخول بكلمة المرور الجديدة',
-  continueToSite: 'المتابعة إلى دلالة',
-  signedOutAllSessions: 'تم تسجيل خروجك من كل الجلسات — سجّل الدخول مجدداً.',
-  login: 'تسجيل الدخول',
-  loading: 'جارٍ التحميل...',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-  authWeakPassword: 'كلمة المرور ضعيفة جداً — استخدم 8 أحرف على الأقل',
-  passwordsNoMatch: 'كلمتا المرور غير متطابقتين',
-};
+// User-facing strings — t('...') keys verbatim from js/i18n.{ar,fr,en}.js
+// (js/auth-action.js). Round 118: hardcoded Arabic STR replaced with useLang()
+// from the shared app-wide language store (js/i18n.js setLang parity).
 
 interface ActionAuth extends CompatAuth {
   applyActionCode: (code: string) => Promise<void>;
@@ -80,6 +67,7 @@ function isInvalidCodeError(e: unknown): boolean {
 }
 
 function AuthActionInner() {
+  const { t, lang } = useLang();
   const params = useSearchParams();
   const mode = params.get('mode') || '';
   const oobCode = params.get('oobCode') || '';
@@ -132,11 +120,11 @@ function AuthActionInner() {
     ev.preventDefault();
     setFormError(null);
     if (pw1.length < 8) {
-      setFormError(STR.authWeakPassword);
+      setFormError(t('authWeakPassword'));
       return;
     }
     if (pw1 !== pw2) {
-      setFormError(STR.passwordsNoMatch);
+      setFormError(t('passwordsNoMatch'));
       return;
     }
     setSaving(true);
@@ -154,19 +142,19 @@ function AuthActionInner() {
       setStage('resetDone');
     } catch (e) {
       if (isInvalidCodeError(e)) setStage('invalid');
-      else setFormError(STR.errorGeneric);
+      else setFormError(t('errorGeneric'));
       setSaving(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <main className="max-w-md mx-auto px-4 py-10">
         <div className="rounded-2xl bg-white shadow-sm p-6 text-center">
           {stage === 'working' && (
             <div>
               <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-700" />
-              <p className="mt-4 text-zinc-600">{STR.loading}</p>
+              <p className="mt-4 text-zinc-600">{t('loading')}</p>
             </div>
           )}
 
@@ -174,10 +162,10 @@ function AuthActionInner() {
             <div>
               <div className="text-5xl mb-4">🔗</div>
               <h1 className="text-xl font-bold text-zinc-900 mb-4">
-                {STR.actionLinkInvalid}
+                {t('actionLinkInvalid')}
               </h1>
               <a href="/auth" className={btnCls + ' inline-block no-underline'}>
-                {STR.login}
+                {t('login')}
               </a>
             </div>
           )}
@@ -186,14 +174,14 @@ function AuthActionInner() {
             <div>
               <div className="text-5xl mb-4">⚠️</div>
               <h1 className="text-xl font-bold text-zinc-900 mb-4">
-                {STR.errorGeneric}
+                {t('errorGeneric')}
               </h1>
               <button
                 type="button"
                 className={btnCls}
                 onClick={() => window.location.reload()}
               >
-                إعادة المحاولة
+                {t('retry')}
               </button>
             </div>
           )}
@@ -202,21 +190,21 @@ function AuthActionInner() {
             <div>
               <div className="text-5xl mb-4">✅</div>
               <h1 className="text-xl font-bold text-zinc-900 mb-5">
-                {STR.verifyEmailDone}
+                {t('verifyEmailDone')}
               </h1>
               <a
                 href={continueUrl}
                 className={btnCls + ' inline-block no-underline'}
               >
-                {STR.continueToSite}
+                {t('continueToSite')}
               </a>
             </div>
           )}
 
           {stage === 'resetForm' && (
-            <div className="text-right">
+            <div className="text-start">
               <h1 className="text-xl font-bold text-zinc-900 mb-2 text-center">
-                {STR.newPasswordTitle}
+                {t('newPasswordTitle')}
               </h1>
               {email && (
                 <p className="text-sm text-zinc-500 mb-5 text-center" dir="ltr">
@@ -233,7 +221,7 @@ function AuthActionInner() {
                   htmlFor="aaPw1"
                   className="block text-sm font-medium text-zinc-700 mb-1"
                 >
-                  {STR.newPassword}
+                  {t('newPassword')}
                 </label>
                 <input
                   id="aaPw1"
@@ -250,7 +238,7 @@ function AuthActionInner() {
                   htmlFor="aaPw2"
                   className="block text-sm font-medium text-zinc-700 mb-1"
                 >
-                  {STR.confirmNewPassword}
+                  {t('confirmNewPassword')}
                 </label>
                 <input
                   id="aaPw2"
@@ -264,7 +252,7 @@ function AuthActionInner() {
                   required
                 />
                 <button type="submit" className={btnCls} disabled={saving}>
-                  {saving ? STR.loading : STR.saveNewPassword}
+                  {saving ? t('loading') : t('saveNewPassword')}
                 </button>
               </form>
             </div>
@@ -274,13 +262,13 @@ function AuthActionInner() {
             <div>
               <div className="text-5xl mb-4">✅</div>
               <h1 className="text-xl font-bold text-zinc-900 mb-2">
-                {STR.passwordChanged}
+                {t('passwordChanged')}
               </h1>
               <p className="text-sm text-zinc-600 mb-5">
-                {STR.signedOutAllSessions}
+                {t('signedOutAllSessions')}
               </p>
               <a href="/auth" className={btnCls + ' inline-block no-underline'}>
-                {STR.login}
+                {t('login')}
               </a>
             </div>
           )}
@@ -292,7 +280,7 @@ function AuthActionInner() {
 
 export default function AuthActionPage() {
   return (
-    <Suspense fallback={<LoadingSpinner label="جارٍ التحميل..." />}>
+    <Suspense fallback={<LoadingSpinner />}>
       <AuthActionInner />
     </Suspense>
   );

@@ -257,6 +257,18 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     createAccountLink: 'أنشئ واحداً',
     haveAccountQ: 'عندك حساب؟',
     signInLink: 'سجّل الدخول',
+    // Round 118: auth-action page (email verify / password reset) —
+    // verbatim js/i18n.{ar,fr,en}.js (js/auth-action.js).
+    actionLinkInvalid: 'هذا الرابط غير صالح أو انتهت صلاحيته — اطلب رابطاً جديداً',
+    verifyEmailDone: 'تم التحقق من بريدك الإلكتروني — يمكنك الآن تسجيل الدخول',
+    newPasswordTitle: 'اختر كلمة مرور جديدة',
+    newPassword: 'كلمة المرور الجديدة',
+    confirmNewPassword: 'تأكيد كلمة المرور الجديدة',
+    saveNewPassword: 'حفظ كلمة المرور الجديدة',
+    passwordChanged: 'تم تغيير كلمة المرور — سجّل الدخول بكلمة المرور الجديدة',
+    continueToSite: 'المتابعة إلى دلالة',
+    signedOutAllSessions: 'تم تسجيل خروجك من كل الجلسات — سجّل الدخول مجدداً.',
+    passwordsNoMatch: 'كلمتا المرور غير متطابقتين',
     // Seller page (Round 111) — js/i18n.ar.js verbatim unless marked [port].
     block: 'حظر',
     shareStore: 'مشاركة المتجر',
@@ -529,6 +541,18 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     createAccountLink: 'Créez-en un',
     haveAccountQ: 'Déjà un compte ?',
     signInLink: 'Connectez-vous',
+    // Round 118: auth-action page (email verify / password reset) —
+    // verbatim js/i18n.{ar,fr,en}.js (js/auth-action.js).
+    actionLinkInvalid: 'Ce lien est invalide ou a expiré — veuillez en demander un nouveau',
+    verifyEmailDone: 'Votre e-mail a été vérifié — vous pouvez maintenant vous connecter',
+    newPasswordTitle: 'Choisissez un nouveau mot de passe',
+    newPassword: 'Nouveau mot de passe',
+    confirmNewPassword: 'Confirmez le nouveau mot de passe',
+    saveNewPassword: 'Enregistrer le nouveau mot de passe',
+    passwordChanged: 'Votre mot de passe a été modifié — connectez-vous avec votre nouveau mot de passe',
+    continueToSite: 'Continuer vers Dlala',
+    signedOutAllSessions: 'Vous avez été déconnecté de toutes les sessions — reconnectez-vous.',
+    passwordsNoMatch: 'Les deux mots de passe ne correspondent pas',
     // Seller page (Round 111) — js/i18n.fr.js verbatim unless marked [port].
     block: 'Bloquer',
     shareStore: 'Partager la boutique',
@@ -801,6 +825,18 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     createAccountLink: 'Create one',
     haveAccountQ: 'Have an account?',
     signInLink: 'Sign in',
+    // Round 118: auth-action page (email verify / password reset) —
+    // verbatim js/i18n.{ar,fr,en}.js (js/auth-action.js).
+    actionLinkInvalid: 'This link is invalid or has expired — please request a new one',
+    verifyEmailDone: 'Your email has been verified — you can now sign in',
+    newPasswordTitle: 'Choose a new password',
+    newPassword: 'New password',
+    confirmNewPassword: 'Confirm the new password',
+    saveNewPassword: 'Save the new password',
+    passwordChanged: 'Your password has been changed — sign in with your new password',
+    continueToSite: 'Continue to Dlala',
+    signedOutAllSessions: 'You have been signed out of all sessions — please sign in again.',
+    passwordsNoMatch: 'The two passwords do not match',
     // Seller page (Round 111) — js/i18n.en.js verbatim unless marked [port].
     block: 'Block',
     shareStore: 'Share store',
