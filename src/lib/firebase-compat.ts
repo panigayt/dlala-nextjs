@@ -47,6 +47,7 @@ export interface CompatUser {
   displayName: string | null;
   reload: () => Promise<void>;
   sendEmailVerification: () => Promise<void>;
+  updateProfile: (p: { displayName?: string }) => Promise<void>;
   delete: () => Promise<void>;
   reauthenticateWithCredential: (cred: unknown) => Promise<void>;
 }
@@ -56,11 +57,20 @@ export interface CompatAuth {
   onAuthStateChanged: (cb: (u: CompatUser | null) => void) => () => void;
   signOut: () => Promise<void>;
   setPersistence: (p: string) => Promise<void>;
+  signInWithEmailAndPassword: (email: string, pass: string) => Promise<{ user: CompatUser }>;
+  createUserWithEmailAndPassword: (email: string, pass: string) => Promise<{ user: CompatUser }>;
+  sendPasswordResetEmail: (email: string) => Promise<void>;
+}
+
+export interface CompatBatch {
+  set: (ref: unknown, data: unknown) => void;
+  commit: () => Promise<void>;
 }
 
 export interface CompatFirestore {
   collection: (path: string) => unknown;
   doc: (path: string) => unknown;
+  batch: () => CompatBatch;
 }
 
 export interface CompatStorage {

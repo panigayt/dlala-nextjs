@@ -2,27 +2,35 @@
 
 // Dlala auth page — client component (interactive, no SSR needed).
 //
-// Uses the Firebase **compat** SDK loaded at runtime from the gstatic CDN
-// (same 10.12.0 version the production SPA uses). Runtime <script> injection
-// keeps the SDK out of the Next.js bundle entirely — zero bundler issues,
-// zero SDK bytes on any other page.
+// Uses the shared Firebase **compat** SDK loader (src/lib/firebase-compat):
+// auth + firestore compat SDKs at runtime from the gstatic CDN (same 10.12.0
+// version the production SPA uses). Runtime <script> injection keeps the SDKs
+// out of the Next.js bundle entirely — zero bundler issues.
+//
+// Signup creates the account atomically (js/auth.js parity):
+//  1. Username registry pre-check BEFORE the Auth account is created
+//     (m-15: a taken handle must not leave an Auth account with no user doc).
+//  2. Atomic batch: users/{uid} profile doc + usernames/{lower} registry,
+//     with every required field (termsAcceptedAt = one-time legal evidence).
+//  3. Mandatory terms checkbox — no acceptance, no account.
+//  4. Email-verification gate — nobody proceeds to / unverified.
+// A retry-after-commit (L9) and a post-login orphan heal (P2) keep accounts
+// structurally valid even when a network blip interrupts signup.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-
-const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyCjll9nUDSbf9h8oS0s9xRyl1S0Qh9qO5M',
-  authDomain: 'dlala-85cea.firebaseapp.com',
-  projectId: 'dlala-85cea',
-};
-
-const SDK_BASE = 'https://www.gstatic.com/firebasejs/10.12.0/';
-const APP_SDK = SDK_BASE + 'firebase-app-compat.js';
-const AUTH_SDK = SDK_BASE + 'firebase-auth-compat.js';
+import {
+  getFirebase,
+  withTimeout,
+  type CompatAuth,
+  type CompatUser,
+  type FirebaseCompat,
+} from '../../lib/firebase-compat';
 
 // Arabic user-facing strings — verbatim from js/i18n.ar.js (production).
 const STR = {
   loginError: 'بيانات الدخول غير صحيحة',
+  signupError: 'تعذّر إنشاء الحساب — تحقق من البيانات',
   errorGeneric: 'حدث خطأ — حاول مجدداً',
   resetLinkSent: 'تم إرسال رابط الاستعادة إلى بريدك',
   resetEmailInvalid: 'أدخل بريداً إلكترونياً صالحاً',
@@ -33,69 +41,28 @@ const STR = {
   authWeakPassword: 'كلمة المرور ضعيفة جداً — استخدم 8 أحرف على الأقل',
   pleaseWait: 'جارٍ الانتظار...',
   sdkLoadFailed: 'تعذر تحميل خدمة الدخول — تحقق من الاتصال وحاول مجدداً',
+  usernameTaken: 'اسم المستخدم محجوز',
+  termsRequired: 'يجب الموافقة على شروط الاستخدام للتسجيل.',
+  nameHint: 'بالأحرف اللاتينية فقط، مثال: Zak Benali',
+  usernameHint: '3 إلى 20 حرفًا: a-z 0-9 . _',
+  verifyEmailTitle: 'فعّل بريدك الإلكتروني',
+  verifyEmailBody: 'أرسلنا لك رابط التفعيل. فعّل بريدك لتتمكن من النشر ومراسلة البائعين.',
+  verifyStatusLabel: 'حالة التفعيل:',
+  verifyStatusPending: 'بانتظار التفعيل',
+  verifyStatusDone: 'تم التفعيل ✓',
+  verifyStillPending: 'لم يتم التفعيل بعد — تحقق من بريدك ثم حاول مجدداً',
+  verifiedContinue: 'فعّلت البريد — تابع',
+  resendEmail: 'إعادة إرسال الرابط',
+  logout: 'تسجيل الخروج',
+  emailSent: 'تم إرسال رابط التفعيل',
+  signupDocRetry: 'تم إنشاء حسابك، لكن تعذّر حفظ الملف الشخصي — سيُنشأ تلقائياً عند تسجيل الدخول.',
 };
-
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${CSS.escape(src)}"]`)) {
-      resolve();
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('sdk-load-failed'));
-    document.head.appendChild(s);
-  });
-}
-
-interface FirebaseCompat {
-  apps: unknown[];
-  initializeApp: (cfg: typeof FIREBASE_CONFIG) => unknown;
-  auth: (() => FirebaseAuthCompat) & {
-    Auth: { Persistence: { LOCAL: string } };
-  };
-}
-
-interface FirebaseAuthCompat {
-  setPersistence: (p: string) => Promise<void>;
-  signInWithEmailAndPassword: (email: string, pass: string) => Promise<{ user: FirebaseUserCompat }>;
-  createUserWithEmailAndPassword: (email: string, pass: string) => Promise<{ user: FirebaseUserCompat }>;
-  sendPasswordResetEmail: (email: string) => Promise<void>;
-  onAuthStateChanged: (cb: (u: FirebaseUserCompat | null) => void) => () => void;
-}
-
-interface FirebaseUserCompat {
-  updateProfile: (p: { displayName?: string }) => Promise<void>;
-  sendEmailVerification: () => Promise<void>;
-}
-
-let authInitP: Promise<FirebaseAuthCompat> | null = null;
-
-async function getAuth(): Promise<FirebaseAuthCompat> {
-  if (authInitP) return authInitP;
-  authInitP = (async () => {
-    await loadScript(APP_SDK);
-    await loadScript(AUTH_SDK);
-    const fb = (window as unknown as { firebase?: FirebaseCompat }).firebase;
-    if (!fb) throw new Error('sdk-load-failed');
-    if (fb.apps.length === 0) fb.initializeApp(FIREBASE_CONFIG);
-    const auth = fb.auth();
-    try {
-      await auth.setPersistence(fb.auth.Auth.Persistence.LOCAL);
-    } catch {
-      // persistence failure is non-fatal (private mode etc.)
-    }
-    return auth;
-  })();
-  return authInitP;
-}
 
 // Friendly localized messages for Firebase auth errors.
 // Mirrors js/auth.js authErrorMessage() exactly:
 // wrong-password/user-not-found -> "incorrect credentials"; network/timeout ->
-// "connection problem". Never blame credentials for a network fault.
+// "connection problem". Never blame credentials for a network fault, and never
+// surface raw codes or raw JS errors.
 function authErrorMessage(e: unknown, fallback: string): string {
   const code = (e as { code?: string } | null)?.code || '';
   switch (code) {
@@ -107,6 +74,7 @@ function authErrorMessage(e: unknown, fallback: string): string {
       return STR.resetEmailInvalid;
     case 'auth/network-request-failed':
     case 'auth/timeout':
+    case 'deadline-exceeded':
     case 'sdk-load-failed':
       return STR.authConnectionProblem;
     case 'auth/email-already-in-use':
@@ -122,28 +90,108 @@ function authErrorMessage(e: unknown, fallback: string): string {
   }
 }
 
-type Mode = 'login' | 'signup' | 'reset';
+// --- Firestore helpers (js/auth.js parity) ---
+
+interface DocRefLike {
+  get: () => Promise<{ exists: () => boolean }>;
+}
+
+function fieldValue(fb: FirebaseCompat) {
+  return (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue;
+}
+
+// Atomic batch: users/{uid} profile doc + usernames/{lower} registry.
+// Mirrors js/auth.js ensureUserDoc() — rules-compliant create with every
+// required field (termsAcceptedAt = one-time acceptance, legal evidence).
+async function ensureUserDoc(fb: FirebaseCompat, uid: string, name: string, username: string): Promise<void> {
+  const db = fb.firestore();
+  const snap = await withTimeout((db.doc('users/' + uid) as unknown as DocRefLike).get());
+  if (snap.exists()) return;
+  const batch = db.batch();
+  batch.set(db.doc('users/' + uid), {
+    name: name || '',
+    username: username || '',
+    verified: false,
+    isAdmin: false,
+    emailVerified: false,
+    rating: 0,
+    ratingCount: 0,
+    confirmedDeals: 0,
+    boostCredits: 0,
+    phone: '',
+    termsAcceptedAt: fieldValue(fb).serverTimestamp(),
+    createdAt: fieldValue(fb).serverTimestamp(),
+  });
+  batch.set(db.doc('usernames/' + username.toLowerCase()), { userId: uid });
+  await withTimeout(batch.commit());
+}
+
+// Collision-safe username claim for the login heal path (legacy P2).
+// Prefers the signup-chosen handle (recovered from sessionStorage); falls
+// back to a deterministic derivation with a uid-suffix collision escape.
+async function claimUsername(
+  fb: FirebaseCompat,
+  uid: string,
+  preferred: string | null,
+  fallbackName: string
+): Promise<string> {
+  const db = fb.firestore();
+  const candidates: string[] = [];
+  if (preferred && /^[a-z0-9._]{3,20}$/.test(preferred)) candidates.push(preferred);
+  let base = (fallbackName || 'user').toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 16);
+  if (base.length < 3) base = 'user';
+  candidates.push(base);
+  candidates.push((base + '_' + uid.slice(0, 4)).toLowerCase().slice(0, 20));
+  for (const c of candidates) {
+    if (!/^[a-z0-9._]{3,20}$/.test(c)) continue;
+    try {
+      const snap = await withTimeout((db.doc('usernames/' + c) as unknown as DocRefLike).get());
+      if (!snap.exists()) return c;
+    } catch {
+      // treat as taken, try the next candidate
+    }
+  }
+  return (base.slice(0, 11) + '_' + uid.slice(0, 7)).toLowerCase().slice(0, 20);
+}
+
+type Mode = 'login' | 'signup' | 'reset' | 'verify';
+
+// Signup-chosen profile stashed so a post-signup network failure can still
+// create the exact user doc on the next sign-in (P2 orphan heal).
+const PENDING_KEY = 'dlala_pending_profile';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [terms, setTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState('');
+  const [verifyDone, setVerifyDone] = useState(false);
   const mounted = useRef(true);
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     mounted.current = true;
-    // If already signed in, go home.
+    // Already signed in: verified users proceed, unverified users land on
+    // the verification gate — nobody proceeds to / unverified.
     let cancelled = false;
-    getAuth()
-      .then((auth) => {
+    getFirebase()
+      .then((fb) => {
         if (cancelled) return;
-        unsubRef.current = auth.onAuthStateChanged((u) => {
-          if (u && mounted.current) window.location.href = '/';
+        unsubRef.current = fb.auth().onAuthStateChanged((u) => {
+          if (!mounted.current || !u) return;
+          if (u.emailVerified) {
+            window.location.href = '/';
+          } else {
+            setVerifyEmail(u.email || '');
+            setVerifyDone(false);
+            setMode('verify');
+          }
         });
       })
       .catch(() => {});
@@ -163,19 +211,79 @@ export default function AuthPage() {
     setOkMsg(null);
   }, []);
 
-  const goHome = useCallback(() => {
-    window.location.href = '/';
+  const showVerifyGate = useCallback((u: CompatUser | null) => {
+    setVerifyEmail(u?.email || '');
+    setVerifyDone(!!u?.emailVerified);
+    setError(null);
+    setOkMsg(null);
+    setMode('verify');
   }, []);
 
   async function handleLogin(ev: React.FormEvent) {
     ev.preventDefault();
     setError(null);
     setOkMsg(null);
+    const em = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      setError(STR.resetEmailInvalid);
+      return;
+    }
     setLoading(true);
     try {
-      const auth = await getAuth();
-      await auth.signInWithEmailAndPassword(email.trim(), password);
-      if (mounted.current) goHome();
+      const fb = await getFirebase();
+      const auth = fb.auth();
+      const cred = await withTimeout(auth.signInWithEmailAndPassword(em, password));
+      // M3: sign-in success is determined by the sign-in result itself.
+      // A post-login reload() failure must NOT flip a success into a
+      // failure — log it and continue with the cached verification flag.
+      let verified = !!cred.user.emailVerified;
+      try {
+        await withTimeout(cred.user.reload());
+        verified = !!cred.user.emailVerified;
+      } catch (e) {
+        console.error('post-login reload failed (non-fatal):', e);
+      }
+      // P2: heal an orphaned signup — if the user doc was never created
+      // (post-signup failure), create it now so the account is complete.
+      try {
+        const snap = await withTimeout(
+          (fb.firestore().doc('users/' + cred.user.uid) as unknown as DocRefLike).get()
+        );
+        if (!snap.exists()) {
+          let nm = cred.user.displayName || '';
+          let un: string | null = null;
+          try {
+            const pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null');
+            if (pending && pending.uid === cred.user.uid && pending.username) {
+              nm = pending.name || nm;
+              un = pending.username;
+            }
+          } catch {
+            // no stashed profile — derive below
+          }
+          const claimed = await claimUsername(
+            fb,
+            cred.user.uid,
+            un,
+            nm || (cred.user.email || '').split('@')[0]
+          );
+          await ensureUserDoc(fb, cred.user.uid, nm, claimed);
+          try {
+            sessionStorage.removeItem(PENDING_KEY);
+          } catch {
+            // non-fatal
+          }
+        }
+      } catch (e) {
+        console.error('post-login user-doc heal failed (non-fatal):', e);
+      }
+      if (!mounted.current) return;
+      setLoading(false);
+      if (verified) {
+        window.location.href = '/';
+      } else {
+        showVerifyGate(cred.user);
+      }
     } catch (e) {
       if (mounted.current) {
         setError(authErrorMessage(e, STR.loginError));
@@ -189,32 +297,124 @@ export default function AuthPage() {
     setError(null);
     setOkMsg(null);
     const displayName = name.trim();
-    if (!displayName) {
-      setError('أدخل الاسم');
+    const handle = username.trim().toLowerCase();
+    const em = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      setError(STR.resetEmailInvalid);
       return;
     }
+    // Latin-script rules mirror the app: name Latin, handle 3-20 [a-z0-9._]
+    if (!/^[A-Za-z][A-Za-z .'-]{1,38}$/.test(displayName) || !/^[a-z0-9._]{3,20}$/.test(handle)) {
+      setError(STR.signupError);
+      return;
+    }
+    // Terms are accepted exactly once, at signup — never shown again.
+    if (!terms) {
+      setError(STR.termsRequired);
+      return;
+    }
+    // Client-side 8-char minimum (Firebase's server policy stays untouched).
     if (password.length < 8) {
       setError(STR.authWeakPassword);
       return;
     }
     setLoading(true);
+    let fb: FirebaseCompat | null = null;
     try {
-      const auth = await getAuth();
-      const cred = await auth.createUserWithEmailAndPassword(email.trim(), password);
+      fb = await getFirebase();
+      const auth: CompatAuth = fb.auth();
+      // m-15: check the username registry BEFORE creating the Auth account —
+      // a taken handle used to fail the post-creation batch in ensureUserDoc(),
+      // leaving an Auth account with no user doc (a stuck account). The batch
+      // commit still guards the TOCTOU race atomically.
+      const regSnap = await withTimeout(
+        (fb.firestore().doc('usernames/' + handle) as unknown as DocRefLike).get()
+      );
+      if (regSnap.exists()) {
+        if (mounted.current) {
+          setError(STR.usernameTaken);
+          setLoading(false);
+        }
+        return;
+      }
+      const cred = await withTimeout(auth.createUserWithEmailAndPassword(em, password));
+      // The Auth account now exists. Post-creation steps must NEVER orphan
+      // it — on failure we still advance (the user doc is created idempotently
+      // by ensureUserDoc on the next sign-in too) and report what happened.
       try {
-        await cred.user.updateProfile({ displayName });
+        await withTimeout(cred.user.updateProfile({ displayName }));
+      } catch (e) {
+        console.error('updateProfile failed (non-fatal):', e);
+      }
+      try {
+        sessionStorage.setItem(
+          PENDING_KEY,
+          JSON.stringify({ uid: cred.user.uid, name: displayName, username: handle })
+        );
       } catch {
         // non-fatal
       }
+      // Round 24: the doc-failure note must surface in the VISIBLE mode
+      // (verify), never in the hidden signup form.
+      let docRetryNote = false;
       try {
-        await cred.user.sendEmailVerification();
-      } catch {
-        // non-fatal — user can resend later
+        await ensureUserDoc(fb, cred.user.uid, displayName, handle);
+        try {
+          sessionStorage.removeItem(PENDING_KEY);
+        } catch {
+          // non-fatal
+        }
+      } catch (e) {
+        console.error('ensureUserDoc failed (will retry on sign-in):', e);
+        docRetryNote = true;
       }
-      if (mounted.current) goHome();
+      try {
+        await withTimeout(cred.user.sendEmailVerification());
+      } catch (e) {
+        console.error('sendEmailVerification failed (non-fatal):', e);
+      }
+      if (!mounted.current) return;
+      setLoading(false);
+      showVerifyGate(cred.user);
+      if (docRetryNote) setError(STR.signupDocRetry);
     } catch (e) {
+      // L9: retry-after-commit — createUser may have committed server-side
+      // while the response was lost; the retry then fails with
+      // email-already-in-use. Try signing in with the same credentials; if
+      // it works, the account was created by our request.
+      const code = (e as { code?: string } | null)?.code || '';
+      if (code === 'auth/email-already-in-use') {
+        try {
+          const fbL9 = fb ?? (await getFirebase());
+          const signInCred = await withTimeout(
+            fbL9.auth().signInWithEmailAndPassword(em, password)
+          );
+          try {
+            await withTimeout(signInCred.user.updateProfile({ displayName }));
+          } catch {
+            // non-fatal
+          }
+          try {
+            await ensureUserDoc(fbL9, signInCred.user.uid, displayName, handle);
+          } catch {
+            // P2 heal covers this on the next sign-in
+          }
+          try {
+            await withTimeout(signInCred.user.sendEmailVerification());
+          } catch {
+            // non-fatal
+          }
+          if (!mounted.current) return;
+          setLoading(false);
+          showVerifyGate(signInCred.user);
+          return;
+        } catch (se) {
+          // Sign-in failed: genuine email-in-use by someone else.
+          console.error('L9 sign-in fallback failed:', se);
+        }
+      }
       if (mounted.current) {
-        setError(authErrorMessage(e, STR.errorGeneric));
+        setError(authErrorMessage(e, STR.signupError));
         setLoading(false);
       }
     }
@@ -225,14 +425,14 @@ export default function AuthPage() {
     setError(null);
     setOkMsg(null);
     const em = email.trim();
-    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
       setError(STR.resetEmailInvalid);
       return;
     }
     setLoading(true);
     try {
-      const auth = await getAuth();
-      await auth.sendPasswordResetEmail(em);
+      const fb = await getFirebase();
+      await withTimeout(fb.auth().sendPasswordResetEmail(em));
       if (mounted.current) {
         setOkMsg(STR.resetLinkSent);
         setLoading(false);
@@ -245,10 +445,98 @@ export default function AuthPage() {
     }
   }
 
+  // Verify gate: "I verified, continue" — reloads the user and proceeds only
+  // when the email is actually verified, so users are never stuck.
+  async function handleVerifyContinue() {
+    setError(null);
+    setOkMsg(null);
+    setLoading(true);
+    try {
+      const fb = await getFirebase();
+      const u = fb.auth().currentUser;
+      if (!u) {
+        if (mounted.current) {
+          setLoading(false);
+          switchMode('login');
+        }
+        return;
+      }
+      try {
+        await withTimeout(u.reload());
+      } catch (e) {
+        console.error('verify-continue reload failed:', e);
+        if (mounted.current) {
+          setError(authErrorMessage(e, STR.errorGeneric));
+          setLoading(false);
+        }
+        return;
+      }
+      if (!mounted.current) return;
+      const verified = !!u.emailVerified;
+      setVerifyDone(verified);
+      if (verified) {
+        window.location.href = '/';
+      } else {
+        // Still not verified — say so plainly, don't leave them guessing.
+        setError(STR.verifyStillPending);
+        setLoading(false);
+      }
+    } catch (e) {
+      if (mounted.current) {
+        setError(authErrorMessage(e, STR.errorGeneric));
+        setLoading(false);
+      }
+    }
+  }
+
+  async function handleResend() {
+    setError(null);
+    setOkMsg(null);
+    setLoading(true);
+    try {
+      const fb = await getFirebase();
+      const u = fb.auth().currentUser;
+      if (!u) {
+        if (mounted.current) {
+          setLoading(false);
+          switchMode('login');
+        }
+        return;
+      }
+      await withTimeout(u.sendEmailVerification());
+      if (mounted.current) {
+        // Success and failure states are exclusive.
+        setOkMsg(STR.emailSent);
+        setLoading(false);
+      }
+    } catch (e) {
+      if (mounted.current) {
+        setError(authErrorMessage(e, STR.errorGeneric));
+        setLoading(false);
+      }
+    }
+  }
+
+  async function handleVerifyLogout() {
+    try {
+      const fb = await getFirebase();
+      await fb.auth().signOut();
+    } catch (e) {
+      // A failed sign-out must surface in the VISIBLE mode (verify), never
+      // in the hidden login mode.
+      console.error(e);
+      if (mounted.current) setError(authErrorMessage(e, STR.errorGeneric));
+      return;
+    }
+    if (mounted.current) switchMode('login');
+  }
+
   const inputCls =
     'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder-zinc-400 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 text-base';
   const btnCls =
     'w-full rounded-lg bg-emerald-700 px-4 py-3 font-bold text-white hover:bg-emerald-800 disabled:opacity-60 disabled:cursor-wait transition-colors';
+  const btnSecondaryCls =
+    'w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 transition-colors';
 
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
@@ -334,8 +622,9 @@ export default function AuthPage() {
               )}
               <form onSubmit={handleSignup} noValidate>
                 <label htmlFor="sName" className="block text-sm font-medium text-zinc-700 mb-1">
-                  الاسم (باللاتينية)
+                  الاسم
                 </label>
+                <p className="text-xs text-zinc-500 mb-1">{STR.nameHint}</p>
                 <input
                   id="sName"
                   dir="ltr"
@@ -344,6 +633,20 @@ export default function AuthPage() {
                   className={inputCls + ' mb-4 text-left'}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  required
+                />
+                <label htmlFor="sUser" className="block text-sm font-medium text-zinc-700 mb-1">
+                  اسم المستخدم
+                </label>
+                <p className="text-xs text-zinc-500 mb-1">{STR.usernameHint}</p>
+                <input
+                  id="sUser"
+                  dir="ltr"
+                  maxLength={20}
+                  autoComplete="username"
+                  className={inputCls + ' mb-4 text-left'}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
                   required
                 />
                 <label htmlFor="sEmail" className="block text-sm font-medium text-zinc-700 mb-1">
@@ -373,6 +676,21 @@ export default function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                <label htmlFor="sTerms" className="flex items-start gap-2 mb-5 text-sm text-zinc-700 cursor-pointer">
+                  <input
+                    id="sTerms"
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 accent-emerald-700"
+                    checked={terms}
+                    onChange={(e) => setTerms(e.target.checked)}
+                  />
+                  <span>
+                    أوافق على{' '}
+                    <Link href="/terms" className="text-emerald-700 hover:underline">
+                      شروط الاستخدام
+                    </Link>
+                  </span>
+                </label>
                 <button type="submit" className={btnCls} disabled={loading}>
                   {loading ? STR.pleaseWait : 'إنشاء الحساب'}
                 </button>
@@ -430,6 +748,57 @@ export default function AuthPage() {
                   العودة لتسجيل الدخول
                 </button>
               </p>
+            </div>
+          )}
+
+          {mode === 'verify' && (
+            <div>
+              <h1 className="text-xl font-bold text-zinc-900 mb-3">{STR.verifyEmailTitle}</h1>
+              <div className="mb-4 rounded-lg bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-800">
+                {STR.verifyEmailBody}
+              </div>
+              {verifyEmail && (
+                <p className="mb-2 text-sm text-zinc-600" dir="ltr" style={{ textAlign: 'right' }}>
+                  {verifyEmail}
+                </p>
+              )}
+              <p className="mb-4 text-sm text-zinc-600">
+                {STR.verifyStatusLabel}{' '}
+                <strong className={verifyDone ? 'text-emerald-700' : 'text-amber-700'}>
+                  {verifyDone ? STR.verifyStatusDone : STR.verifyStatusPending}
+                </strong>
+              </p>
+              {error && (
+                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+              {okMsg && (
+                <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
+                  {okMsg}
+                </div>
+              )}
+              <button type="button" className={btnCls} disabled={loading} onClick={handleVerifyContinue}>
+                {loading ? STR.pleaseWait : STR.verifiedContinue}
+              </button>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className={btnSecondaryCls}
+                  disabled={loading}
+                  onClick={handleResend}
+                >
+                  {STR.resendEmail}
+                </button>
+                <button
+                  type="button"
+                  className={btnSecondaryCls}
+                  disabled={loading}
+                  onClick={handleVerifyLogout}
+                >
+                  {STR.logout}
+                </button>
+              </div>
             </div>
           )}
         </div>
