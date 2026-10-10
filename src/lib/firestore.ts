@@ -661,9 +661,78 @@ function relevanceRank(docs: ListingCard[], q: string): ListingCard[] {
   return out;
 }
 
+// 0.0.0.31 FIX-WEB-014 (+050): result-count text with proper Arabic plurals.
+// Verbatim port of js/home.js resultsCountText — pure, unit-tested there.
+export function resultsCountText(n: number, lang = 'ar'): string {
+  n = Number(n) || 0;
+  lang = lang || 'ar';
+  if (lang === 'ar') {
+    if (n === 0) return 'لا توجد نتائج';
+    if (n === 1) return 'نتيجة واحدة';
+    if (n === 2) return 'نتيجتان';
+    if (n <= 10) return n + ' نتائج';
+    return n + ' نتيجة';
+  }
+  if (lang === 'fr') return n <= 1 ? n + ' résultat' : n + ' résultats';
+  return n === 1 ? '1 result' : n + ' results';
+}
+
+// js/home.js paging constants — DEEP_POOL = 60 (single deep fetch when
+// client-side refinements need room), MAX_SEARCH_MATCHES = 60 (text-search
+// match cap), PAGE_SIZE = 24 (docs per page).
+export const SEARCH_DEEP_POOL = 60;
+export const SEARCH_MAX_MATCHES = 60;
+export const SEARCH_PAGE_SIZE = 24;
+
+export interface SearchResult {
+  listings: ListingCard[];
+  // Count of painted cards — legacy resultsMeta semantics:
+  // js/home.js setResultsCount(shown.length).
+  total: number;
+  // Structured-filter mode only: a further page may exist
+  // (legacy: moreAvailable = !deepPool && fresh.length === limit).
+  hasMore: boolean;
+}
+
 // Server-side search: structured Firestore filters + client-side text match
 // (mirrors js/home.js renderFeed text-query branch).
-export async function searchListings(f: SearchFilters, limit = 24): Promise<ListingCard[]> {
+export async function searchListingsWithCount(
+  f: SearchFilters,
+  limit = SEARCH_PAGE_SIZE
+): Promise<SearchResult> {
+  // js/home.js feedShape(): deep-fetch the pool when the client refines it
+  // itself — price range, text query, or facet refinements. Structured
+  // filters page server-side (legacy PAGE_SIZE + cursor): fetch one extra
+  // row so hasMore mirrors `moreAvailable = fresh.length === limit`.
+  const usePriceRange =
+    (f.min !== undefined && f.min !== '') || (f.max !== undefined && f.max !== '');
+  const deepPool = usePriceRange || !!f.q?.trim() || hasFacetFilter(f);
+  const poolLimit = deepPool ? SEARCH_DEEP_POOL : limit + 1;
+  const matched = await runSearchPipeline(f, poolLimit, usePriceRange);
+  if (deepPool) {
+    // Legacy deepPool mode paints every matched doc — no load-more.
+    return { listings: matched, total: matched.length, hasMore: false };
+  }
+  const listings = matched.slice(0, limit);
+  // total = painted cards (legacy setResultsCount(shown.length)).
+  return { listings, total: listings.length, hasMore: matched.length > limit };
+}
+
+// Backward-compatible wrapper — the painted cards only.
+export async function searchListings(
+  f: SearchFilters,
+  limit = SEARCH_PAGE_SIZE
+): Promise<ListingCard[]> {
+  return (await searchListingsWithCount(f, limit)).listings;
+}
+
+// Internal pipeline: server pool → client refinements → matched docs
+// (pre-slice; the caller decides how many to paint).
+async function runSearchPipeline(
+  f: SearchFilters,
+  poolLimit: number,
+  usePriceRange: boolean
+): Promise<ListingCard[]> {
   const filters: unknown[] = [{
     fieldFilter: {
       field: { fieldPath: 'status' },
@@ -708,7 +777,6 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
   // run on the server when the query shape stays index-friendly (recent sort,
   // no price range — mirrors the legacy eligibility bail); the missing-index
   // fallback below reverts to client-side matching via matchFacets().
-  const usePriceRange = (f.min !== undefined && f.min !== '') || (f.max !== undefined && f.max !== '');
   const facetServerEligible = (!f.sort || f.sort === 'recent') && !usePriceRange;
   if (facetServerEligible) {
     if (f.cat === 'phones') {
@@ -782,9 +850,9 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
             : useFilters[0],
           orderBy,
           select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
-          // Text query and facet refinements need a pool to scan
-          // (js/home.js DEEP_POOL pattern).
-          limit: f.q || hasFacetFilter(f) ? 100 : limit,
+          // Deep-pool shapes scan a fixed pool (js/home.js DEEP_POOL);
+          // structured shapes fetch one extra row for the hasMore heuristic.
+          limit: poolLimit,
         },
       }),
       cache: 'no-store',
@@ -842,7 +910,7 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
     const q = normSearchText(f.q);
     const matched: ListingCard[] = [];
     for (const d of docs) {
-      if (matched.length >= 48) break;
+      if (matched.length >= SEARCH_MAX_MATCHES) break;
       const title = normSearchText(
         d.title && typeof d.title === 'object'
           ? (d.title as Record<string, string>).ar || ''
@@ -853,12 +921,8 @@ export async function searchListings(f: SearchFilters, limit = 24): Promise<List
     }
     // FIX-WEB-021: with a text query, relevance leads (exact title first) —
     // recency only breaks ties. Price sorts keep their own order instead
-    // (legacy renderFeed sort branch).
-    docs = (!f.sort || f.sort === 'recent')
-      ? relevanceRank(matched, f.q).slice(0, limit)
-      : matched.slice(0, limit);
-  } else if (hasFacetFilter(f)) {
-    docs = docs.slice(0, limit);
+    // (legacy renderFeed sort branch). No slice here — the caller paints.
+    docs = (!f.sort || f.sort === 'recent') ? relevanceRank(matched, f.q) : matched;
   }
   return docs;
 }

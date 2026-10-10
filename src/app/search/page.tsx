@@ -9,33 +9,25 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import {
-  searchListings,
-  cardTitle,
-  cardImage,
-  formatPrice,
+  searchListingsWithCount,
   hasFacetFilter,
   facetPhoneBrandsForOs,
   FACET_CAR_BRANDS,
-  type ListingCard,
+  type SearchResult,
   type SearchFilters,
 } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
 import { brandLatinName } from '@/lib/seo';
 import { pubT } from '@/lib/publish-strings';
-import TimeAgo from '@/components/TimeAgo';
 import SaveSearchButton from './SaveSearchButton';
+import SearchResultsGrid from './SearchResultsGrid';
+import { parseSearchFilters } from './filters';
 
-async function getResults(f: SearchFilters): Promise<ListingCard[]> {
+async function getResults(f: SearchFilters): Promise<SearchResult> {
   'use cache';
   cacheLife({ revalidate: 60 });
-  return searchListings(f);
-}
-
-function wilayaName(code: number | undefined): string {
-  if (!code) return '';
-  const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
-  return w ? `${w.code} - ${w.ar}` : '';
+  return searchListingsWithCount(f);
 }
 
 // Category facet row — mirrors js/home.js renderFacets() (0.0.0.43).
@@ -295,15 +287,15 @@ function ResultsSkeleton() {
 }
 
 async function Results({ filters }: { filters: SearchFilters }) {
-  let listings: ListingCard[] = [];
+  let data: SearchResult | null = null;
   let error: string | null = null;
   try {
-    listings = await getResults(filters);
+    data = await getResults(filters);
   } catch (e) {
     error = e instanceof Error ? e.message : 'search-error';
   }
 
-  if (error) {
+  if (error || !data) {
     return (
       <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">
         تعذر البحث ({error}).
@@ -311,56 +303,13 @@ async function Results({ filters }: { filters: SearchFilters }) {
     );
   }
 
-  if (listings.length === 0) {
-    return (
-      <div className="rounded-xl bg-white p-8 text-center text-zinc-500">
-        <p className="text-lg">لا توجد نتائج مطابقة</p>
-        <p className="mt-2 text-sm">جرّب كلمات مختلفة أو أزل بعض الفلاتر.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-      {listings.map((l) => {
-        const img = cardImage(l);
-        return (
-          <Link
-            key={l.id}
-            href={`/listing/${l.id}`}
-            className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-            dir="rtl"
-          >
-            <div className="relative aspect-[4/3] bg-zinc-100">
-              {img ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={img}
-                  alt={cardTitle(l)}
-                  loading="lazy"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
-              )}
-            </div>
-            <div className="p-3">
-              <p className="font-bold text-emerald-700 text-lg">{formatPrice(l.price || 0)}</p>
-              <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
-              <p className="mt-1 text-xs text-zinc-500">
-                {wilayaName(l.wilayaCode)}
-                {l.createdAt ? (
-                  <>
-                    {' · '}
-                    <TimeAgo iso={l.createdAt.toISOString()} />
-                  </>
-                ) : null}
-              </p>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
+    <SearchResultsGrid
+      initialListings={data.listings}
+      initialTotal={data.total}
+      initialHasMore={data.hasMore}
+      filters={filters}
+    />
   );
 }
 
@@ -370,27 +319,7 @@ async function SearchContent({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const get = (k: string): string => {
-    const v = sp[k];
-    return typeof v === 'string' ? v : '';
-  };
-  const filters: SearchFilters = {
-    q: get('q') || undefined,
-    cat: get('cat') || undefined,
-    wilaya: get('wilaya') || undefined,
-    min: get('min') || undefined,
-    max: get('max') || undefined,
-    sort: get('sort') || undefined,
-    fOs: get('fOs') || undefined,
-    fBrand: get('fBrand') || undefined,
-    fCarBrand: get('fCarBrand') || undefined,
-    fFuel: get('fFuel') || undefined,
-    fGear: get('fGear') || undefined,
-    fYearMin: get('fYearMin') || undefined,
-    fYearMax: get('fYearMax') || undefined,
-    fMilMin: get('fMilMin') || undefined,
-    fMilMax: get('fMilMax') || undefined,
-  };
+  const filters = parseSearchFilters(sp);
   const hasFilter =
     filters.q ||
     filters.cat ||
