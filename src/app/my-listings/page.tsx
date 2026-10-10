@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate, { PageHeader } from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang, type Lang } from '@/lib/i18n';
-import { cardImage, cardTitle, formatPrice } from '@/lib/firestore';
+import { formatPrice } from '@/lib/firestore';
 import { deleteR2Objects } from '@/lib/r2-upload';
 
 interface OwnListing {

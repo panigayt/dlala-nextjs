@@ -13,6 +13,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { tasteMirrorUid } from '@/lib/taste';
 
@@ -172,6 +173,7 @@ export type AuthState =
 // Redirects to /auth when signed out. Returns the auth state; pages
 // render a loading spinner while status === 'loading'.
 export function useRequireAuth(): AuthState {
+  const router = useRouter();
   const [state, setState] = useState<AuthState>({ status: 'loading' });
 
   useEffect(() => {
@@ -190,7 +192,7 @@ export function useRequireAuth(): AuthState {
           } else {
             tasteMirrorUid(null);
             setState({ status: 'signed-out' });
-            window.location.href = '/auth';
+            router.push('/auth');
           }
         });
       })
@@ -201,7 +203,7 @@ export function useRequireAuth(): AuthState {
       cancelled = true;
       if (unsub) unsub();
     };
-  }, []);
+  }, [router]);
 
   return state;
 }
@@ -244,7 +246,7 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
     <header className="bg-emerald-700 text-white shadow">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link href="/" className="text-xl font-bold">
-          دلالة
+          {title || 'دلالة'}
         </Link>
         <span className="text-sm">{subtitle || 'سوق الجزائر للإعلانات المبوبة'}</span>
       </div>

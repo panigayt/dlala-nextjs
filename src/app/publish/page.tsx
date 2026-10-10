@@ -15,7 +15,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   useRequireAuth,
   PageHeader,
@@ -512,6 +512,7 @@ function PublishForm({
     }
   };
   const [isWanted, setIsWanted] = useState(initialMode === 'wanted');
+  const router = useRouter();
   const [title, setTitle] = useState(() => readDraft()?.title || '');
   const [cat, setCat] = useState(() => readDraft()?.cat || '');
   const [wilaya, setWilaya] = useState(() => readDraft()?.wilaya || '');
@@ -550,7 +551,6 @@ function PublishForm({
   }, [title, cat, wilaya, price, desc, answers, editId]);
 
   // Edit mode: load existing listing
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (!editId) return;
     (async () => {
@@ -922,7 +922,7 @@ function PublishForm({
           }
         }
         try { localStorage.removeItem('dlala_publish_draft'); } catch { /* ignore */ }
-        window.location.href = `/listing/${editId}`;
+        router.push(`/listing/${editId}`);
         return;
       }
 

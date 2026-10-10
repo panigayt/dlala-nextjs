@@ -16,6 +16,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AuthGate, { PageHeader } from '@/components/AuthGate';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { deleteR2Objects } from '@/lib/r2-upload';
@@ -39,6 +40,7 @@ export default function SettingsPage() {
 }
 
 function SettingsContent({ user }: { user: CompatUser }) {
+  const router = useRouter();
   const { lang, setLang, t } = useLang();
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [blocked, setBlocked] = useState<BlockedUser[] | null>(null);
@@ -352,7 +354,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         const dc = (de as { code?: string })?.code || '';
         if (dc === 'auth/requires-recent-login') {
           window.alert(t('reauthNeeded'));
-          window.location.href = '/auth';
+          router.push('/auth');
           return;
         }
         throw de;
@@ -363,7 +365,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         // already signed out
       }
       window.alert(t('deletionRequested'));
-      window.location.href = '/';
+      router.push('/');
     } catch (e) {
       console.error(e);
       if (mounted.current) {
@@ -371,7 +373,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         setDeleteBusy(false);
       }
     }
-  }, [user, deleteWord, deletePw, t]);
+  }, [user, deleteWord, deletePw, t, router]);
 
   const rowCls =
     'flex items-center gap-3 w-full text-start p-4 hover:bg-zinc-50 transition-colors';

@@ -8,6 +8,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
 import { useLang } from '@/lib/i18n';
 
@@ -16,6 +17,7 @@ interface AuthGateProps {
 }
 
 export default function AuthGate({ children }: AuthGateProps) {
+  const router = useRouter();
   const { lang, t } = useLang();
   const [user, setUser] = useState<CompatUser | null>(null);
   const [timedOut, setTimedOut] = useState(false);
@@ -36,7 +38,7 @@ export default function AuthGate({ children }: AuthGateProps) {
             setUser(u);
           } else {
             // Not signed in — bounce to /auth (requireAuth behavior).
-            window.location.href = '/auth';
+            router.push('/auth');
           }
         });
         // Safety: if onAuthStateChanged never fires within 12s, show retry.
@@ -57,7 +59,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         unsubRef.current = null;
       }
     };
-  }, []);
+  }, [router]);
 
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 

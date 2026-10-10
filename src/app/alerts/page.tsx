@@ -6,6 +6,7 @@
 // All user-facing strings verbatim from js/i18n.ar.js.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   useRequireAuth,
@@ -576,19 +577,25 @@ export default function AlertsPage() {
                     🔎 {search.query || searchMeta(search) || '—'}
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
-                    {hits.map((h) => (
+                    {hits.map((h) => {
+                      const thumb = listingThumb(h);
+                      return (
                       <a
                         key={h.id}
                         href={`/listing/${encodeURIComponent(h.id)}`}
                         className="rounded-xl bg-white shadow-sm overflow-hidden no-underline hover:shadow"
                       >
-                        {listingThumb(h) ? (
-                          <img
-                            src={listingThumb(h)}
-                            alt=""
-                            loading="lazy"
-                            className="w-full h-28 object-cover"
-                          />
+                        {thumb ? (
+                          <span className="relative block w-full h-28">
+                            <Image
+                              unoptimized
+                              src={thumb}
+                              alt=""
+                              fill
+                              sizes="(max-width: 640px) 50vw, 300px"
+                              className="object-cover"
+                            />
+                          </span>
                         ) : (
                           <div className="w-full h-28 bg-zinc-100 flex items-center justify-center text-2xl">
                             📷
@@ -603,7 +610,8 @@ export default function AlertsPage() {
                           </div>
                         </div>
                       </a>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}

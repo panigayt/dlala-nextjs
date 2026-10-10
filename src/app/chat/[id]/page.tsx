@@ -8,6 +8,7 @@
 // js/i18n.ar.js. Chat photos go to R2 ONLY (never Firebase Storage).
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import NextImage from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   useRequireAuth,
@@ -1537,11 +1538,15 @@ function ChatInner() {
         >
           {m.imageUrl && (
             <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
-              <img
+              <NextImage
+                unoptimized
                 src={m.imageUrl}
                 alt={STR.photoLabel}
-                loading="lazy"
-                className="rounded-lg max-h-64 w-auto mb-1"
+                width={640}
+                height={480}
+                sizes="(max-width: 768px) 80vw, 480px"
+                className="rounded-lg mb-1"
+                style={{ width: 'auto', height: 'auto', maxHeight: '16rem' }}
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
@@ -1627,10 +1632,13 @@ function ChatInner() {
                 className="flex items-center gap-1.5 text-xs text-emerald-100 hover:underline truncate"
               >
                 {listingChip.photo && (
-                  <img
+                  <NextImage
+                    unoptimized
                     src={listingChip.photo}
                     alt=""
-                    className="w-5 h-5 rounded object-cover"
+                    width={20}
+                    height={20}
+                    className="rounded object-cover"
                   />
                 )}
                 <span className="truncate">{listingChip.title}</span>

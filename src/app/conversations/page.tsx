@@ -7,6 +7,7 @@
 // fallbacks where the key only exists there).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import {
   useRequireAuth,
   LoadingSpinner,
@@ -389,17 +390,19 @@ export default function ConversationsPage() {
                   href={`/chat/${encodeURIComponent(c.id)}`}
                   className="flex items-center gap-3 flex-1 min-w-0 no-underline"
                 >
-                  <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+                  <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center text-2xl shrink-0 overflow-hidden relative">
                     {isSupport ? (
                       '🎧'
                     ) : isAnn ? (
                       '📢'
                     ) : li && li.photo ? (
-                      <img
+                      <Image
+                        unoptimized
                         src={li.photo}
                         alt=""
-                        loading="lazy"
-                        className="w-full h-full object-cover"
+                        fill
+                        sizes="48px"
+                        className="object-cover"
                       />
                     ) : (
                       '💬'

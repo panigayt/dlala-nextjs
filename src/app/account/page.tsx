@@ -459,7 +459,7 @@ function AccountContent({ user }: { user: CompatUser }) {
         makePreview(f, setLogoPreview);
       }
     },
-    [t]
+    [t, makePreview]
   );
 
   const resendVerification = useCallback(async () => {

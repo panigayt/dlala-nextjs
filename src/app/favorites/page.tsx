@@ -290,7 +290,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   );
 
   const removeFavorite = useCallback(
-    async (listingId: string, orphan: boolean) => {
+    async (listingId: string) => {
       setRemoving(listingId);
       try {
         const fb = await getFirebase();
@@ -398,7 +398,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
                         <p className="text-sm text-zinc-500">{t('favListingRemoved')}</p>
                       </div>
                       <button
-                        onClick={() => removeFavorite(lid, true)}
+                        onClick={() => removeFavorite(lid)}
                         disabled={busy}
                         aria-label={t('removeFavorite')}
                         title={t('removeFavorite')}
@@ -437,7 +437,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
                       </div>
                     </a>
                     <button
-                      onClick={() => removeFavorite(lid, false)}
+                      onClick={() => removeFavorite(lid)}
                       disabled={busy}
                       aria-label={t('removeFavorite')}
                       title={t('removeFavorite')}

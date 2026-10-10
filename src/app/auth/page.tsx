@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   getFirebase,
   withTimeout,
@@ -161,6 +162,7 @@ type Mode = 'login' | 'signup' | 'reset' | 'verify';
 const PENDING_KEY = 'dlala_pending_profile';
 
 export default function AuthPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -186,7 +188,7 @@ export default function AuthPage() {
         unsubRef.current = fb.auth().onAuthStateChanged((u) => {
           if (!mounted.current || !u) return;
           if (u.emailVerified) {
-            window.location.href = '/';
+            router.push('/');
           } else {
             setVerifyEmail(u.email || '');
             setVerifyDone(false);
@@ -203,7 +205,7 @@ export default function AuthPage() {
         unsubRef.current = null;
       }
     };
-  }, []);
+  }, [router]);
 
   const switchMode = useCallback((m: Mode) => {
     setMode(m);
@@ -280,7 +282,7 @@ export default function AuthPage() {
       if (!mounted.current) return;
       setLoading(false);
       if (verified) {
-        window.location.href = '/';
+        router.push('/');
       } else {
         showVerifyGate(cred.user);
       }
@@ -475,7 +477,7 @@ export default function AuthPage() {
       const verified = !!u.emailVerified;
       setVerifyDone(verified);
       if (verified) {
-        window.location.href = '/';
+        router.push('/');
       } else {
         // Still not verified — say so plainly, don't leave them guessing.
         setError(STR.verifyStillPending);
