@@ -214,11 +214,28 @@ export function useFollowToggle(storeUid: string) {
   return { following, isOwn, toast, onTap };
 }
 
-export default function FollowButton({ storeUid }: { storeUid: string }) {
+export default function FollowButton({
+  storeUid,
+  className,
+}: {
+  storeUid: string;
+  // Optional full button class override (e.g. the boutique hero's
+  // .bh-follow-btn, 0.0.0.39 parity). The `on` suffix is appended when
+  // following. Default keeps the standard rounded-xl emerald button.
+  className?: string;
+}) {
   const { following, isOwn, toast, onTap } = useFollowToggle(storeUid);
   const { t } = useLang();
 
   if (isOwn) return null;
+
+  const btnClass = className
+    ? `${className}${following ? ' on' : ''}`
+    : `w-full rounded-xl px-6 py-3 font-bold transition-colors ${
+        following
+          ? 'bg-white border border-zinc-300 text-zinc-700 hover:bg-zinc-50'
+          : 'bg-emerald-700 text-white hover:bg-emerald-800'
+      }`;
 
   return (
     <div className="relative">
@@ -226,11 +243,7 @@ export default function FollowButton({ storeUid }: { storeUid: string }) {
         type="button"
         onClick={onTap}
         aria-pressed={following ? 'true' : 'false'}
-        className={`w-full rounded-xl px-6 py-3 font-bold transition-colors ${
-          following
-            ? 'bg-white border border-zinc-300 text-zinc-700 hover:bg-zinc-50'
-            : 'bg-emerald-700 text-white hover:bg-emerald-800'
-        }`}
+        className={btnClass}
       >
         {following ? `✓ ${t('following')}` : `+ ${t('follow')}`}
       </button>

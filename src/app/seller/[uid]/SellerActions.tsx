@@ -39,6 +39,120 @@ const TOGGLE_BLOCK_URL =
 const storeShareUrl = (uid: string) =>
   'https://dzdlala.com/seller.html?uid=' + encodeURIComponent(uid);
 
+// Icon-only store share button (0.0.0.39 .share-icon-btn parity, 0.0.0.1o):
+// Web Share API when available, else the WhatsApp / Facebook / copy-link
+// dialog. Visible to everyone, including the owner (legacy parity).
+export function ShareIconButton({
+  uid,
+  storeName,
+  className,
+}: {
+  uid: string;
+  storeName: string;
+  className?: string;
+}) {
+  const { t } = useLang();
+  const [shareOpen, setShareOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    const timerRef = toastTimer;
+    return () => {
+      mounted.current = false;
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => {
+      if (mounted.current) setToast(null);
+    }, 2600);
+  }, []);
+
+  const shareUrl = storeShareUrl(uid);
+
+  const onShare = useCallback(() => {
+    const nav = window.navigator as Navigator & {
+      share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+    };
+    // js/market.js shareStore: Web Share API when available, else the
+    // WhatsApp / Facebook / copy-link dialog.
+    if (typeof nav.share === 'function') {
+      nav.share({ title: 'DLALA', text: storeName || 'DLALA', url: shareUrl }).catch(() => {});
+      return;
+    }
+    setShareOpen(true);
+  }, [storeName, shareUrl]);
+
+  const onCopyLink = useCallback(async () => {
+    try {
+      await window.navigator.clipboard.writeText(shareUrl);
+      setShareOpen(false);
+      showToast(t('linkCopied'));
+    } catch {
+      window.prompt(t('copyLink'), shareUrl);
+    }
+  }, [shareUrl, showToast, t]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onShare}
+        title={t('shareStore')}
+        aria-label={t('shareStore')}
+        className={className || 'share-icon-btn'}
+      >
+        🔗
+      </button>
+
+      {shareOpen && (
+        <Modal title={t('shareStore')} onClose={() => setShareOpen(false)}>
+          <div className="flex flex-wrap gap-2">
+            <a
+              className="rounded-lg bg-emerald-700 text-white font-bold px-4 py-2"
+              href={`https://wa.me/?text=${encodeURIComponent((storeName || 'DLALA') + ' — DLALA')}%20${encodeURIComponent(shareUrl)}`}
+              target="_blank"
+              rel="noopener"
+            >
+              WhatsApp
+            </a>
+            <a
+              className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
+              target="_blank"
+              rel="noopener"
+            >
+              Facebook
+            </a>
+            <button
+              type="button"
+              onClick={onCopyLink}
+              className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
+            >
+              {t('copyLink')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg max-w-[90vw] text-center"
+        >
+          {toast}
+        </div>
+      )}
+    </>
+  );
+}
+
 function Modal({
   title,
   onClose,
@@ -98,7 +212,6 @@ export default function SellerActions({
   // Round 111: strings follow the UI language (js/i18n.js parity).
   const { t, lang } = useLang();
   const [toast, setToast] = useState<string | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
   // null = checking (never a false 🚫/✓) — js/block.js paintBlockButton
   // keeps the default label until the pair state resolves.
   const [blocked, setBlocked] = useState<boolean | null>(null);
@@ -203,46 +316,10 @@ export default function SellerActions({
     }
   }, [auth.status, blockBusy, user, client, uid, blocked, guestNudgeThenLogin, showToast, t]);
 
-  // ---------- share ----------
-  const shareUrl = storeShareUrl(uid);
-
-  const onShare = useCallback(() => {
-    const nav = window.navigator as Navigator & {
-      share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-    };
-    // js/market.js shareStore: Web Share API when available, else the
-    // WhatsApp / Facebook / copy-link dialog.
-    if (typeof nav.share === 'function') {
-      nav.share({ title: 'DLALA', text: storeName || 'DLALA', url: shareUrl }).catch(() => {});
-      return;
-    }
-    setShareOpen(true);
-  }, [storeName, shareUrl]);
-
-  const onCopyLink = useCallback(async () => {
-    try {
-      await window.navigator.clipboard.writeText(shareUrl);
-      setShareOpen(false);
-      showToast(t('linkCopied'));
-    } catch {
-      window.prompt(t('copyLink'), shareUrl);
-    }
-  }, [shareUrl, showToast, t]);
-
-
-
   return (
     <div className="flex flex-wrap gap-3 items-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {/* Share — visible to everyone including the owner (legacy parity). */}
-      <button
-        type="button"
-        onClick={onShare}
-        title={t('shareStore')}
-        aria-label={t('shareStore')}
-        className="rounded-lg px-4 py-3 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-emerald-500"
-      >
-        🔗
-      </button>
+      <ShareIconButton uid={uid} storeName={storeName} />
       {/* Report — everyone except the seller themselves (sellerReportVisible);
           the shared component self-hides for the owner too. */}
       {!isOwn && <ReportUserButton uid={uid} targetTitle={storeName} />}
@@ -258,37 +335,6 @@ export default function SellerActions({
           {blocked === true ? `✓ ${t('unblock')}` : `🚫 ${t('block')}`}
         </button>
       )}
-
-      {shareOpen && (
-        <Modal title={t('shareStore')} onClose={() => setShareOpen(false)}>
-          <div className="flex flex-wrap gap-2">
-            <a
-              className="rounded-lg bg-emerald-700 text-white font-bold px-4 py-2"
-              href={`https://wa.me/?text=${encodeURIComponent((storeName || 'DLALA') + ' — DLALA')}%20${encodeURIComponent(shareUrl)}`}
-              target="_blank"
-              rel="noopener"
-            >
-              WhatsApp
-            </a>
-            <a
-              className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
-              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
-              target="_blank"
-              rel="noopener"
-            >
-              Facebook
-            </a>
-            <button
-              type="button"
-              onClick={onCopyLink}
-              className="rounded-lg border border-zinc-300 font-bold px-4 py-2"
-            >
-              {t('copyLink')}
-            </button>
-          </div>
-        </Modal>
-      )}
-
 
       {toast && (
         <div
