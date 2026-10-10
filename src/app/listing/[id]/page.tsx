@@ -10,7 +10,6 @@
 //     render the trilingual 404.
 
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -43,6 +42,7 @@ import BackLink from '@/components/BackLink';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import RateCta from '@/components/RateCta';
+import NotFoundCta from './NotFoundCta';
 import {
   ListingDir,
   SoldBanner,
@@ -159,9 +159,7 @@ function NotFoundView() {
       <p className="mt-1 text-zinc-600" lang="fr">Cette annonce n&rsquo;existe pas ou a été supprimée.</p>
       <p className="mt-1 text-zinc-600" lang="en">This listing does not exist or was removed.</p>
       <div className="mt-6">
-        <Link href="/" className="inline-block rounded-lg bg-emerald-700 text-white px-6 py-3 font-medium">
-          تصفح الإعلانات
-        </Link>
+        <NotFoundCta />
       </div>
     </div>
   );

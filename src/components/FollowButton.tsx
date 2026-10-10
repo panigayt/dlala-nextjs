@@ -171,7 +171,10 @@ export function useFollowToggle(storeUid: string) {
               ) as unknown as DocRefLike
             ).set({
               type: 'follow',
-              title: `${followerName} بدأ بمتابعتك`,
+              // Legacy js/app.js parity (v101 follow-notif): the stored title
+              // is written in the FOLLOWER's (writer's) UI language via the
+              // followedYou template — was hardcoded Arabic (Round 131 fix).
+              title: t('followedYou').replace('{name}', followerName),
               body: '',
               createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
               read: false,
