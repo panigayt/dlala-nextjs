@@ -19,36 +19,27 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
+import { useLang } from '@/lib/i18n';
 import { withTimeout } from '@/lib/firebase-compat';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 
-// Verbatim strings from js/i18n.ar.js
-const STR = {
-  reportUser: 'الإبلاغ عن المستخدم',
-  loginToReportUser: 'سجّل الدخول للإبلاغ عن مستخدم',
-  verifyToReport: 'أرسلنا لك رابط التفعيل. فعّل بريدك لتتمكن من النشر ومراسلة البائعين.',
-  reportReason: 'سبب البلاغ',
-  reportDetails: 'تفاصيل إضافية',
-  reportDetailsHint: 'اشرح ما حدث…',
-  reportPhoto: 'صورة دليل (اختياري)',
-  optional: 'اختياري',
-  sendReport: 'إرسال البلاغ',
-  reportSent: 'تم إرسال البلاغ. شكراً لك.',
-  reportFailed: 'تعذّر إرسال البلاغ. حاول مجدداً.',
-  reportExists: 'لقد أبلغت عن هذا مسبقاً.',
-  close: 'إغلاق',
-};
+// All user-facing strings come from the shared trilingual store
+// (js/i18n.{ar,fr,en}.js parity); legacy report reasons use the dynamic
+// key pattern t('reason' + r[0].toUpperCase() + r.slice(1))
+// (js/market.js:713 parity).
 
 function Modal({
   title,
   onClose,
   children,
+  lang,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  lang: 'ar' | 'fr' | 'en';
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -60,7 +51,7 @@ function Modal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      dir="rtl"
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
       onClick={onClose}
     >
       <div
@@ -75,7 +66,7 @@ function Modal({
           <button
             type="button"
             onClick={onClose}
-            aria-label={STR.close}
+            aria-label={title}
             className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100"
           >
             ✕
@@ -87,15 +78,8 @@ function Modal({
   );
 }
 
-// Verbatim REPORT_REASONS order from js/market.js.
-const REASONS: ReadonlyArray<readonly [string, string]> = [
-  ['scam', 'احتيال'],
-  ['fake', 'إعلان وهمي'],
-  ['prohibited', 'محتوى محظور'],
-  ['spam', 'إزعاج / سبام'],
-  ['abuse', 'إساءة'],
-  ['other', 'أخرى'],
-];
+// Verbatim REPORT_REASONS order from js/market.js:708.
+const REASONS = ['scam', 'fake', 'prohibited', 'spam', 'abuse', 'other'] as const;
 
 export default function ReportUserButton({
   uid,
@@ -106,6 +90,7 @@ export default function ReportUserButton({
   targetTitle: string;
   className?: string;
 }) {
+  const { t, lang } = useLang();
   const router = useRouter();
   const auth = useAuthState();
   const [toast, setToast] = useState<string | null>(null);
@@ -158,7 +143,7 @@ export default function ReportUserButton({
     if (!user || !client) {
       // R4-D1 (js/seller.js renderSellerExtras): guest gets the toast nudge
       // before the auth redirect — never a silent bounce.
-      guestNudgeThenLogin(STR.loginToReportUser);
+      guestNudgeThenLogin(t('loginToReportUser'));
       return;
     }
     if (user.uid === uid) return; // owner never sees this button
@@ -171,12 +156,12 @@ export default function ReportUserButton({
       /* offline — use cached */
     }
     if (!user.emailVerified) {
-      showToast(STR.verifyToReport);
+      showToast(t('verifyToReport'));
       return;
     }
     setRepError(null);
     setReportOpen(true);
-  }, [auth.status, user, client, uid, guestNudgeThenLogin, showToast]);
+  }, [auth.status, user, client, uid, guestNudgeThenLogin, showToast, t]);
 
   const onSendReport = useCallback(async () => {
     if (!user || !client || repSending) return;
@@ -225,7 +210,7 @@ export default function ReportUserButton({
       setReportOpen(false);
       setRepPhoto(null);
       setRepDetails('');
-      showToast(STR.reportSent);
+      showToast(t('reportSent'));
     } catch (e) {
       console.error(e);
       // The write failed AFTER the evidence photo uploaded — if the
@@ -247,11 +232,11 @@ export default function ReportUserButton({
         }
       }
       const code = (e as { code?: string })?.code || '';
-      setRepError(code === 'permission-denied' ? STR.reportExists : STR.reportFailed);
+      setRepError(code === 'permission-denied' ? t('reportExists') : t('reportFailed'));
     } finally {
       if (mounted.current) setRepSending(false);
     }
-  }, [user, client, repSending, repPhoto, repReason, repDetails, uid, targetTitle, showToast]);
+  }, [user, client, repSending, repPhoto, repReason, repDetails, uid, targetTitle, showToast, t]);
 
   // Owner never sees the button (legacy sellerReportVisible parity) — the
   // listing page also hides it inside OwnerSellerCard, double guard.
@@ -267,35 +252,35 @@ export default function ReportUserButton({
           'rounded-lg px-4 py-3 font-bold border bg-white border-zinc-300 text-zinc-700 hover:border-red-300'
         }
       >
-        ⚑ {STR.reportUser}
+        ⚑ {t('reportUser')}
       </button>
 
       {reportOpen && (
-        <Modal title={STR.reportUser} onClose={() => !repSending && setReportOpen(false)}>
-          <label className="block text-sm font-medium">{STR.reportReason}</label>
+        <Modal title={t('reportUser')} onClose={() => !repSending && setReportOpen(false)} lang={lang}>
+          <label className="block text-sm font-medium">{t('reportReason')}</label>
           <select
             value={repReason}
             onChange={(e) => setRepReason(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 bg-white"
           >
-            {REASONS.map(([v, l]) => (
+            {REASONS.map((v) => (
               <option key={v} value={v}>
-                {l}
+                {t('reason' + v[0].toUpperCase() + v.slice(1))}
               </option>
             ))}
           </select>
           <label className="mt-3 block text-sm font-medium">
-            {STR.reportDetails} <span className="text-zinc-400">({STR.optional})</span>
+            {t('reportDetails')} <span className="text-zinc-400">({t('optional')})</span>
           </label>
           <textarea
             value={repDetails}
             onChange={(e) => setRepDetails(e.target.value)}
             maxLength={1000}
             rows={3}
-            placeholder={STR.reportDetailsHint}
+            placeholder={t('reportDetailsHint')}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2"
           />
-          <label className="mt-3 block text-sm font-medium">{STR.reportPhoto}</label>
+          <label className="mt-3 block text-sm font-medium">{t('reportPhoto')}</label>
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -316,7 +301,7 @@ export default function ReportUserButton({
             disabled={repSending}
             className="mt-4 w-full rounded-lg bg-red-600 text-white font-bold px-5 py-2.5 disabled:opacity-50"
           >
-            {STR.sendReport}
+            {t('sendReport')}
           </button>
         </Modal>
       )}

@@ -17,18 +17,12 @@
 
 import { useEffect, useState } from 'react';
 import { useAuthState } from '@/lib/firebase-client';
+import { useLang } from '@/lib/i18n';
 import {
   ensureProVerdicts,
   getProVerdict,
   subscribeProVerdicts,
 } from '@/lib/card-markers';
-
-// Verbatim strings from js/i18n.ar.js (the card surfaces are AR-only, like
-// the rest of ListingCardView's hardcoded AR badges).
-const STR = {
-  yourListing: 'إعلانك',
-  proMerchant: 'تاجر محترف',
-};
 
 export function useProVerdict(sellerId: string): boolean | undefined {
   const [, bump] = useState(0);
@@ -45,6 +39,7 @@ export function useProVerdict(sellerId: string): boolean | undefined {
 // before auth (SSR/loading → null), then tags once auth is known — the same
 // visual sequence as legacy's markOwnCards(). No-op for guests.
 export function OwnBadge({ sellerId }: { sellerId: string }) {
+  const { t } = useLang();
   const auth = useAuthState();
   const isMine =
     !!sellerId &&
@@ -52,17 +47,18 @@ export function OwnBadge({ sellerId }: { sellerId: string }) {
     !!auth.user &&
     auth.user.uid === sellerId;
   if (!isMine) return null;
-  return <span className="badge badge-own">✓ {STR.yourListing}</span>;
+  return <span className="badge badge-own">✓ {t('yourListing')}</span>;
 }
 
 // 16 Sep 2026 parity: gold pro badge inside the card title for verified pro
 // merchants. Renders only once the verdict resolves true (fails closed).
 export function ProBadge({ sellerId }: { sellerId: string }) {
+  const { t } = useLang();
   const verdict = useProVerdict(sellerId);
   if (verdict !== true) return null;
   return (
     <span className="pro-badge" style={{ fontSize: 11, marginInlineStart: 6 }}>
-      ★ {STR.proMerchant}
+      ★ {t('proMerchant')}
     </span>
   );
 }
