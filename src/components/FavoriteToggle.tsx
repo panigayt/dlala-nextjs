@@ -13,7 +13,10 @@
 //   stripOwnHearts parity); the parent skips sold listings
 //   (`l.status !== 'sold'`).
 // - Guests get the login nudge (LIS-4: toast explaining why, then /auth) —
-//   never a silent bounce.
+//   never a silent bounce. R3 (Zak ordered, js/app.js:843 parity): the
+//   pending favorite is stashed in sessionStorage so it auto-applies after
+//   the login round-trip; the button carries data-fid so the applier can
+//   find and click it.
 // - The heart renders neutral (♡) until the favorite check resolves —
 //   never a false ♥ (js/listing.js refreshAuthDependent parity).
 // - Zak 21 Sep tap-feedback fix: the glyph AND the count move on the tap
@@ -32,6 +35,7 @@ import { useAuthState } from '@/lib/firebase-client';
 import { withTimeout } from '@/lib/firebase-compat';
 import { tasteNoteFav } from '@/lib/taste';
 import { authLoginHref } from '@/lib/auth-return';
+import { savePendingAction } from '@/lib/pending-action';
 
 // Verbatim strings from js/i18n.ar.js
 const STR = {
@@ -121,6 +125,9 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
 
   const showToastThenAuth = useCallback(
     (msg: string) => {
+      // R3 (Zak ordered, js/app.js:843 parity): stash the pending favorite so
+      // it auto-applies after the login round-trip.
+      savePendingAction({ type: 'favorite', listingId });
       setToast(msg);
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
       toastTimer.current = window.setTimeout(() => {
@@ -128,7 +135,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         router.push(authLoginHref(window.location.pathname, window.location.search));
       }, 1500);
     },
-    [router]
+    [router, listingId]
   );
 
   const showToast = useCallback((msg: string) => {
@@ -248,6 +255,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       <button
         type="button"
         onClick={onTap}
+        data-fid={listingId}
         aria-pressed={fav === true}
         aria-busy={fav === null}
         aria-label={STR.favorites}
