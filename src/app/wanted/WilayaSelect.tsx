@@ -11,6 +11,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useLang } from '@/lib/i18n';
 import { WILAYAS } from '@/lib/wilayas';
 
 interface Filters {
@@ -21,6 +22,7 @@ interface Filters {
 
 export default function WilayaSelect({ f }: { f: Filters }) {
   const router = useRouter();
+  const { t, lang } = useLang();
 
   const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const p = new URLSearchParams();
@@ -35,7 +37,7 @@ export default function WilayaSelect({ f }: { f: Filters }) {
   return (
     <div>
       <label htmlFor="wWilaya" className="sr-only">
-        الولاية
+        {t('wilaya')}
       </label>
       <select
         id="wWilaya"
@@ -43,10 +45,10 @@ export default function WilayaSelect({ f }: { f: Filters }) {
         onChange={onChange}
         className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 text-base"
       >
-        <option value="">كل الولايات</option>
+        <option value="">{t('allWilayas')}</option>
         {WILAYAS.map((w) => (
           <option key={w.code} value={String(w.code)}>
-            {w.code} - {w.ar}
+{w.code} - {w[lang] || w.ar}
           </option>
         ))}
       </select>

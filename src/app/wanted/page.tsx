@@ -12,15 +12,13 @@
 
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
-import Link from 'next/link';
 import {
   fetchWanted,
   normSearchText,
   type ListingCard,
 } from '@/lib/firestore';
-import { CATEGORIES } from '@/lib/categories';
 import ListingCardView from '@/components/ListingCardView';
-import WilayaSelect from './WilayaSelect';
+import WantedFilterBar from './WantedFilterBar';
 
 const WANTED_LIMIT = 60;
 
@@ -71,59 +69,6 @@ function wantedMatches(l: ListingCard, f: Filters): boolean {
   return true;
 }
 
-function FilterBar({ f }: { f: Filters }) {
-  const chipCls = (active: boolean) =>
-    `rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
-      active
-        ? 'bg-emerald-700 text-white'
-        : 'bg-white text-zinc-700 border border-zinc-200 hover:border-emerald-400'
-    }`;
-
-  const params = (over: Partial<Filters>) => {
-    const p = new URLSearchParams();
-    const nf = { ...f, ...over };
-    if (nf.cat) p.set('cat', nf.cat);
-    if (nf.wilaya) p.set('wilaya', nf.wilaya);
-    if (nf.q) p.set('q', nf.q);
-    const s = p.toString();
-    return s ? `/wanted?${s}` : '/wanted';
-  };
-
-  return (
-    <div className="mb-5 space-y-3">
-      <form action="/wanted" method="get" className="flex gap-2">
-        {f.cat ? <input type="hidden" name="cat" value={f.cat} /> : null}
-        {f.wilaya ? <input type="hidden" name="wilaya" value={f.wilaya} /> : null}
-        <input
-          name="q"
-          defaultValue={f.q}
-          placeholder="ابحث..."
-          className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder-zinc-400 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 text-base"
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-emerald-700 px-5 py-2.5 font-bold text-white hover:bg-emerald-800 transition-colors"
-        >
-          بحث
-        </button>
-      </form>
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <Link href={params({ cat: '' })} className={chipCls(!f.cat)}>
-          كل الأقسام
-        </Link>
-        {CATEGORIES.map((c) => (
-          <Link key={c.id} href={params({ cat: c.id })} className={chipCls(f.cat === c.id)}>
-            {c.ar}
-          </Link>
-        ))}
-      </div>
-
-      <WilayaSelect f={f} />
-    </div>
-  );
-}
-
 async function WantedContent({
   searchParams,
 }: {
@@ -161,7 +106,7 @@ async function WantedContent({
           </a>
         </div>
 
-        <FilterBar f={f} />
+        <WantedFilterBar f={f} />
 
         {error ? (
           <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">

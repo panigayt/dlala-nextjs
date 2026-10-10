@@ -188,6 +188,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     publishedOn: 'تاريخ النشر', seller: 'البائع', description: 'الوصف',
     details: 'التفاصيل', viewStore: 'عرض المتجر', viewProfile: 'عرض الصفحة',
     respondToWanted: 'الرد على هذا الطلب', photo: 'صورة',
+    back: 'رجوع',
 
     // Round 110: auth page (login/signup/reset/verify gate) —
     // verbatim js/i18n.{ar,fr,en}.js + port-specific auth keys.
@@ -431,6 +432,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     publishedOn: 'Publié le', seller: 'Vendeur', description: 'Description',
     details: 'Détails', viewStore: 'Voir la boutique', viewProfile: 'Voir la page',
     respondToWanted: 'Répondre à cette demande', photo: 'Photo',
+    back: 'Retour',
 
     // Round 110: auth page (login/signup/reset/verify gate) —
     // verbatim js/i18n.{ar,fr,en}.js + port-specific auth keys.
@@ -674,6 +676,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     publishedOn: 'Published on', seller: 'Seller', description: 'Description',
     details: 'Details', viewStore: 'View store', viewProfile: 'View page',
     respondToWanted: 'Respond to this request', photo: 'Photo',
+    back: 'Back',
 
     // Round 110: auth page (login/signup/reset/verify gate) —
     // verbatim js/i18n.{ar,fr,en}.js + port-specific auth keys.

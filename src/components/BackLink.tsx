@@ -17,8 +17,10 @@
 
 import { useCallback } from 'react';
 import Link from 'next/link';
+import { useLang } from '@/lib/i18n';
 
 export default function BackLink() {
+  const { t, lang } = useLang();
   const onClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     try {
       if (window.history && window.history.length > 1) {
@@ -40,9 +42,9 @@ export default function BackLink() {
         className="text-emerald-700 hover:underline"
       >
         <span aria-hidden="true" className="inline-block min-w-[0.6em] text-center">
-          ›
+          {lang === 'ar' ? '›' : '‹'}
         </span>{' '}
-        <span>رجوع</span>
+        <span>{t('back')}</span>
       </Link>
     </p>
   );

@@ -9,7 +9,7 @@
 //   - Public view renders without auth; sold/hidden docs (403 anonymous)
 //     render the trilingual 404.
 
-import { Suspense, Fragment } from 'react';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
@@ -22,12 +22,11 @@ import {
   cardTitle,
   cardImage,
   formatPrice,
-  viewsText,
   type ListingCard,
   type ListingDetail,
   type SellerProfile,
 } from '@/lib/firestore';
-import { answerRows } from '@/lib/answers';
+
 import { WILAYAS } from '@/lib/wilayas';
 import {
   SITE,
@@ -39,13 +38,20 @@ import {
   condLabelAr,
   fmtPriceText,
 } from '@/lib/seo';
-import TimeAgo from '@/components/TimeAgo';
 import BackLink from '@/components/BackLink';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
-import FollowButton from '@/components/FollowButton';
-import ReportUserButton from '@/components/ReportUserButton';
 import RateCta from '@/components/RateCta';
+import {
+  ListingDir,
+  SoldBanner,
+  MetaGrid,
+  StatRow,
+  SellerCardBody,
+  ListingDescription,
+  AnswersBox,
+  SimilarAds,
+} from './ListingShell';
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
 import MatchingOffers, { type MatchOfferDoc } from './MatchingOffers';
@@ -62,35 +68,6 @@ function wilayaName(code: number | undefined): string {
   if (!code) return '';
   const w = (WILAYAS as { code: number; ar: string }[]).find((x) => x.code === Number(code));
   return w ? `${w.code} - ${w.ar}` : '';
-}
-
-// js/listing.js loadSeller trust row (verbatim logic):
-// - verified pro stores show their STORE name, not their personal name
-//   (18 Sep 2026, Zak).
-// - rating text: "4.5 ★ (12)"; 0.0.0.31 (users_public split): ratingCount is
-//   not in the public mirror — show the rating alone when absent.
-// - 0.0.0.31 FIX-WEB-027: no orphan line — the row is hidden when there is
-//   neither a rating nor a verified badge.
-function sellerTrust(profile: SellerProfile | null): {
-  displayName: string | null;
-  isPro: boolean;
-  ratingRow: string | null;
-} {
-  if (!profile) return { displayName: null, isPro: false, ratingRow: null };
-  const isPro = profile.storeTier === 'verified';
-  const displayName =
-    (isPro && profile.storeName ? profile.storeName : profile.name) || null;
-  const ratingNum = Number(profile.rating);
-  const hasRating = isFinite(ratingNum) && ratingNum > 0;
-  const ratingTxt = hasRating ? ratingNum.toFixed(1) + ' ★' : '';
-  const rating = profile.ratingCount
-    ? `${ratingTxt} (${Number(profile.ratingCount) || 0})`
-    : ratingTxt;
-  const ratingRow =
-    ratingTxt || profile.verified === true
-      ? `${rating}${profile.verified === true ? ' ✓' : ''}`.trim()
-      : null;
-  return { displayName, isPro, ratingRow };
 }
 
 // Per-listing SEO — mirrors js/listing.js applyListingSeoHead() +
@@ -169,13 +146,6 @@ export async function generateMetadata({
   }
 }
 
-function description(l: ListingDetail, lang = 'ar'): string {
-  if (l.description && typeof l.description === 'object') {
-    return l.description[lang] || l.description.ar || '';
-  }
-  return '';
-}
-
 function NotFoundView() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-16 text-center" dir="rtl">
@@ -197,51 +167,9 @@ function NotFoundView() {
 }
 
 
-// Card for the similar-ads grid — mirrors the seller page's
-// ListingCardView (same markup, Link instead of plain anchor).
-function SimilarCard({ l }: { l: ListingCard }) {
-  const img = cardImage(l);
-  return (
-    <Link
-      href={`/listing/${l.id}`}
-      className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-      dir="rtl"
-    >
-      <div className="relative aspect-[4/3] bg-zinc-100">
-        {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
-            alt={cardTitle(l)}
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
-        )}
-      </div>
-      <div className="p-3">
-        <p className="font-bold text-emerald-700 text-lg">{formatPrice(l.price || 0)}</p>
-        <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{cardTitle(l)}</h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          {wilayaName(l.wilayaCode)}
-          {l.createdAt ? (
-            <>
-              {' · '}
-              <TimeAgo iso={l.createdAt.toISOString()} />
-            </>
-          ) : (
-            ''
-          )}
-        </p>
-      </div>
-    </Link>
-  );
-}
-
 function ListingSkeleton() {
   return (
-    <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
+    <main className="max-w-4xl mx-auto px-4 py-6">
       <div className="rounded-xl bg-white shadow-sm overflow-hidden">
         <div className="w-full aspect-[4/3] bg-zinc-200 animate-pulse" />
       </div>
@@ -291,8 +219,6 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   } catch {
     jsonLdScript = '';
   }
-  // js/app.js renderAnswers parity: structured category Q&A.
-  const rows = answerRows(l.answers);
   // js/listing.js loadMatches parity:
   // - regular ads: similar ads (same category, max 12).
   // - wanted ads (مطلوب): reverse-matched offers via matchingOffers
@@ -331,7 +257,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
+    <main className="max-w-4xl mx-auto px-4 py-6">
       {/* LIS-7 (16 Sep 2026, js/listing.js): the back link returns to the
           previous page (feed with its filters/scroll intact) via
           history.back() instead of dumping to home; href="/" is the
@@ -375,44 +301,22 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
         {/* LIS-1 (legacy js/listing.js): sold listings get an explicit
             "no longer available" banner, prepended to the detail card. */}
-        {l.status === 'sold' && (
-          <div
-            className="bg-[#7a1f1f] text-white px-[14px] py-[10px] rounded-[10px] mb-3 font-bold text-center"
-            lang="ar"
-            dir="rtl"
-          >
-            تم بيع هذا الإعلان — لم يعد متاحاً
-          </div>
-        )}
+        {l.status === 'sold' && <SoldBanner />}
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
         <p className="mt-2 text-3xl font-bold text-emerald-700">{formatPrice(l.price || 0)}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <span className="text-zinc-500">الولاية: </span>
-            <b>{wilayaName(l.wilayaCode)}</b>
-          </div>
-          {l.condition && (
-            <div>
-              <span className="text-zinc-500">الحالة: </span>
-              <b>{l.condition === 'used' ? 'مستعمل' : l.condition === 'new' ? 'جديد' : l.condition}</b>
-            </div>
-          )}
-          {l.createdAt && (
-            <div>
-              <span className="text-zinc-500">نُشر: </span>
-              <b><TimeAgo iso={l.createdAt.toISOString()} /></b>
-            </div>
-          )}
-        </div>
+        <MetaGrid
+          wilayaCode={l.wilayaCode}
+          condition={l.condition}
+          categoryId={l.categoryId}
+          createdAtISO={l.createdAt ? l.createdAt.toISOString() : null}
+          answers={l.answers as Record<string, unknown> | undefined}
+        />
         {/* js/app.js FIX-WEB-025 parity: stat-row under the meta grid —
             views with proper Arabic plurals + favorite count (public
             popularity signal). Legacy markup:
             <div class="stat-row"><span>👁 viewsText(l.views)</span>
             <span>♥ favCount inFavorites</span></div>. */}
-        <div className="mt-2.5 flex flex-wrap gap-x-[18px] gap-y-1 text-[13px] text-zinc-500">
-          <span>👁 {viewsText(l.views)}</span>
-          <span>♥ {Number(l.favoriteCount) || 0} في المفضلة</span>
-        </div>
+        <StatRow views={l.views} favoriteCount={l.favoriteCount} />
         {/* js/listing.js loadRateBox parity: the #rateBox sits directly under
             the stat-row in the detail card — rating entry point shown when I
             have a buyer-confirmed deal with this seller that I have not
@@ -454,93 +358,32 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           store/profile link + report-user button. */}
       <OwnerSellerCard sellerId={l.sellerId}>
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
-        <h2 className="text-lg font-semibold">البائع</h2>
-        {/* js/listing.js parity: the listing seller card carries a follow
-            button next to the seller identity (legacy loadSeller full-card
-            row: name left, .follow-btn right). OwnerSellerCard swaps the
-            whole card for "✓ إعلانك" when the viewer owns the listing. */}
-        {(() => {
-          const trust = sellerTrust(profile);
-          const denorm = l as unknown as { sellerName?: string; sellerPhotoUrl?: string };
-          const name = trust.displayName || denorm.sellerName || 'عرض صفحة البائع';
-          return (
-            <>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  {denorm.sellerPhotoUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={denorm.sellerPhotoUrl}
-                      alt=""
-                      className="w-12 h-12 rounded-full object-cover shrink-0"
-                    />
-                  )}
-                  <span className="font-bold truncate">
-                    <Link
-                      href={`/seller/${l.sellerId}`}
-                      className="text-emerald-700 hover:underline"
-                    >
-                      {name}
-                    </Link>
-                    {trust.isPro && (
-                      <span className="mr-2 inline-block rounded-full bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5">
-                        ★ تاجر محترف
-                      </span>
-                    )}
-                  </span>
-                </div>
-                {l.sellerId && (
-                  <div className="shrink-0 min-w-[120px]">
-                    <FollowButton storeUid={l.sellerId} />
-                  </div>
-                )}
-              </div>
-              {trust.ratingRow && (
-                <p className="mt-1 text-sm text-zinc-500">{trust.ratingRow}</p>
-              )}
-              {l.sellerId && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Link
-                    href={`/seller/${l.sellerId}`}
-                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 font-bold text-zinc-700 hover:border-emerald-500"
-                  >
-                    {trust.isPro ? 'عرض المتجر' : 'عرض الصفحة'}
-                  </Link>
-                  <ReportUserButton
-                    uid={l.sellerId}
-                    targetTitle={trust.displayName || ''}
-                    className="rounded-lg border border-zinc-300 bg-white px-4 py-2 font-bold text-zinc-700 hover:border-red-300"
-                  />
-                </div>
-              )}
-            </>
-          );
-        })()}
+        {/* js/listing.js loadSeller full-card parity: heading + identity row
+            (name left, .follow-btn right) + rating row + view-store/page +
+            report-user buttons. Trilingual via ListingShell. OwnerSellerCard
+            swaps the whole card for "✓ إعلانك" when the viewer owns it. */}
+        {l.sellerId && (
+          <SellerCardBody
+            sellerId={l.sellerId}
+            profile={profile}
+            denormName={
+              (l as unknown as { sellerName?: string }).sellerName
+            }
+            denormPhoto={
+              (l as unknown as { sellerPhotoUrl?: string }).sellerPhotoUrl
+            }
+          />
+        )}
       </div>
       </OwnerSellerCard>
 
-      {/* Description */}
-      {description(l) && (
-        <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
-          <h2 className="text-lg font-semibold mb-2">الوصف</h2>
-          <p className="whitespace-pre-wrap text-zinc-800">{description(l)}</p>
-        </div>
-      )}
+      {/* Description — body follows the UI language (js/app.js
+          localizedText parity). */}
+      <ListingDescription description={l.description} />
 
-      {/* Answers box — structured category Q&A (js/app.js renderAnswers) */}
-      {rows.length > 0 && (
-        <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
-          <h2 className="text-lg font-semibold mb-2">التفاصيل</h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 mt-2 text-sm">
-            {rows.map((r, i) => (
-              <Fragment key={i}>
-                <dt className="text-zinc-500">{r.label}</dt>
-                <dd className="text-zinc-900">{r.value}</dd>
-              </Fragment>
-            ))}
-          </dl>
-        </div>
-      )}
+      {/* Answers box — structured category Q&A (js/app.js renderAnswers
+          parity). Labels follow the UI language (PUB_STR ar/fr/en). */}
+      <AnswersBox answers={l.answers as Record<string, unknown> | undefined} />
 
       {/* Matches section — js/listing.js loadMatches parity:
           wanted ads show reverse-matched offers («عروض مطابقة لطلبك»,
@@ -561,20 +404,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           />
         )
       ) : (
-        similar !== null && (
-          <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
-            <h2 className="text-lg font-semibold mb-4">إعلانات مشابهة</h2>
-            {similar.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {similar.map((s) => (
-                  <SimilarCard key={s.id} l={s} />
-                ))}
-              </div>
-            ) : (
-              <p className="text-zinc-500">لا توجد إعلانات مشابهة حالياً</p>
-            )}
-          </div>
-        )
+        similar !== null && <SimilarAds items={similar} />
       )}
 
     </main>
@@ -587,10 +417,10 @@ export default function ListingPage({
   params: Promise<{ id: string }>;
 }) {
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <ListingDir>
       <Suspense fallback={<ListingSkeleton />}>
         <ListingContent params={params} />
       </Suspense>
-    </div>
+    </ListingDir>
   );
 }

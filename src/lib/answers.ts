@@ -62,22 +62,25 @@ const Q_FALLBACK: Record<string, string> = {
   qCarModel: 'qModel',
 };
 
-function labelFor(key: string): string {
+// Round 115: labels follow the UI language (js/app.js renderAnswers +
+// answerLabel read LANG at render time). PUB_STR carries ar/fr/en for
+// every key; fallback is Arabic, then the raw key — never empty.
+function labelFor(key: string, lang: 'ar' | 'fr' | 'en' = 'ar'): string {
   let q = key;
   if (Q_FALLBACK[key]) {
     q = Q_FALLBACK[key];
   } else if (!PUB_STR[key]) {
     q = SHORT_KEY_TO_Q[key] || key;
   }
-  return PUB_STR[q]?.ar || key;
+  return PUB_STR[q]?.[lang] || PUB_STR[q]?.ar || key;
 }
 
-function valueFor(v: unknown): string {
+function valueFor(v: unknown, lang: 'ar' | 'fr' | 'en' = 'ar'): string {
   if (v == null) return '';
   const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-  // Option values (osAndroid, fuelPetrol…) resolve to their Arabic label;
+  // Option values (osAndroid, fuelPetrol…) resolve to their label;
   // free text (brand names, numbers) renders as-is. Mirrors answerLabel().
-  return PUB_STR[s]?.ar || s;
+  return PUB_STR[s]?.[lang] || PUB_STR[s]?.ar || s;
 }
 
 export interface AnswerRow {
@@ -89,18 +92,19 @@ export interface AnswerRow {
 // The salary "to be defined at the interview" toggle is a boolean —
 // rendered as a labeled row only when true, never "true"/raw.
 export function answerRows(
-  answers: Record<string, unknown> | undefined | null
+  answers: Record<string, unknown> | undefined | null,
+  lang: 'ar' | 'fr' | 'en' = 'ar'
 ): AnswerRow[] {
   if (!answers || typeof answers !== 'object') return [];
   const rows: AnswerRow[] = [];
   for (const [k, v] of Object.entries(answers)) {
     if (k === 'salaryTbd') {
       if (v === true) {
-        rows.push({ label: labelFor('qSalary'), value: labelFor('salaryTbd') });
+        rows.push({ label: labelFor('qSalary', lang), value: labelFor('salaryTbd', lang) });
       }
       continue;
     }
-    rows.push({ label: labelFor(k), value: valueFor(v) });
+    rows.push({ label: labelFor(k, lang), value: valueFor(v, lang) });
   }
   return rows;
 }
