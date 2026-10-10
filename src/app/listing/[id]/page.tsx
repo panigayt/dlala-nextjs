@@ -27,6 +27,7 @@ import { WILAYAS } from '@/lib/wilayas';
 import TimeAgo from '@/components/TimeAgo';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
+import Gallery from './Gallery';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -154,7 +155,6 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   const l = listing;
   const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
-  const mainPhoto = photos[0] || cardImage(l);
   const title = cardTitle(l);
   // js/app.js renderAnswers parity: structured category Q&A.
   const rows = answerRows(l.answers);
@@ -171,35 +171,9 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6" dir="rtl">
-      {/* Gallery */}
-      <div className="rounded-xl bg-white shadow-sm overflow-hidden">
-        {mainPhoto ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={mainPhoto}
-            alt={title}
-            className="w-full aspect-[4/3] object-cover"
-          />
-        ) : (
-          <div className="w-full aspect-[4/3] flex items-center justify-center text-zinc-300 text-6xl bg-zinc-100">
-            📷
-          </div>
-        )}
-        {photos.length > 1 && (
-          <div className="flex gap-2 p-3 overflow-x-auto">
-            {photos.map((p, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={p}
-                alt={`${title} — صورة ${i + 1}/${photos.length}`}
-                loading="lazy"
-                className="w-20 h-20 object-cover rounded-lg shrink-0"
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Gallery — clickable thumbnails + fullscreen lightbox
+          (client component; mirrors js/listing.js LIS-8 gallery). */}
+      <Gallery photos={photos} fallback={cardImage(l)} title={title} />
 
       {/* Head: title / price / meta */}
       <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
@@ -247,7 +221,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             sellerId={l.sellerId}
             title={title}
             price={l.price || 0}
-            photoUrl={mainPhoto || ''}
+            photoUrl={photos[0] || cardImage(l)}
             sold={l.status === 'sold'}
           />
         )}
