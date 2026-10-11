@@ -116,9 +116,20 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
   const lqip = lqipUrlFor(listing);
   if (!lqip) {
     // No derivable LQIP (old listings, non-variant URLs): today's behavior.
+    // Add onError to hide broken images gracefully (don't show "?" icon).
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={img} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" className={className} />
+      <img
+        src={img}
+        alt={alt}
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+        className={className}
+        onError={(e) => {
+          // Hide broken image, show placeholder background via CSS
+          (e.target as HTMLImageElement).style.display = 'none';
+        }}
+      />
     );
   }
 
