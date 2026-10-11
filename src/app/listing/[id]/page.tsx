@@ -363,7 +363,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
         {isWanted && <WantedBadge />}
         <p className="mt-2 text-3xl font-bold text-emerald-700">
-          <span dir="ltr">{formatPrice(l.price || 0)}</span>
+          <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
           {(l as { priceReduced?: boolean }).priceReduced && (
             <PriceReducedBadge />
