@@ -222,9 +222,6 @@ function AccountContent({ user }: { user: CompatUser }) {
       const db = fb.firestore() as unknown as DbLike & {
         doc: (p: string) => { get: () => Promise<{ exists: boolean }> };
       };
-      const w = window as unknown as {
-        firebase: { firestore: { FieldValue: { serverTimestamp: () => unknown } } };
-      };
       // Derive a unique username (mirrors js/app.js claimUniqueUsername).
       const base = (user.displayName || (user.email || '').split('@')[0] || 'user')
         .toLowerCase()
@@ -250,8 +247,8 @@ function AccountContent({ user }: { user: CompatUser }) {
         confirmedDeals: 0,
         boostCredits: 0,
         phone: '',
-        termsAcceptedAt: w.firebase.firestore.FieldValue.serverTimestamp(),
-        createdAt: w.firebase.firestore.FieldValue.serverTimestamp(),
+        termsAcceptedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+        createdAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
       });
       batch.set(db.doc('usernames/' + candidate), { userId: user.uid });
       await withTimeout(batch.commit(), 20000);
@@ -291,9 +288,6 @@ function AccountContent({ user }: { user: CompatUser }) {
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike;
       const storage = fb.storage() as unknown as StorageLike;
-      const w = window as unknown as {
-        firebase: { firestore: { FieldValue: { serverTimestamp: () => unknown } } };
-      };
       const old = profData || {};
       const oldUsername = old.username || '';
       const oldPhotoPath = old.photoPath || '';
@@ -336,7 +330,7 @@ function AccountContent({ user }: { user: CompatUser }) {
         username: u,
         bio: b,
         photoPath: photoPath || '',
-        lastSeenAt: w.firebase.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
       };
       // If the write fails AFTER the new avatar uploaded, delete the new
       // upload so no orphaned Storage object is left behind.
