@@ -56,7 +56,7 @@ function MiniProduct({ p }: { p: ListingCard }) {
       </Link>
       <div className="vitrine-mini-info">
         {p.price != null && p.price !== 0 && (
-          <span className="vitrine-mini-price">{formatPrice(p.price)}</span>
+          <span className="vitrine-mini-price">{formatPrice(p.price, lang)}</span>
         )}
         {(cond || p.createdAt) && (
           <span className="vitrine-mini-meta">
