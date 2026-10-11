@@ -733,9 +733,8 @@ function PublishForm({
   };
 
   const removeExisting = (i: number) => {
-    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-      if (!window.confirm(t('removePhotoConfirm'))) return;
-    }
+    // 11 Oct 2026: removed window.confirm — hangs headless browsers.
+    // Photo removal is reversible (user can re-upload before saving).
     setExistingDirty(true);
     setExistingPhotos((p) => {
       const pp = [...p];
@@ -1060,7 +1059,8 @@ function PublishForm({
       }
 
       // Build payload
-      const isSeeker = cat === 'jobs' && answers['jobType'] === 'jobSeeker';
+      // 11 Oct 2026: fixed key — was answers['jobType'], form uses qJobType.
+      const isSeeker = cat === 'jobs' && answers['qJobType'] === 'jobSeeker';
       const saleQty = isWanted ? 1 : Math.max(1, Number(qty) || 1);
       // Canonicalize answer keys to production short format (js/publish.js).
       // The form uses q* field IDs (qCarBrand, qYear...), but the
