@@ -114,13 +114,16 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
   const isDesktop = useSyncExternalStore(subscribeDesktopWidth, getDesktopWidth, () => false);
 
   const lqip = lqipUrlFor(listing);
+  // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
+  const rewriteDefaultImg = (u: string) =>
+    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
   if (!lqip) {
     // No derivable LQIP (old listings, non-variant URLs): today's behavior.
     // Add onError to hide broken images gracefully (don't show "?" icon).
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={img}
+        src={rewriteDefaultImg(img || '')}
         alt={alt}
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
@@ -133,10 +136,7 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
     );
   }
 
-  // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
-  // (dzdlala.com blocks hotlinking on the preview domain).
-  const rewriteDefaultImg = (u: string) =>
-    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
+  // (dzdlala.com blocks hotlinking on the preview domain) — defined above.
   const full = rewriteDefaultImg((listing.photoUrls && listing.photoUrls[0]) || '');
   const w640 = listing.photoVariants && full ? variantUrlFor(full, 640) : '';
   const imgRewritten = rewriteDefaultImg(img || '');
