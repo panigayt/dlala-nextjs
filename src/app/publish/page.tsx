@@ -1114,7 +1114,13 @@ function PublishForm({
         if (code === 'unauthenticated' || code === 'permission-denied') {
           fail(t('mustLogin')); return;
         }
-        fail(t('publishError'));
+        // Show the backend's specific error message for diagnosis (not just generic).
+        const backendMsg = fnBody?.error?.message;
+        if (backendMsg && typeof backendMsg === 'string') {
+          fail(`${t('publishError')} [${backendMsg}]`);
+        } else {
+          fail(t('publishError'));
+        }
         return;
       }
       const finalId = fnBody.result?.listingId || listingId;
