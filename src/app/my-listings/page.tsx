@@ -86,6 +86,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [showVerifyBanner] = useState(() => !user.emailVerified);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [confirmSoldId, setConfirmSoldId] = useState<string | null>(null);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
@@ -158,7 +159,17 @@ function MyListingsContent({ user }: { user: CompatUser }) {
 
   const markSold = useCallback(
     async (id: string) => {
-      if (!window.confirm(t('markSoldConfirm'))) return;
+      // Use custom modal instead of window.confirm (testable, better UX)
+      setConfirmSoldId(id);
+    },
+    []
+  );
+
+  const confirmMarkSold = useCallback(
+    async () => {
+      const id = confirmSoldId;
+      if (!id) return;
+      setConfirmSoldId(null);
       setActionBusy(id);
       try {
         const fb = await getFirebase();
@@ -182,7 +193,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         if (mounted.current) setActionBusy(null);
       }
     },
-    [t, load]
+    [t, load, confirmSoldId]
   );
 
   const deleteAd = useCallback(
@@ -433,6 +444,29 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           </div>
         )}
       </main>
+
+      {/* Custom confirm modal for Mark as Sold (replaces window.confirm) */}
+      {confirmSoldId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-zinc-900">{t('markSoldConfirm')}</h3>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmSoldId(null)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={confirmMarkSold}
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800"
+              >
+                {t('markSold')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
