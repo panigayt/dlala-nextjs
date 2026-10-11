@@ -207,7 +207,7 @@ function notifTarget(n: Notif): string | null {
   return null;
 }
 
-function notifTitle(n: Notif, t: (k: string) => string): string {
+function notifTitle(n: Notif, t: (k: string) => string, lang: Lang = 'ar'): string {
   if (n.type === 'follow') {
     return t('followedYou').replace(
       '{name}',
@@ -219,13 +219,14 @@ function notifTitle(n: Notif, t: (k: string) => string): string {
   if (n.type === 'price_drop') {
     const d = n.data || {};
     const str = (v: unknown) => String(v == null ? '' : v);
+    // 11 Oct 2026: pass lang — prices were always rendering in Arabic.
     return t('notifPriceDrop')
       .split('{title}')
       .join(str(d.title))
       .split('{oldPrice}')
-      .join(formatPrice(Number(d.oldPrice) || 0))
+      .join(formatPrice(Number(d.oldPrice) || 0, lang))
       .split('{newPrice}')
-      .join(formatPrice(Number(d.newPrice) || 0));
+      .join(formatPrice(Number(d.newPrice) || 0, lang));
   }
   // 11 Oct 2026: message/new_message — legacy writer stores title:''.
   // Construct from sender name in data, fallback to non-empty.
@@ -240,6 +241,7 @@ function notifTitle(n: Notif, t: (k: string) => string): string {
   // Some legacy notifications have empty title and unhandled type.
   const title = n.title || '';
   if (title) return title;
+  // Last resort: newMessage is better than blank for any notification.
   return t('newMessage');
 }
 
@@ -731,7 +733,7 @@ export default function AlertsPage() {
                 const inner = (
                   <>
                     <div className="font-bold text-zinc-900 text-sm">
-                      {notifTitle(n, t)}
+                      {notifTitle(n, t, lang)}
                     </div>
                     {n.body && (
                       <div className="text-sm text-zinc-600">{n.body}</div>
