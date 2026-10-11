@@ -115,7 +115,7 @@ export default function StoreListingsGrid({
             onChange={(e) => setSearchText(e.target.value)}
             placeholder={t('searchInStore')}
             aria-label={t('searchInStore')}
-            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-emerald-600 focus:outline-none"
+            className="w-full rounded-lg border border-amber-400 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-amber-500 focus:outline-none"
           />
         </div>
       )}
@@ -155,7 +155,7 @@ export default function StoreListingsGrid({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((l) => (
-            <ListingCardView key={l.id} l={l} />
+            <ListingCardView key={l.id} l={l} gold />
           ))}
         </div>
       )}

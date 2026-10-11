@@ -24,7 +24,7 @@ function wilayaName(code: number | undefined, lang: Lang): string {
   return w ? `${w.code} - ${w[lang]}` : '';
 }
 
-export default function ListingCardView({ l, eager, priority }: { l: ListingCard; eager?: boolean; priority?: boolean }) {
+export default function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?: boolean; priority?: boolean; gold?: boolean }) {
   const { t, lang } = useLang();
   const img = cardImage(l);
   const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
@@ -45,7 +45,7 @@ export default function ListingCardView({ l, eager, priority }: { l: ListingCard
     <a
       href={`/listing/${l.id}`}
       data-sid={l.sellerId || ''}
-      className="block relative rounded-xl bg-white border border-[#e5e7eb] overflow-hidden hover:shadow-md transition-shadow"
+      className={`block relative rounded-xl bg-white border overflow-hidden hover:shadow-md transition-shadow ${gold ? 'border-amber-400' : 'border-[#e5e7eb]'}`}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       {/* HOM-4 parity (js/app.js markOwnCards): "yours" badge, positioned
@@ -111,7 +111,7 @@ export default function ListingCardView({ l, eager, priority }: { l: ListingCard
               photoUrl={img}
             />
           )}
-          <p className="font-extrabold text-[#0b6b4f] text-base">
+          <p className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'}`}>
             <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
             {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
           </p>
