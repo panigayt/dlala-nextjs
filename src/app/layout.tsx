@@ -7,11 +7,26 @@ import "./guides.css";
 import SiteChrome from "@/components/SiteChrome";
 import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
+import { cookies } from "next/headers";
 
-export const metadata: Metadata = {
-  title: "دلالة — سوق الجزائر للإعلانات المبوبة",
-  description: "موقع دلالة: إعلانات مبوبة مجانية في الجزائر — سيارات، عقارات، هواتف، والمزيد.",
-};
+// 11 Oct 2026: language-aware metadata — was hardcoded Arabic in EN/FR mode.
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = (await cookies()).get("dlala_lang")?.value || "ar";
+  const titles: Record<string, string> = {
+    ar: "دلالة — سوق الجزائر للإعلانات المبوبة",
+    fr: "Dlala — Petites annonces en Algérie",
+    en: "Dlala — Classifieds in Algeria",
+  };
+  const descs: Record<string, string> = {
+    ar: "موقع دلالة: إعلانات مبوبة مجانية في الجزائر — سيارات، عقارات، هواتف، والمزيد.",
+    fr: "Dlala : petites annonces gratuites en Algérie — voitures, immobilier, téléphones et plus.",
+    en: "Dlala: free classifieds in Algeria — cars, real estate, phones and more.",
+  };
+  return {
+    title: titles[lang] || titles.ar,
+    description: descs[lang] || descs.ar,
+  };
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
