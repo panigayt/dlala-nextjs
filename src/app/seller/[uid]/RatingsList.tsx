@@ -54,19 +54,26 @@ export default function RatingsList({
       // Use the existing /reports collection (targetType='review').
       // Rules: only the reviewed user may report; shape validated server-side.
       const user = fb.auth().currentUser;
-      await db.collection('reports').add({
-        reporterId: currentUid,
-        reporterName: user?.displayName || '',
-        targetType: 'review',
-        targetId: rating.id,
-        targetTitle: `Review by ${rating.raterName || 'user'}`,
-        targetUserId: (rating as { raterId?: string }).raterId || '',
-        reason: 'abuse',
-        details: `Reported review: ${rating.stars}/5 - ${rating.comment || ''}`.slice(0, 2000),
-        photoUrl: '',
-        status: 'new',
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      // 11 Oct 2026: 15s timeout — prevents browser hang if Firestore stalls.
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Write timeout')), 15000)
+      );
+      await Promise.race([
+        db.collection('reports').add({
+          reporterId: currentUid,
+          reporterName: user?.displayName || '',
+          targetType: 'review',
+          targetId: rating.id,
+          targetTitle: `Review by ${rating.raterName || 'user'}`,
+          targetUserId: (rating as { raterId?: string }).raterId || '',
+          reason: 'abuse',
+          details: `Reported review: ${rating.stars}/5 - ${rating.comment || ''}`.slice(0, 2000),
+          photoUrl: '',
+          status: 'new',
+          createdAt: FieldValue.serverTimestamp(),
+        }),
+        timeout,
+      ]);
       setMessage(t('reportSent'));
     } catch (e) {
       console.error(e);
