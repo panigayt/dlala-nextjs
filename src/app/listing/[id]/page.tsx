@@ -218,6 +218,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   const l = listing;
+  const pageLang = await getServerLang();
   const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
   // 0.0.0.1s per-index thumbnail preference (js/app.js detailInnerHtml):
   // photo_thumbs, then legacy thumbUrls, then the full photo.
@@ -353,6 +354,11 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             "no longer available" banner, prepended to the detail card. */}
         {l.status === 'sold' && <SoldBanner />}
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
+        {isWanted && (
+          <span className="mt-2 inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-blue-800">
+            {t('wantedBadge', pageLang)}
+          </span>
+        )}
         <p className="mt-2 text-3xl font-bold text-emerald-700">
           <span dir="ltr">{formatPrice(l.price || 0)}</span>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
@@ -368,6 +374,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           categoryId={l.categoryId}
           createdAtISO={l.createdAt ? l.createdAt.toISOString() : null}
           answers={l.answers as Record<string, unknown> | undefined}
+          isWanted={isWanted}
         />
         {/* js/app.js FIX-WEB-025 parity: stat-row under the meta grid —
             views with proper Arabic plurals + favorite count (public

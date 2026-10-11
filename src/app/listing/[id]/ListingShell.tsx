@@ -74,21 +74,29 @@ export function MetaGrid({
   categoryId,
   createdAtISO,
   answers,
+  isWanted,
 }: {
   wilayaCode?: number;
   condition?: string;
   categoryId?: string;
   createdAtISO?: string | null;
   answers?: Record<string, unknown> | null;
+  isWanted?: boolean;
 }) {
   const { t, lang } = useLang();
   const showCond =
     !!condition && !isConditionExempt(categoryId, answers ?? undefined);
+  // For wanted ads without a wilaya, show "All wilayas"
+  const wilayaDisplay = wilayaCode
+    ? wilayaNameLang(wilayaCode, lang)
+    : isWanted
+      ? t('allWilayas')
+      : '';
   return (
     <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
       <div>
         <span className="text-zinc-500">{t('wilaya')}: </span>
-        <b>{wilayaNameLang(wilayaCode, lang)}</b>
+        <b>{wilayaDisplay}</b>
       </div>
       {showCond && (
         <div>
