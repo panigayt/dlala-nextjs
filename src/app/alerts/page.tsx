@@ -227,6 +227,15 @@ function notifTitle(n: Notif, t: (k: string) => string): string {
       .split('{newPrice}')
       .join(formatPrice(Number(d.newPrice) || 0));
   }
+  // 11 Oct 2026: message/new_message — legacy writer stores title:''.
+  // Construct from sender name in data, fallback to non-empty.
+  if (n.type === 'message' || n.type === 'new_message') {
+    const d = (n.data || {}) as Record<string, unknown>;
+    const sender = String(d.senderName || d.sender || '');
+    if (sender) return sender;
+    // Fallback: use non-empty title so the UI never shows blank.
+    return t('newMessage');
+  }
   return n.title || '';
 }
 
