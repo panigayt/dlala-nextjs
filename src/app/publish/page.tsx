@@ -935,6 +935,18 @@ function PublishForm({
         const mergedUrls = existingPhotos.map((p) => p.url).concat(up.urls);
         const mergedHashes = existingPhotos.map((p) => p.hash || '').concat(up.hashes);
         const mergedThumbs = existingPhotos.map((p) => p.thumb).concat(up.thumbs);
+        // Canonicalize answer keys for Firestore (same Q_TO_SHORT as publish flow).
+        // Edit mode must send short keys (brand, year...) not q* form keys.
+        const Q_TO_SHORT_EDIT: Record<string, string> = {
+          qCarBrand: 'brand', qYear: 'year', qMileage: 'mileage',
+          qFuel: 'fuel', qGear: 'gear', qModel: 'model',
+          qOs: 'os', qStorage: 'storage', qBrand: 'brand',
+        };
+        const canonAnswers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(answers)) {
+          const short = Q_TO_SHORT_EDIT[k] || k;
+          canonAnswers[short] = v as string;
+        }
         const updateDoc: Record<string, unknown> = {
           title: { ar: title.trim() },
           description: { ar: desc.trim() },
@@ -942,7 +954,7 @@ function PublishForm({
           categoryId: cat,
           wilayaCode,
           condition: cat === 'beauty' ? answers['qBeautyCond'] || '' : condition,
-          answers,
+          answers: canonAnswers,
           quantity: saleQty,
           isWholesale: saleQty > 1,
           version: Number(cur.version || 0) + 1,
