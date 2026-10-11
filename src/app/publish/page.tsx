@@ -587,7 +587,21 @@ function PublishForm({
         setNegotiable(!!d.negotiable);
         setIsWanted(!!d.isWanted);
         if (d.answers && typeof d.answers === 'object') {
-          setAnswers(d.answers as Record<string, string>);
+          const raw = d.answers as Record<string, string>;
+          // Map Firestore keys (brand, year...) to form keys (qCarBrand, qYear...)
+          // for edit-mode pre-fill. Reverse of the publish-time mapping.
+          const mapped: Record<string, string> = { ...raw };
+          // Cars
+          if (raw.brand && !raw.qCarBrand) mapped.qCarBrand = raw.brand;
+          if (raw.year && !raw.qYear) mapped.qYear = raw.year;
+          if (raw.mileage && !raw.qMileage) mapped.qMileage = raw.mileage;
+          if (raw.fuel && !raw.qFuel) mapped.qFuel = raw.fuel;
+          if (raw.gear && !raw.qGear) mapped.qGear = raw.gear;
+          if (raw.model && !raw.qModel) mapped.qModel = raw.model;
+          // Phones
+          if (raw.os && !raw.qOs) mapped.qOs = raw.os;
+          if (raw.storage && !raw.qStorage) mapped.qStorage = raw.storage;
+          setAnswers(mapped);
         }
         // Fix 7: load existing photos with hashes + thumbs (legacy editListing.photoUrls)
         const pUrls = Array.isArray(d.photoUrls) ? d.photoUrls : [];
