@@ -414,7 +414,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                       )}
                       {l.status === 'sold' && (
                         <span className="absolute top-2 start-2 rounded bg-zinc-900/80 text-white text-xs px-2 py-1">
-                          {t('markSold')}
+                          {t('sold')}
                         </span>
                       )}
                     </div>
