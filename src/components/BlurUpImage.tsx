@@ -139,7 +139,8 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
     u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
   const full = rewriteDefaultImg((listing.photoUrls && listing.photoUrls[0]) || '');
   const w640 = listing.photoVariants && full ? variantUrlFor(full, 640) : '';
-  const hi = isDesktop && w640 ? w640 : img;
+  const imgRewritten = rewriteDefaultImg(img || '');
+  const hi = isDesktop && w640 ? w640 : imgRewritten;
 
   // LQIP died (404 — publish writes variants best-effort): fall back to the
   // card image instead of a broken icon. The src===hi guard prevents loops.
