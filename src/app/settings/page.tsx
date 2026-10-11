@@ -200,9 +200,6 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setReportBusy(true);
     try {
       const fb = await getFirebase();
-      const w = window as unknown as {
-        firebase: { firestore: { FieldValue: { serverTimestamp: () => unknown } } };
-      };
       const db = fb.firestore() as unknown as {
         collection: (p: string) => {
           doc: (id: string) => {
@@ -219,7 +216,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
           body,
           lang,
           status: 'open',
-          createdAt: w.firebase.firestore.FieldValue.serverTimestamp(),
+          createdAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
         }),
         20000
       );
@@ -290,9 +287,6 @@ function SettingsContent({ user }: { user: CompatUser }) {
           commit: () => Promise<void>;
         };
       };
-      const w = window as unknown as {
-        firebase: { firestore: { FieldValue: { serverTimestamp: () => unknown } } };
-      };
       // Best-effort pre-wipe of own listings (batches of 5).
       const snap = await withTimeout(
         db.collection('listings').where('sellerId', '==', user.uid).limit(100).get(),
@@ -341,7 +335,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
       await withTimeout(
         db.doc('deletionRequests/' + user.uid).set({
           userId: user.uid,
-          requestedAt: w.firebase.firestore.FieldValue.serverTimestamp(),
+          requestedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
           status: 'pending',
         }),
         20000
