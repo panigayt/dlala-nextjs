@@ -497,7 +497,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="font-bold text-emerald-700">{formatPrice(live.price || 0)}</p>
+                        <p className="font-bold text-emerald-700">{formatPrice(live.price || 0, lang)}</p>
                         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(live, lang)}</h3>
                       </div>
                     </a>

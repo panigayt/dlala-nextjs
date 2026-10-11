@@ -1524,7 +1524,7 @@ function ChatInner() {
           )}
           {p ? (
             <div>
-              <div className="font-bold">💰 {formatPrice(p.amount)}</div>
+              <div className="font-bold">💰 {formatPrice(p.amount, lang)}</div>
               <div
                 className={`text-xs mt-1 ${
                   p.status === 'accepted'

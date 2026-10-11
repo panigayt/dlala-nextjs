@@ -705,7 +705,7 @@ export default function AlertsPage() {
                             {localizedTitle(h.title, lang)}
                           </div>
                           <div className="text-sm font-bold text-emerald-700">
-                            {formatPrice(h.price || 0)}
+                            {formatPrice(h.price || 0, lang)}
                           </div>
                         </div>
                       </a>

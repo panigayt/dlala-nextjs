@@ -103,7 +103,7 @@ function previewText(conv: Conv, uid: string, lang: Lang): string {
   const lm = conv.lastMessage;
   if (!lm) return '';
   let s: string;
-  if (lm.proposalAmount != null) s = '💰 ' + formatPrice(lm.proposalAmount);
+  if (lm.proposalAmount != null) s = '💰 ' + formatPrice(lm.proposalAmount, lang);
   else {
     const t = lm.text || '';
     s = t === '📷' ? '📷 ' + convSt(lang, 'photoLabel') : t;
