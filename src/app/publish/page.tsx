@@ -1047,13 +1047,13 @@ function PublishForm({
       if (!urls.length) {
         const jt = answers['qJobType'];
         if (cat === 'jobs' && jt === 'jobSeeker') {
-          urls.push('https://dzdlala.com/img/default_ads/seeker-v5.png');
+          urls.push('/img/default_ads/seeker-v5.png');
           thumbs.push(null);
         } else if (cat === 'jobs' && jt === 'jobOffer') {
-          urls.push('https://dzdlala.com/img/default_ads/offer-v5.png');
+          urls.push('/img/default_ads/offer-v5.png');
           thumbs.push(null);
         } else if (isWanted) {
-          urls.push('https://dzdlala.com/img/default_ads/wanted-v5.png');
+          urls.push('/img/default_ads/wanted-v5.png');
           thumbs.push(null);
         }
       }
