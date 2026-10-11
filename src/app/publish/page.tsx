@@ -1044,16 +1044,17 @@ function PublishForm({
       const thumbs: (string | null)[] = up.thumbs;
 
       // Default images when no photo picked (app parity)
+      // 11 Oct 2026: use full dzdlala.com URLs (backend rejects relative paths).
       if (!urls.length) {
         const jt = answers['qJobType'];
         if (cat === 'jobs' && jt === 'jobSeeker') {
-          urls.push('/img/default_ads/seeker-v5.png');
+          urls.push('https://dzdlala.com/img/default_ads/seeker-v5.png');
           thumbs.push(null);
         } else if (cat === 'jobs' && jt === 'jobOffer') {
-          urls.push('/img/default_ads/offer-v5.png');
+          urls.push('https://dzdlala.com/img/default_ads/offer-v5.png');
           thumbs.push(null);
         } else if (isWanted) {
-          urls.push('/img/default_ads/wanted-v5.png');
+          urls.push('https://dzdlala.com/img/default_ads/wanted-v5.png');
           thumbs.push(null);
         }
       }
@@ -1085,7 +1086,7 @@ function PublishForm({
         qTrotType: 'trotType', qVeloType: 'veloType', qVolume: 'volume',
         qWheelSize: 'wheelSize', qYear: 'year',
       };
-      const NUMERIC_ANSWERS = new Set(['year', 'mileage', 'rooms', 'area', 'salary']);
+      const NUMERIC_ANSWERS = new Set(['year', 'mileage', 'rooms', 'area', 'salary', 'experience']);
       const canonAnswers: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(answers)) {
         if (v === '' || v == null) continue;

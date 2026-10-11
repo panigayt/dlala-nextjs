@@ -43,6 +43,7 @@ import BackLink from '@/components/BackLink';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import WantedBadge from './WantedBadge';
+import PriceReducedBadge from './PriceReducedBadge';
 import RateCta from '@/components/RateCta';
 import NotFoundCta from './NotFoundCta';
 import {
@@ -365,9 +366,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           <span dir="ltr">{formatPrice(l.price || 0)}</span>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
           {(l as { priceReduced?: boolean }).priceReduced && (
-            <span className="ms-2 inline-block rounded-full bg-red-100 px-2 py-0.5 text-sm font-semibold text-red-700">
-              انخفض السعر
-            </span>
+            <PriceReducedBadge />
           )}
         </p>
         <MetaGrid
