@@ -56,7 +56,7 @@ export default function ListingCardView({ l, eager, priority, gold }: { l: Listi
           <BlurUpImage
             listing={l}
             img={img}
-            alt={cardTitle(l)}
+            alt={cardTitle(l, lang)}
             eager={eager}
             priority={priority}
             className="absolute inset-0 w-full h-full object-cover"
@@ -106,7 +106,7 @@ export default function ListingCardView({ l, eager, priority, gold }: { l: Listi
               listingId={l.id}
               sellerId={l.sellerId || ''}
               initialCount={favCount}
-              title={cardTitle(l)}
+              title={cardTitle(l, lang)}
               price={l.price || 0}
               photoUrl={img}
             />
@@ -117,7 +117,7 @@ export default function ListingCardView({ l, eager, priority, gold }: { l: Listi
           </p>
         </div>
         <h3 className="mt-1 mb-1 text-sm text-zinc-900 whitespace-nowrap overflow-hidden text-ellipsis" style={{unicodeBidi: 'plaintext'}}>
-          {cardTitle(l)}
+          {cardTitle(l, lang)}
           {/* 16 Sep 2026 parity (js/app.js markProCards): gold pro badge
               appended inside the card title for verified pro merchants. */}
           <ProBadge sellerId={l.sellerId || ''} />

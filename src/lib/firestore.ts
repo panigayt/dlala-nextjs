@@ -1201,6 +1201,8 @@ export function cardTitle(l: ListingCard, lang = 'ar'): string {
   if (l.title && typeof l.title === 'object') {
     return l.title[lang] || l.title.ar || l.title.fr || l.title.en || '';
   }
+  // 11 Oct 2026: return string titles as-is (legacy docs store plain strings).
+  if (typeof l.title === 'string') return l.title;
   return '';
 }
 

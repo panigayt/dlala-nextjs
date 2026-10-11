@@ -275,6 +275,8 @@ export function AnswersBox({
 function SimilarCard({ l }: { l: ListingCard }) {
   const { lang } = useLang();
   const img = cardImage(l);
+  // 11 Oct 2026: pass lang — titles were always Arabic.
+  const title = cardTitle(l, lang);
   // Round 128 (js/app.js listingCard priceWordsHtml parity): similar ads
   // use the full card renderer in legacy, so they carry the Darija
   // parenthetical too.
@@ -290,7 +292,7 @@ function SimilarCard({ l }: { l: ListingCard }) {
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={img}
-            alt={cardTitle(l)}
+            alt={title}
             loading="lazy"
             className="absolute inset-0 w-full h-full object-cover"
           />
@@ -306,7 +308,7 @@ function SimilarCard({ l }: { l: ListingCard }) {
           {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
         </p>
         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
-          {cardTitle(l)}
+          {title}
         </h3>
         <p className="mt-1 text-xs text-zinc-500">
           {wilayaNameLang(l.wilayaCode, lang)}

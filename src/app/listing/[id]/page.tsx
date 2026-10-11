@@ -236,7 +236,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   const thumbs = photos.map(
     (p, i) => (l.photo_thumbs && l.photo_thumbs[i]) || (l.thumbUrls && l.thumbUrls[i]) || p
   );
-  const title = cardTitle(l);
+  const title = cardTitle(l, pageLang);
   // Round 128 (js/app.js priceWordsHtml / detailPriceHtml parity, 0.0.0.39):
   // the Darija price parenthetical «(200 مليون)» next to the DZD price on
   // the detail page — display-only, stays Arabic in FR/EN UI (Zak, 21 Sep
