@@ -817,23 +817,31 @@ function PublishForm({
       const p = list[i];
       const ts = Date.now();
       const key = r2KeyFor(uid, listingId, `${ts}_${i}.webp`);
-      const { publicUrl } = await uploadToR2(p.file, key, idToken);
-      urls.push(publicUrl);
+      // DEBUG-TEMP: granular R2 upload error context.
+      let upMain;
+      try {
+        upMain = await uploadToR2(p.file, key, idToken);
+      } catch (e) {
+        throw new Error('r2-main-' + i + ':' + ((e as Error)?.message || String(e)));
+      }
+      urls.push(upMain.publicUrl);
       hashes.push(p.hash || '');
       // Variants: w320 thumb (photo_thumbs content), w640/w1024 heroes, w32 LQIP.
-      // Best-effort — failures are swallowed, never fail publish.
+      // DEBUG-TEMP: temporarily fail (not best-effort) to identify the failing upload.
       const uploadVariant = async (vf: File | null, vprefix: string): Promise<void> => {
         if (!vf) return;
         try {
           await uploadToR2(vf, r2KeyFor(uid, listingId, `${vprefix}_${ts}_${i}.webp`), idToken);
-        } catch { /* variant failed — progressive enhancement */ }
+        } catch (e) {
+          throw new Error('r2-variant-' + i + ':' + ((e as Error)?.message || String(e)));
+        }
       };
       if (p.thumb) {
         try {
           const tr = await uploadToR2(p.thumb, r2KeyFor(uid, listingId, `w320_${ts}_${i}.webp`), idToken);
           thumbs.push(tr.publicUrl);
-        } catch {
-          thumbs.push(null);
+        } catch (e) {
+          throw new Error('r2-thumb-' + i + ':' + ((e as Error)?.message || String(e)));
         }
       } else {
         thumbs.push(null);
@@ -1127,7 +1135,8 @@ function PublishForm({
       window.location.href = dest;
     } catch (err) {
       console.error('publish failed', err);
-      fail(t('publishError'));
+      // DEBUG-TEMP: surface which R2 upload failed.
+      fail(t('publishError') + ' [up:' + ((err as Error)?.message || String(err)) + ']');
     } finally {
       setProgress(null);
       setSubmitting(false);
