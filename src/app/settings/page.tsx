@@ -503,7 +503,9 @@ function SettingsContent({ user }: { user: CompatUser }) {
             <p className="text-xs text-zinc-500 mb-3">{t('deleteAccountWarn')}</p>
             <button
               onClick={() => {
-                if (window.confirm(t('deleteAccountWarn'))) setShowDelete(true);
+                // 11 Oct 2026: removed window.confirm() — hangs headless browsers.
+                // The typed confirmation word is sufficient.
+                setShowDelete(true);
               }}
               className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"
             >
