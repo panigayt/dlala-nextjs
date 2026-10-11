@@ -262,6 +262,8 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   //   the title-word match runs client-side with the viewer's uid.
   // null = fetch failed -> render nothing (legacy catch behavior).
   const isWanted = !!l.isWanted;
+  // 11 Oct 2026: seekers store isWanted=true but show seeker badge, not wanted.
+  const isSeeker = l.categoryId === 'jobs' && (l.answers as Record<string, unknown> | undefined)?.jobType === 'jobSeeker';
   let similar: ListingCard[] | null = null;
   let similarWindow: ListingCard[] | null = null;
   if (l.categoryId) {
@@ -361,7 +363,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             "no longer available" banner, prepended to the detail card. */}
         {l.status === 'sold' && <SoldBanner />}
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
-        {isWanted && <WantedBadge />}
+        {isWanted && !isSeeker && <WantedBadge />}
         <p className="mt-2 text-3xl font-bold text-emerald-700">
           <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
