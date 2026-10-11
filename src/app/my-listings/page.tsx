@@ -178,10 +178,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           doc: (p: string) => { update: (d: Record<string, unknown>) => Promise<void> };
         };
         await withTimeout(db.doc('listings/' + id).update({ status: 'sold' }), 15000);
-        if (mounted.current) {
-          setNotice('✓ ' + t('markSold'));
-          load();
-        }
+        // Full reload instead of React state update (automation-compatible)
+        window.location.reload();
       } catch (e) {
         const code = (e as { code?: string })?.code;
         if (code === 'deadline-exceeded') {
@@ -290,7 +288,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         } catch {
           // non-fatal
         }
-        if (mounted.current) load();
+        // Full reload instead of React state update (automation-compatible)
+        window.location.reload();
       } catch (e) {
         console.error(e);
         if (mounted.current) window.alert(t('errorGeneric'));
