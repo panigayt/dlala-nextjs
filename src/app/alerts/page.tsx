@@ -686,8 +686,8 @@ export default function AlertsPage() {
                       >
                         {thumb ? (
                           <span className="relative block w-full h-28">
+                            {/* 11 Oct 2026: removed unoptimized — AVIF/WebP for weak internet. */}
                             <Image
-                              unoptimized
                               src={thumb}
                               alt=""
                               fill

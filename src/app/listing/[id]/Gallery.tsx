@@ -343,18 +343,14 @@ export default function Gallery({
                 (i === sel ? 'ring-2 ring-emerald-700' : 'opacity-70 hover:opacity-100')
               }
             >
-              {/* Round 158: all strip thumbs eager — they are visible above the
-                  fold in the strip (small count), and lazy delayed 1+ thumbs
-                  on weak connections. fetchPriority="high" per LIS-10c
-                  (production parity — thumbnails are small and must paint fast).
-                  src falls back to the full photo only when no dedicated
-                  thumb exists (legacy/pre-0.0.0.1w listings). */}
+              {/* 11 Oct 2026: only first thumb eager — 8 high-priority requests
+                  competed with hero on weak connections. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={thumbs[i] || p}
                 alt=""
-                loading="eager"
-                fetchPriority="high"
+                loading={i === 0 ? "eager" : "lazy"}
+                fetchPriority={i === 0 ? "high" : "low"}
                 decoding="async"
                 className="w-20 h-20 object-cover"
               />

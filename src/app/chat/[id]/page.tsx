@@ -1503,8 +1503,8 @@ function ChatInner() {
         >
           {m.imageUrl && (
             <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
+              {/* 11 Oct 2026: removed unoptimized — enables AVIF/WebP + resizing for weak internet. */}
               <NextImage
-                unoptimized
                 src={m.imageUrl}
                 alt={st('photoLabel')}
                 width={640}

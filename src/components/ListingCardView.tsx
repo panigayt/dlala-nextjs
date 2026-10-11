@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 // Shared listing card renderer — used by the home feed (SSR + load-more).
 // Moved from src/app/page.tsx (Round 39) so the client-side "load more"
 // can render identical cards. All helpers used here are client-safe
@@ -24,7 +25,8 @@ function wilayaName(code: number | undefined, lang: Lang): string {
   return w ? `${w.code} - ${w[lang]}` : '';
 }
 
-export default function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?: boolean; priority?: boolean; gold?: boolean }) {
+// 11 Oct 2026: memoized — prevents re-render storm on scroll/filter/lang change.
+function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?: boolean; priority?: boolean; gold?: boolean }) {
   const { t, lang } = useLang();
   const img = cardImage(l);
   const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
@@ -139,3 +141,5 @@ export default function ListingCardView({ l, eager, priority, gold }: { l: Listi
     </a>
   );
 }
+
+export default memo(ListingCardView);
