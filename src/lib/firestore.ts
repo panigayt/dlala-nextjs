@@ -930,19 +930,24 @@ async function runSearchPipeline(
       },
     });
   }
-  if (f.min !== undefined && f.min !== '') {
+  // 11 Oct 2026: auto-order min/max — user entering max<min got zero results.
+  const pMin = f.min !== undefined && f.min !== '' ? Number(f.min) : undefined;
+  const pMax = f.max !== undefined && f.max !== '' ? Number(f.max) : undefined;
+  const lo = pMin !== undefined && pMax !== undefined ? Math.min(pMin, pMax) : pMin;
+  const hi = pMin !== undefined && pMax !== undefined ? Math.max(pMin, pMax) : pMax;
+  if (lo !== undefined) {
     filters.push({
       fieldFilter: {
         field: { fieldPath: 'price' }, op: 'GREATER_THAN_OR_EQUAL',
-        value: { doubleValue: Number(f.min) },
+        value: { doubleValue: lo },
       },
     });
   }
-  if (f.max !== undefined && f.max !== '') {
+  if (hi !== undefined) {
     filters.push({
       fieldFilter: {
         field: { fieldPath: 'price' }, op: 'LESS_THAN_OR_EQUAL',
-        value: { doubleValue: Number(f.max) },
+        value: { doubleValue: hi },
       },
     });
   }
@@ -1058,8 +1063,13 @@ async function runSearchPipeline(
     docs = docs.filter((d) => {
       if (f.cat && d.categoryId !== f.cat) return false;
       if (f.wilaya && String(d.wilayaCode) !== String(f.wilaya)) return false;
-      if (f.min !== undefined && f.min !== '' && (d.price ?? 0) < Number(f.min)) return false;
-      if (f.max !== undefined && f.max !== '' && (d.price ?? 0) > Number(f.max)) return false;
+      // 11 Oct 2026: use ordered lo/hi — matches server fix above.
+      const cMin = f.min !== undefined && f.min !== '' ? Number(f.min) : undefined;
+      const cMax = f.max !== undefined && f.max !== '' ? Number(f.max) : undefined;
+      const cLo = cMin !== undefined && cMax !== undefined ? Math.min(cMin, cMax) : cMin;
+      const cHi = cMin !== undefined && cMax !== undefined ? Math.max(cMin, cMax) : cMax;
+      if (cLo !== undefined && (d.price ?? 0) < cLo) return false;
+      if (cHi !== undefined && (d.price ?? 0) > cHi) return false;
       return true;
     });
     // Server orderBy(price) was dropped with the filters — sort client-side.
