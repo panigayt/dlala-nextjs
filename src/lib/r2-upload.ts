@@ -14,27 +14,39 @@ export async function uploadToR2(
   file: File | Blob,
   key: string,
   idToken: string,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  timeoutMs = 60000
 ): Promise<R2UploadResult> {
-  // 1. Mint presigned URL
-  const res = await fetch('/api/r2/upload-url', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({ key, contentType: file.type || 'image/jpeg' }),
-  });
+  // 1. Mint presigned URL (with timeout)
+  const ctrl = new AbortController();
+  const t1 = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch('/api/r2/upload-url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ key, contentType: file.type || 'image/jpeg' }),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    clearTimeout(t1);
+    throw new Error(`upload-url-timeout`);
+  }
+  clearTimeout(t1);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(`upload-url-${res.status}-${data.error || 'unknown'}`);
   }
   const { url, publicUrl } = await res.json();
 
-  // 2. PUT directly to R2
+  // 2. PUT directly to R2 (with timeout, like production putWithTimeout)
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
+    xhr.timeout = timeoutMs;
     xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
@@ -46,6 +58,7 @@ export async function uploadToR2(
       else reject(new Error(`r2-put-${xhr.status}`));
     };
     xhr.onerror = () => reject(new Error('r2-put-network'));
+    xhr.ontimeout = () => reject(new Error('r2-put-timeout'));
     xhr.send(file);
   });
 
