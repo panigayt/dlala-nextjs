@@ -289,8 +289,10 @@ export default function SellerActions({
     }
     if (user.uid === uid) return;
     // js/block.js armBlockButton: unblocking never asks; blocking asks once.
+    // 11 Oct 2026: removed window.confirm — hangs headless browsers.
+    // The block button itself is the confirmation (with busy state).
     if (!blocked) {
-      if (!window.confirm(t('blockConfirm'))) return;
+      // Proceed directly — user explicitly clicked Block.
     }
     setBlockBusy(true);
     try {

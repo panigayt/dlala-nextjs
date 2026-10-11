@@ -25,6 +25,8 @@ export default function RatingsList({
   const { t, lang } = useLang();
   const [currentUid, setCurrentUid] = useState<string | null>(null);
   const [reporting, setReporting] = useState<string | null>(null);
+  // 11 Oct 2026: track reported reviews — prevents duplicate spam.
+  const [reported, setReported] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +41,8 @@ export default function RatingsList({
   const isOwner = profileUid && currentUid && profileUid === currentUid;
 
   const handleReport = async (rating: SellerRating) => {
-    if (!isOwner || reporting) return;
+    // 11 Oct 2026: prevent duplicate reports for the same review.
+    if (!isOwner || reporting || reported.has(rating.id)) return;
     // 11 Oct 2026: removed native confirm() — it hangs headless browsers.
     // The button label is clear enough; the action is reversible via admin.
     setReporting(rating.id);
@@ -75,6 +78,8 @@ export default function RatingsList({
         timeout,
       ]);
       setMessage(t('reportSent'));
+      // 11 Oct 2026: mark as reported — disables the button.
+      setReported((prev) => new Set(prev).add(rating.id));
     } catch (e) {
       console.error(e);
       setMessage(t('errorGeneric'));
@@ -103,11 +108,14 @@ export default function RatingsList({
         <p className="text-zinc-400 text-sm text-center py-4">⭐ {t('noRatingsYet')}</p>
       ) : (
         <ul className="space-y-4">
-          {ratings.map((r) => (
+          {ratings.map((r) => {
+            // 11 Oct 2026: clamp stars 0..5 — negative crashes repeat().
+            const stars = Math.max(0, Math.min(5, Math.round(r.stars || 0)));
+            return (
             <li key={r.id} className="border-b border-zinc-100 pb-4 last:border-0 last:pb-0">
-              <div className="text-amber-500" aria-label={`${r.stars} / 5`}>
-                {'★'.repeat(r.stars)}
-                {'☆'.repeat(5 - r.stars)}
+              <div className="text-amber-500" aria-label={`${stars} / 5`}>
+                {'★'.repeat(stars)}
+                {'☆'.repeat(5 - stars)}
               </div>
               {r.raterName && (
                 <div className="mt-1 text-sm font-medium text-zinc-900">{r.raterName}</div>
@@ -117,14 +125,15 @@ export default function RatingsList({
                 <button
                   type="button"
                   onClick={() => handleReport(r)}
-                  disabled={reporting === r.id}
+                  disabled={reporting === r.id || reported.has(r.id)}
                   className="mt-2 text-xs text-zinc-500 underline hover:text-zinc-700 disabled:opacity-50"
                 >
                   {reporting === r.id ? '...' : t('reportReview')}
                 </button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>
