@@ -211,13 +211,6 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setActionBusy(id);
       try {
         const fb = await getFirebase();
-        const w = window as unknown as {
-          firebase: {
-            firestore: {
-              FieldValue: { arrayRemove: (v: string) => unknown; serverTimestamp: () => unknown };
-            };
-          };
-        };
         const db = fb.firestore() as unknown as {
           doc: (p: string) => {
             get: () => Promise<{ exists: boolean; data: () => OwnListing }>;
@@ -250,13 +243,13 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           listingId: id,
           title,
           sellerName: user.displayName || '',
-          deletedAt: w.firebase.firestore.FieldValue.serverTimestamp(),
+          deletedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.serverTimestamp(),
           reason: 'owner',
           adminId: '',
         });
         batch.delete(listingRef);
         batch.update(db.doc('users/' + user.uid), {
-          vitrineIds: w.firebase.firestore.FieldValue.arrayRemove(id),
+          vitrineIds: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
         });
         await withTimeout(batch.commit(), 20000);
         // Photo cleanup (best-effort): legacy Firebase Storage URLs first,
