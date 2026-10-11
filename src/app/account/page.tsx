@@ -370,9 +370,8 @@ function AccountContent({ user }: { user: CompatUser }) {
       setProfOk(true);
     } catch (e) {
       console.error(e);
-      // 11 Oct 2026: show specific error code for debugging (remove after fix)
-      const code = e && typeof e === 'object' && 'code' in e ? (e as {code: string}).code : 'unknown';
-      if (mounted.current) setProfErr(`${t('errorGeneric')} [${code}]`);
+      // 11 Oct 2026: removed temporary [code] suffix — was debug aid.
+      if (mounted.current) setProfErr(t('errorGeneric'));
     } finally {
       if (mounted.current) setProfBusy(false);
     }
@@ -489,11 +488,12 @@ function AccountContent({ user }: { user: CompatUser }) {
     (kind: 'photo' | 'cover' | 'logo', f: File | undefined) => {
       if (!f) return;
       if (!f.type.startsWith('image/')) {
-        window.alert(t('errorPhoto'));
+        // 11 Oct 2026: inline error — window.alert hangs headless browsers.
+        setProfErr(t('errorPhoto'));
         return;
       }
       if (f.size > 5 * 1024 * 1024) {
-        window.alert(t('photoTooBig'));
+        setProfErr(t('photoTooBig'));
         return;
       }
       if (kind === 'photo') {
@@ -513,9 +513,10 @@ function AccountContent({ user }: { user: CompatUser }) {
   const resendVerification = useCallback(async () => {
     try {
       await withTimeout(user.sendEmailVerification(), 15000);
-      window.alert(t('verifyEmailBody'));
+      // 11 Oct 2026: inline — window.alert hangs headless browsers.
+      setProfErr(t('verifyEmailBody'));
     } catch {
-      window.alert(t('authConnectionProblem'));
+      setProfErr(t('authConnectionProblem'));
     }
   }, [user, t]);
 
@@ -523,13 +524,13 @@ function AccountContent({ user }: { user: CompatUser }) {
     try {
       await withTimeout(user.reload(), 15000);
     } catch {
-      window.alert(t('authConnectionProblem'));
+      setProfErr(t('authConnectionProblem'));
       return;
     }
     const fb = await getFirebase().catch(() => null);
     const cu = fb?.auth().currentUser;
     if (cu && cu.emailVerified) window.location.reload();
-    else window.alert(t('stillNotVerified'));
+    else setProfErr(t('stillNotVerified'));
   }, [user, t]);
 
   const inputCls =

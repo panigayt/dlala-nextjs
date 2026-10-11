@@ -326,7 +326,8 @@ function SettingsContent({ user }: { user: CompatUser }) {
       if (r2Urls.length) {
         try {
           const idToken = await withTimeout(user.getIdToken(), 15000);
-          await deleteR2Objects(r2Urls, idToken);
+          // 11 Oct 2026: timeout added — hanging R2 cleanup stalled deletion.
+          await withTimeout(deleteR2Objects(r2Urls, idToken), 20000);
         } catch {
           // best-effort
         }
@@ -349,7 +350,8 @@ function SettingsContent({ user }: { user: CompatUser }) {
       } catch (de) {
         const dc = (de as { code?: string })?.code || '';
         if (dc === 'auth/requires-recent-login') {
-          window.alert(t('reauthNeeded'));
+          // 11 Oct 2026: inline — window.alert hangs headless browsers.
+          setDeleteErr(t('reauthNeeded'));
           // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
           // scroll position across the /auth round-trip.
           saveScrollForReturn(window.location.pathname);
@@ -363,7 +365,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
       } catch {
         // already signed out
       }
-      window.alert(t('deletionRequested'));
+      // 11 Oct 2026: removed window.alert — redirect shows confirmation.
       router.push('/');
     } catch (e) {
       console.error(e);
