@@ -11,6 +11,7 @@
 
 import { PUB_STR } from './publish-strings';
 import { BRAND_LATIN } from './seo';
+import { formatPrice } from './firestore';
 
 // Legacy short key -> q* label key.
 // From js/app.js ANSWER_KEY_LABELS (verbatim concept); adapted where the
@@ -105,6 +106,11 @@ export function answerRows(
       if (v === true) {
         rows.push({ label: labelFor('qSalary', lang), value: labelFor('salaryTbd', lang) });
       }
+      continue;
+    }
+    // 11 Oct 2026: Salary displays with currency (was missing in EN).
+    if (k === 'salary' && typeof v === 'number') {
+      rows.push({ label: labelFor(k, lang), value: formatPrice(v, lang) });
       continue;
     }
     rows.push({ label: labelFor(k, lang), value: valueFor(v, lang) });
