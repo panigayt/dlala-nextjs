@@ -1106,8 +1106,7 @@ function PublishForm({
         if (code === 'unauthenticated' || code === 'permission-denied') {
           fail(t('mustLogin')); return;
         }
-        // DEBUG-TEMP: surface the real server error so we can diagnose publish failures.
-        fail(t('publishError') + ' [' + code + ': ' + (fnBody?.error?.message || 'no message') + ']');
+        fail(t('publishError'));
         return;
       }
       const finalId = fnBody.result?.listingId || listingId;
@@ -1128,8 +1127,7 @@ function PublishForm({
       window.location.href = dest;
     } catch (err) {
       console.error('publish failed', err);
-      // DEBUG-TEMP: surface the real exception so we can diagnose publish failures.
-      fail(t('publishError') + ' [catch: ' + ((err as Error)?.message || String(err)) + ']');
+      fail(t('publishError'));
     } finally {
       setProgress(null);
       setSubmitting(false);
