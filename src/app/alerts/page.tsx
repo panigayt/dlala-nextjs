@@ -263,6 +263,8 @@ export default function AlertsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // 11 Oct 2026: custom delete confirmation modal (window.confirm hangs automation)
+  const [deleteConfirm, setDeleteConfirm] = useState<SavedSearch | null>(null);
   // form fields
   const [fQ, setFQ] = useState('');
   const [fCat, setFCat] = useState('');
@@ -536,10 +538,17 @@ export default function AlertsPage() {
   }
 
   async function deleteSearch(s: SavedSearch) {
+    // 11 Oct 2026: use custom modal instead of window.confirm (hangs automation)
+    setDeleteConfirm(s);
+  }
+
+  async function confirmDeleteSearch() {
+    const s = deleteConfirm;
+    if (!s) return;
+    setDeleteConfirm(null);
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user) return;
-    if (!window.confirm(t('deleteSearchConfirm'))) return;
     if (s.id === editingId) resetForm();
     try {
       await client.db
@@ -918,6 +927,34 @@ export default function AlertsPage() {
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-full bg-zinc-900 text-white px-5 py-3 shadow-lg text-sm">
           {toast}
+        </div>
+      )}
+
+      {/* 11 Oct 2026: custom delete confirmation modal (replaces window.confirm) */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold text-zinc-900 mb-2">
+              {t('delete')}
+            </h3>
+            <p className="text-zinc-600 text-sm mb-6">
+              {t('deleteSearchConfirm')}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                className={btnSecondaryCls}
+                onClick={() => setDeleteConfirm(null)}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                className="px-4 py-2 rounded-full bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+                onClick={confirmDeleteSearch}
+              >
+                {t('delete')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
