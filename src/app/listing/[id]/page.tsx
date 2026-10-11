@@ -42,6 +42,7 @@ import { getServerLang } from '@/lib/server-lang';
 import BackLink from '@/components/BackLink';
 import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
+import WantedBadge from './WantedBadge';
 import RateCta from '@/components/RateCta';
 import NotFoundCta from './NotFoundCta';
 import {
@@ -359,11 +360,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
             "no longer available" banner, prepended to the detail card. */}
         {l.status === 'sold' && <SoldBanner />}
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
-        {isWanted && (
-          <span className="mt-2 inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-bold text-blue-800">
-            {t('wantedBadge', pageLang)}
-          </span>
-        )}
+        {isWanted && <WantedBadge />}
         <p className="mt-2 text-3xl font-bold text-emerald-700">
           <span dir="ltr">{formatPrice(l.price || 0)}</span>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
