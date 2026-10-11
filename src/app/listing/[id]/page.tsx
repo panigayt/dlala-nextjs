@@ -356,6 +356,11 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
         <p className="mt-2 text-3xl font-bold text-emerald-700">
           <span dir="ltr">{formatPrice(l.price || 0)}</span>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
+          {(l as { priceReduced?: boolean }).priceReduced && (
+            <span className="ms-2 inline-block rounded-full bg-red-100 px-2 py-0.5 text-sm font-semibold text-red-700">
+              انخفض السعر
+            </span>
+          )}
         </p>
         <MetaGrid
           wilayaCode={l.wilayaCode}
