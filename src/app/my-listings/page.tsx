@@ -87,6 +87,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const [showVerifyBanner] = useState(() => !user.emailVerified);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [confirmSoldId, setConfirmSoldId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
@@ -198,8 +199,17 @@ function MyListingsContent({ user }: { user: CompatUser }) {
 
   const deleteAd = useCallback(
     async (id: string) => {
-      const confirmMsg = t('delete') + '?';
-      if (!window.confirm(confirmMsg)) return;
+      // Use custom modal instead of window.confirm (testable, better UX)
+      setConfirmDeleteId(id);
+    },
+    []
+  );
+
+  const confirmDelete = useCallback(
+    async () => {
+      const id = confirmDeleteId;
+      if (!id) return;
+      setConfirmDeleteId(null);
       setActionBusy(id);
       try {
         const fb = await getFirebase();
@@ -288,7 +298,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         if (mounted.current) setActionBusy(null);
       }
     },
-    [user, lang, t, load]
+    [user, lang, t, load, confirmDeleteId]
   );
 
   const resendVerification = useCallback(async () => {
@@ -462,6 +472,30 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800"
               >
                 {t('markSold')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom confirm modal for Delete (replaces window.confirm) */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-zinc-900">{t('delete')}?</h3>
+            <p className="mt-2 text-sm text-zinc-600">{t('deleteConfirm')}</p>
+            <div className="mt-6 flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800"
+              >
+                {t('delete')}
               </button>
             </div>
           </div>
