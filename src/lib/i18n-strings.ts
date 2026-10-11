@@ -530,7 +530,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     wantedBadge: 'Recherché', sold: 'Vendu', wholesale: 'Gros',
     noWanted: 'Aucune annonce recherchée pour le moment', // verbatim js/i18n.fr.js:134
     wantedPublishCta: 'Publier une annonce recherchée', // port-added (wanted page publish CTA)
-    priceReduced: 'Prix réduit', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
+    priceReduced: 'Prix réduit', seekerBadge: 'Chercheur d\'emploi', offerBadge: 'Offre d\'emploi',
     // Listing detail page (Round 108) — verbatim js/i18n.fr.js unless noted.
     loginToContact: 'Connectez-vous pour contacter le vendeur',
     ownFavorite: 'Vous ne pouvez pas ajouter votre propre annonce aux favoris',
@@ -877,7 +877,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     wantedBadge: 'Wanted', sold: 'Sold', wholesale: 'Wholesale',
     noWanted: 'No wanted ads right now', // verbatim js/i18n.en.js:134
     wantedPublishCta: 'Post a wanted ad', // port-added (wanted page publish CTA)
-    priceReduced: 'Price reduced', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
+    priceReduced: 'Price reduced', seekerBadge: 'Job seeker', offerBadge: 'Job offer',
     // Listing detail page (Round 108) — verbatim js/i18n.en.js unless noted.
     loginToContact: 'Sign in to contact the seller',
     ownFavorite: 'You cannot favorite your own listing',

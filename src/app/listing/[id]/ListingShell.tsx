@@ -302,7 +302,7 @@ function SimilarCard({ l }: { l: ListingCard }) {
       </div>
       <div className="p-3">
         <p className="font-bold text-emerald-700 text-lg">
-          <span dir="ltr">{formatPrice(l.price || 0)}</span>
+          <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
           {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
         </p>
         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
