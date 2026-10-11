@@ -112,7 +112,7 @@ export default function ListingCardView({ l, eager, priority }: { l: ListingCard
             />
           )}
           <p className="font-extrabold text-[#0b6b4f] text-base">
-            <span dir="ltr">{formatPrice(l.price || 0)}</span>
+            <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
             {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
           </p>
         </div>

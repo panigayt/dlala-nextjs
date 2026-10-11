@@ -1216,11 +1216,12 @@ export function cardImage(l: ListingCard): string {
   return '';
 }
 
-export function formatPrice(n: number): string {
+export function formatPrice(n: number, lang: string = 'ar'): string {
   if (!isFinite(n)) return '';
-  // 0.0.0.39 fmtPrice parity: LTR digits with COMMA thousand separators
-  // + " دج", e.g. "1,650,000 دج" (MEMORY.md: never "000150 دج").
-  return n.toLocaleString('en-US') + ' دج';
+  // 0.0.0.39 fmtPrice parity: LTR digits with COMMA thousand separators.
+  // Currency localized: 'دج' for AR, 'DZD' for FR/EN.
+  const currency = lang === 'ar' ? 'دج' : 'DZD';
+  return n.toLocaleString('en-US') + ' ' + currency;
 }
 
 // --- Announcements (public, read-only) -----------------------------------
