@@ -158,6 +158,10 @@ type DbLike = {
     delete: () => Promise<void>;
     collection: (p: string) => unknown;
   };
+  batch: () => {
+    delete: (ref: unknown) => void;
+    commit: () => Promise<void>;
+  };
 };
 
 export default function FavoritesPage() {
@@ -362,26 +366,21 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       try {
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as DbLike;
-        await withTimeout(db.doc(`favorites/${user.uid}/items/${listingId}`).delete(), 15000);
-        // Also delete the listingFavoriters doc (prevents stale price-drop notifications).
-        try {
-          await withTimeout(db.doc(`listingFavoriters/${listingId}/users/${user.uid}`).delete(), 15000);
-        } catch {
-          // non-fatal
-        }
-        // js/taste.js tasteNoteFav: a successful toggle IS new behavior —
-        // the taste stamp refreshes even before the snapshot above does.
-        try {
-          tasteNoteFav(listingId);
-        } catch {
-          /* never break the remove flow */
-        }
+        // 11 Oct 2026: atomic batch — prevents orphan listingFavoriters docs
+        // (which caused phantom price-drop notifications).
+        const batch = db.batch();
+        batch.delete(db.doc(`favorites/${user.uid}/items/${listingId}`));
+        batch.delete(db.doc(`listingFavoriters/${listingId}/users/${user.uid}`));
+        await withTimeout(batch.commit(), 15000);
+        // 11 Oct 2026: REMOVED tasteNoteFav — it recorded an ADD signal on remove,
+        // polluting the taste profile with unfavorited listings.
         if (mounted.current) {
           setCards((prev) => (prev ? prev.filter((c) => c.fav.listingId !== listingId) : prev));
         }
       } catch (e) {
         console.error(e);
-        if (mounted.current) window.alert(t('errorGeneric'));
+        // 11 Oct 2026: inline error — window.alert hangs headless browsers.
+        if (mounted.current) setError(t('errorGeneric'));
       } finally {
         if (mounted.current) setRemoving(null);
       }
