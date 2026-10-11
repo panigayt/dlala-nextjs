@@ -236,7 +236,11 @@ function notifTitle(n: Notif, t: (k: string) => string): string {
     // Fallback: use non-empty title so the UI never shows blank.
     return t('newMessage');
   }
-  return n.title || '';
+  // 11 Oct 2026: Final fallback — NEVER return blank.
+  // Some legacy notifications have empty title and unhandled type.
+  const title = n.title || '';
+  if (title) return title;
+  return t('newMessage');
 }
 
 function searchMeta(s: SavedSearch, lang: Lang): string {
