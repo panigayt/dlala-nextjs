@@ -49,16 +49,21 @@ export default function RatingsList({
       const FieldValue = (fb.firestore as unknown as {
         FieldValue: { serverTimestamp: () => unknown };
       }).FieldValue;
-      await db.collection('reviewReports').add({
-        reviewId: rating.id,
-        reviewedUid: profileUid,
-        reporterUid: currentUid,
-        raterUid: (rating as { raterId?: string }).raterId || '',
-        raterName: rating.raterName || '',
-        comment: rating.comment || '',
-        stars: rating.stars,
+      // Use the existing /reports collection (targetType='review').
+      // Rules: only the reviewed user may report; shape validated server-side.
+      const user = fb.auth().currentUser;
+      await db.collection('reports').add({
+        reporterId: currentUid,
+        reporterName: user?.displayName || '',
+        targetType: 'review',
+        targetId: rating.id,
+        targetTitle: `Review by ${rating.raterName || 'user'}`,
+        targetUserId: (rating as { raterId?: string }).raterId || '',
+        reason: 'abuse',
+        details: `Reported review: ${rating.stars}/5 - ${rating.comment || ''}`.slice(0, 2000),
+        photoUrl: '',
+        status: 'new',
         createdAt: FieldValue.serverTimestamp(),
-        status: 'pending',
       });
       alert(t('reportSent'));
     } catch (e) {
