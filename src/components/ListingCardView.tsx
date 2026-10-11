@@ -114,7 +114,12 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
             />
           )}
           <p className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'}`}>
-            <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+            {/* 11 Oct 2026: job offers show salary/month, not price (0 DZD). */}
+            {isOffer && typeof l.answers?.salary === 'number' ? (
+              <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
+            ) : (
+              <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+            )}
             {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
           </p>
         </div>

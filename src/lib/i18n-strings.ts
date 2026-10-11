@@ -187,6 +187,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noWanted: 'لا توجد إعلانات مطلوب حالياً', // verbatim js/i18n.ar.js:134
     wantedPublishCta: 'انشر إعلان مطلوب', // port-added (wanted page publish CTA)
     priceReduced: 'انخفض السعر', seekerBadge: 'باحث عن عمل', offerBadge: 'عرض عمل',
+    salaryPerMonth: 'راتب: {x}/شهر',
     // Listing detail page (Round 108) — verbatim js/i18n.ar.js unless noted.
     loginToContact: 'سجّل الدخول لمراسلة البائع',
     ownFavorite: 'لا يمكنك إضافة إعلانك إلى المفضلة',
@@ -533,6 +534,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noWanted: 'Aucune annonce recherchée pour le moment', // verbatim js/i18n.fr.js:134
     wantedPublishCta: 'Publier une annonce recherchée', // port-added (wanted page publish CTA)
     priceReduced: 'Prix réduit', seekerBadge: 'Chercheur d\'emploi', offerBadge: 'Offre d\'emploi',
+    salaryPerMonth: 'Salaire : {x}/mois',
     // Listing detail page (Round 108) — verbatim js/i18n.fr.js unless noted.
     loginToContact: 'Connectez-vous pour contacter le vendeur',
     ownFavorite: 'Vous ne pouvez pas ajouter votre propre annonce aux favoris',
@@ -881,6 +883,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noWanted: 'No wanted ads right now', // verbatim js/i18n.en.js:134
     wantedPublishCta: 'Post a wanted ad', // port-added (wanted page publish CTA)
     priceReduced: 'Price reduced', seekerBadge: 'Job seeker', offerBadge: 'Job offer',
+    salaryPerMonth: 'Salary: {x}/month',
     // Listing detail page (Round 108) — verbatim js/i18n.en.js unless noted.
     loginToContact: 'Sign in to contact the seller',
     ownFavorite: 'You cannot favorite your own listing',
