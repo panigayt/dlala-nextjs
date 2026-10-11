@@ -128,8 +128,8 @@ function HomeFilteredGrid({
         )
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {state.listings.map((l) => (
-            <ListingCardView key={l.id} l={l} />
+          {state.listings.map((l, i) => (
+            <ListingCardView key={l.id} l={l} eager={i < 4} priority={i < 4} />
           ))}
         </div>
       )}
