@@ -28,6 +28,8 @@ export default function RatingsList({
   // 11 Oct 2026: track reported reviews — prevents duplicate spam.
   const [reported, setReported] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
+  // 11 Oct 2026: track error vs success — errors were showing in green.
+  const [messageIsError, setMessageIsError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -78,11 +80,14 @@ export default function RatingsList({
         timeout,
       ]);
       setMessage(t('reportSent'));
+      setMessageIsError(false);
       // 11 Oct 2026: mark as reported — disables the button.
       setReported((prev) => new Set(prev).add(rating.id));
     } catch (e) {
       console.error(e);
-      setMessage(t('errorGeneric'));
+      // 11 Oct 2026: use dedicated reportFailed key, mark as error (red).
+      setMessage(t('reportFailed'));
+      setMessageIsError(true);
     } finally {
       setReporting(null);
     }
@@ -91,7 +96,11 @@ export default function RatingsList({
     <div className="rounded-xl bg-white shadow-sm p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <h2 className="text-lg font-bold text-zinc-900 mb-4">{t('ratingsTitle')}</h2>
       {message && (
-        <p className="mb-3 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">{message}</p>
+        <p className={`mb-3 text-sm rounded-lg px-3 py-2 ${
+          messageIsError
+            ? 'text-red-700 bg-red-50'
+            : 'text-emerald-700 bg-emerald-50'
+        }`}>{message}</p>
       )}
       {failed ? (
         <div className="text-center py-4">
@@ -125,7 +134,8 @@ export default function RatingsList({
                 <button
                   type="button"
                   onClick={() => handleReport(r)}
-                  disabled={reporting === r.id || reported.has(r.id)}
+                  // 11 Oct 2026: disable ALL while any report in flight.
+                  disabled={reporting !== null || reported.has(r.id)}
                   className="mt-2 text-xs text-zinc-500 underline hover:text-zinc-700 disabled:opacity-50"
                 >
                   {reporting === r.id ? '...' : t('reportReview')}
