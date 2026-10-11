@@ -1332,8 +1332,9 @@ function ChatInner() {
             📞 {st('phoneAcceptedMsg')}
           </div>
         ) : (
-          !slotBusy &&
-          count < 3 && (
+          // 11 Oct 2026: removed `count < 3` — it was conversation-wide but the
+          // rule is per-requester (pf.myBlocked handles it correctly above).
+          !slotBusy && (
             <button
               className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
               onClick={requestPhone}
@@ -1347,7 +1348,7 @@ function ChatInner() {
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800">
             ✅ {st('phoneSharedConfirm')}
           </div>
-        ) : (pf.declines[oUid] || 0) >= 3 ? (
+        ) : (conv?.declinesByRequester?.[oUid] || 0) >= 3 || (pf.declines[oUid] || 0) >= 3 ? (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             🚫 {st('phoneBlockedOther').replace('{name}', name)}
           </div>
