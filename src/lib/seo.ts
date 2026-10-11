@@ -31,7 +31,7 @@ export const SITE_TAGLINE = 'دلالة — سوق الجزائر الحر لل�
 // js/i18n.{ar,fr,en}.js (identical in all three): brand only when honestly
 // known (0.0.0.30 Zak). Keys ending in "Other" resolve to Arabic "أخرى" in
 // i18n and are therefore excluded by listingBrandName() below.
-const BRAND_LATIN: Record<string, string> = {
+export const BRAND_LATIN: Record<string, string> = {
   pbApple: 'Apple',
   pbSamsung: 'Samsung',
   pbHonor: 'Honor',

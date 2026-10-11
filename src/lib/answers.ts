@@ -10,6 +10,7 @@
 // for listings from either writer.
 
 import { PUB_STR } from './publish-strings';
+import { BRAND_LATIN } from './seo';
 
 // Legacy short key -> q* label key.
 // From js/app.js ANSWER_KEY_LABELS (verbatim concept); adapted where the
@@ -80,6 +81,8 @@ function valueFor(v: unknown, lang: 'ar' | 'fr' | 'en' = 'ar'): string {
   const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
   // Option values (osAndroid, fuelPetrol…) resolve to their label;
   // free text (brand names, numbers) renders as-is. Mirrors answerLabel().
+  // Brand codes (cbToyota…) resolve via BRAND_LATIN.
+  if (BRAND_LATIN[s]) return BRAND_LATIN[s];
   return PUB_STR[s]?.[lang] || PUB_STR[s]?.ar || s;
 }
 
