@@ -25,6 +25,7 @@ export default function RatingsList({
   const { t, lang } = useLang();
   const [currentUid, setCurrentUid] = useState<string | null>(null);
   const [reporting, setReporting] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -66,10 +67,10 @@ export default function RatingsList({
         status: 'new',
         createdAt: FieldValue.serverTimestamp(),
       });
-      alert(t('reportSent'));
+      setMessage(t('reportSent'));
     } catch (e) {
       console.error(e);
-      alert(t('errorGeneric'));
+      setMessage(t('errorGeneric'));
     } finally {
       setReporting(null);
     }
@@ -77,6 +78,9 @@ export default function RatingsList({
   return (
     <div className="rounded-xl bg-white shadow-sm p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <h2 className="text-lg font-bold text-zinc-900 mb-4">{t('ratingsTitle')}</h2>
+      {message && (
+        <p className="mb-3 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">{message}</p>
+      )}
       {failed ? (
         <div className="text-center py-4">
           <p className="text-zinc-600 text-sm mb-3">⚠️ {t('errorGeneric')}</p>
