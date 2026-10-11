@@ -18,6 +18,7 @@ import {
   CompatUser,
   btnSecondaryCls,
 } from '@/lib/firebase-client';
+import { withTimeout } from '@/lib/firebase-compat';
 import { formatPrice } from '@/lib/firestore';
 import { useLang, getLang, type Lang } from '@/lib/i18n';
 import { chatSt } from './chat-strings';
@@ -480,7 +481,8 @@ function ChatInner() {
               batch.update(client.db.doc(`conversations/${convId}`), {
                 updatedAt: FV.serverTimestamp(),
               });
-              await batch.commit();
+              // 11 Oct 2026: timeout — hanging commit caused permanent send lock.
+      await withTimeout(batch.commit(), 15000);
             };
             await sys('support_greeting');
             await sys('support_autoreply');
@@ -806,7 +808,8 @@ function ChatInner() {
         [`unread.${oUid}`]: FV.increment(1),
         hiddenFor: FV.arrayRemove(oUid),
       });
-      await batch.commit();
+      // 11 Oct 2026: timeout — hanging commit caused permanent send lock.
+      await withTimeout(batch.commit(), 15000);
       lastSendAtRef.current = Date.now();
       setFailedSend(null);
       setStatusBar(null);
@@ -1028,7 +1031,8 @@ function ChatInner() {
     batch.update(client.db.doc(`conversations/${convId}`), {
       updatedAt: FV.serverTimestamp(),
     });
-    await batch.commit();
+    // 11 Oct 2026: timeout — prevents hang.
+    await withTimeout(batch.commit(), 15000);
   }
 
   async function requestPhone() {
