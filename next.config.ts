@@ -4,6 +4,20 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  // 11 Oct 2026: Speed optimizations for weak internet (Zak's order).
+  // Images: modern formats (AVIF/WebP), responsive sizes, lazy by default.
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 31536000, // 1 year — images are content-hashed
+  },
+  // Compress responses (gzip/brotli) — critical for slow connections.
+  compress: true,
+  // Reduce JS: optimize imports from heavy libraries.
+  experimental: {
+    optimizePackageImports: ['firebase'],
+  },
   turbopack: {
     rules: {
       "*.css": {
