@@ -445,7 +445,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     tagline: 'Annonces claires, vendeurs vérifiés', logout: 'Déconnexion', login: 'Connexion',
     condNew: 'Neuf', condUsed: 'Occasion',
     // Site chrome (Group C) — verbatim from js/i18n.fr.js (js/app.js renderChrome parity).
-    menu: 'Menu', close: 'Fermer', home: 'Accueil', wanted: 'Recherche',
+    menu: 'Menu', close: 'Fermer', home: 'Accueil', wanted: 'Recherchés',
     announcements: "Annonces de l'équipe", messages: 'Messages', alerts: 'Alertes',
     // Team announcements (Round 120) — verbatim from js/i18n.fr.js unless noted.
     share: 'Partager', readMore: 'Lire la suite',
