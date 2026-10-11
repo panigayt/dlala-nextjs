@@ -945,10 +945,12 @@ function ChatInner() {
         setFailedSend({ imageUrl: publicUrl, mid: mintMessageId(user.uid) });
         setStatusBar({ mode: 'error', text: st('chatSendFailed') });
       }
-    } catch {
+    } catch (e) {
+      // Show specific error for debugging (upload-url vs r2-put vs send-message)
+      const msg = e instanceof Error ? e.message : 'unknown';
       setFailedSend({ mid: mintMessageId(user.uid) });
-      setStatusBar({ mode: 'error', text: st('chatSendFailed') });
-      showToast(st('imageSendError'));
+      setStatusBar({ mode: 'error', text: `${st('chatSendFailed')} [${msg}]` });
+      showToast(`${st('imageSendError')} [${msg}]`);
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
