@@ -376,7 +376,9 @@ function AccountContent({ user }: { user: CompatUser }) {
       setProfOk(true);
     } catch (e) {
       console.error(e);
-      if (mounted.current) setProfErr(t('errorGeneric'));
+      // 11 Oct 2026: show specific error code for debugging (remove after fix)
+      const code = e && typeof e === 'object' && 'code' in e ? (e as {code: string}).code : 'unknown';
+      if (mounted.current) setProfErr(`${t('errorGeneric')} [${code}]`);
     } finally {
       if (mounted.current) setProfBusy(false);
     }
