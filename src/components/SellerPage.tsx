@@ -202,7 +202,7 @@ function SellerProfileCard({ s }: { s: SellerProfile }) {
           <h1 className="text-2xl font-bold text-zinc-900 truncate">
             {displayName}
             {isVerified && (
-              <span className="text-emerald-600 text-xl mr-1" title={t('verifiedBadge')}>✓</span>
+              <span className="text-emerald-600 text-xl me-1" title={t('verifiedBadge')}>✓</span>
             )}
           </h1>
           {s.username && s.username !== displayName && (
