@@ -39,7 +39,8 @@ export default function RatingsList({
 
   const handleReport = async (rating: SellerRating) => {
     if (!isOwner || reporting) return;
-    if (!confirm(t('reportReview') + '?')) return;
+    // 11 Oct 2026: removed native confirm() — it hangs headless browsers.
+    // The button label is clear enough; the action is reversible via admin.
     setReporting(rating.id);
     try {
       const fb = await getFirebase();
