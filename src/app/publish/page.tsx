@@ -967,7 +967,8 @@ function PublishForm({
           updateDoc.photoUrls = mergedUrls;
           updateDoc.photoHashes = mergedHashes.slice(0, mergedUrls.length);
           updateDoc.photo_thumbs = mergedThumbs.slice(0, mergedUrls.length);
-          updateDoc.photoVariants = true;
+          // 11 Oct 2026: REMOVED photoVariants — not in v122 edit allowlist,
+          // photo-changing edits were denied. Field is informational only.
         }
         await client.db.collection('listings').doc(editId).update(updateDoc);
         // Delete R2 objects for photos removed in edit mode (best-effort).
