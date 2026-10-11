@@ -359,7 +359,7 @@ export default function SellerPage({
                 rateeName={seller.name || seller.username || ''}
               />
               <div className="mt-4">
-                <RatingsList ratings={ratings} failed={ratingsFailed} />
+                <RatingsList ratings={ratings} failed={ratingsFailed} profileUid={uid} />
               </div>
             </>
           }

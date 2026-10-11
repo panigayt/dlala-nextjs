@@ -198,6 +198,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     shareAd: 'مشاركة الإعلان',
     loginToReport: 'سجّل الدخول للإبلاغ عن هذا الإعلان',
     reportAd: 'الإبلاغ عن الإعلان',
+    reportReview: 'الإبلاغ عن التقييم',
     reportUser: 'الإبلاغ عن المستخدم',
     loginToReportUser: 'سجّل الدخول للإبلاغ عن مستخدم',
     verifyToReport: 'أرسلنا لك رابط التفعيل. فعّل بريدك لتتمكن من النشر ومراسلة البائعين.', // port-added (verified-email nudge; no legacy key)
@@ -542,6 +543,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     shareAd: 'Partager l\'annonce',
     loginToReport: 'Connectez-vous pour signaler cette annonce',
     reportAd: 'Signaler l\'annonce',
+    reportReview: 'Signaler l\'avis',
     reportUser: 'Signaler l\'utilisateur',
     loginToReportUser: 'Connectez-vous pour signaler un utilisateur',
     verifyToReport: 'Nous vous avons envoyé un lien d\'activation. Activez votre e-mail pour pouvoir publier et contacter les vendeurs.', // port-added (verified-email nudge; no legacy key)
@@ -888,6 +890,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     shareAd: 'Share listing',
     loginToReport: 'Sign in to report this listing',
     reportAd: 'Report listing',
+    reportReview: 'Report review',
     reportUser: 'Report user',
     loginToReportUser: 'Sign in to report a user',
     verifyToReport: 'We sent you an activation link. Verify your email to publish and contact sellers.', // port-added (verified-email nudge; no legacy key)

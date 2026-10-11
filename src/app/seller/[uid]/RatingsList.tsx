@@ -7,20 +7,67 @@
 // router.refresh() so a transient failure recovers without a full reload.
 
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import type { SellerRating } from '@/lib/firestore';
 import { useLang } from '@/lib/i18n';
+import { getFirebase } from '@/lib/firebase-compat';
 
 export default function RatingsList({
   ratings,
   failed,
+  profileUid,
 }: {
   ratings: SellerRating[] | null;
   failed: boolean;
+  profileUid?: string;
 }) {
   const router = useRouter();
-  // Round 111: strings follow the UI language (js/i18n.js parity) —
-  // verbatim keys from js/i18n.{ar,fr,en}.js.
   const { t, lang } = useLang();
+  const [currentUid, setCurrentUid] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getFirebase().then((fb) => {
+      const user = fb.auth().currentUser;
+      if (mounted) setCurrentUid(user ? user.uid : null);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
+  const isOwner = profileUid && currentUid && profileUid === currentUid;
+
+  const handleReport = async (rating: SellerRating) => {
+    if (!isOwner || reporting) return;
+    if (!confirm(t('reportReview') + '?')) return;
+    setReporting(rating.id);
+    try {
+      const fb = await getFirebase();
+      const db = fb.firestore() as unknown as {
+        collection: (p: string) => { add: (d: Record<string, unknown>) => Promise<void> };
+      };
+      const FieldValue = (fb.firestore as unknown as {
+        FieldValue: { serverTimestamp: () => unknown };
+      }).FieldValue;
+      await db.collection('reviewReports').add({
+        reviewId: rating.id,
+        reviewedUid: profileUid,
+        reporterUid: currentUid,
+        raterUid: (rating as { raterId?: string }).raterId || '',
+        raterName: rating.raterName || '',
+        comment: rating.comment || '',
+        stars: rating.stars,
+        createdAt: FieldValue.serverTimestamp(),
+        status: 'pending',
+      });
+      alert(t('reportSent'));
+    } catch (e) {
+      console.error(e);
+      alert(t('errorGeneric'));
+    } finally {
+      setReporting(null);
+    }
+  };
   return (
     <div className="rounded-xl bg-white shadow-sm p-6" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <h2 className="text-lg font-bold text-zinc-900 mb-4">{t('ratingsTitle')}</h2>
@@ -49,6 +96,16 @@ export default function RatingsList({
                 <div className="mt-1 text-sm font-medium text-zinc-900">{r.raterName}</div>
               )}
               {r.comment && <p className="mt-1 text-sm text-zinc-700">{r.comment}</p>}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => handleReport(r)}
+                  disabled={reporting === r.id}
+                  className="mt-2 text-xs text-zinc-500 underline hover:text-zinc-700 disabled:opacity-50"
+                >
+                  {reporting === r.id ? '...' : t('reportReview')}
+                </button>
+              )}
             </li>
           ))}
         </ul>
