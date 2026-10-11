@@ -49,8 +49,8 @@ export function drawWatermark(
     const m = Math.round(s * 0.03);
     const bx = Math.round(w - badgeW - m),
       by = Math.round(h - badgeH - m);
-    ctx.globalAlpha = 0.62;
-    ctx.fillStyle = '#0a5c3e'; // dlala deep emerald
+    ctx.globalAlpha = 0.03;
+    ctx.fillStyle = '#0a5c3e'; // dlala deep emerald, 3% opacity (practically invisible)
     wmRoundRect(ctx, bx, by, badgeW, badgeH, badgeH / 2);
     ctx.fill();
     const cy = by + badgeH / 2;
