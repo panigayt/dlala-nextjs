@@ -133,7 +133,11 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
     );
   }
 
-  const full = (listing.photoUrls && listing.photoUrls[0]) || '';
+  // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
+  // (dzdlala.com blocks hotlinking on the preview domain).
+  const rewriteDefaultImg = (u: string) =>
+    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
+  const full = rewriteDefaultImg((listing.photoUrls && listing.photoUrls[0]) || '');
   const w640 = listing.photoVariants && full ? variantUrlFor(full, 640) : '';
   const hi = isDesktop && w640 ? w640 : img;
 

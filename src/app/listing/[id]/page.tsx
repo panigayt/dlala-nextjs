@@ -219,7 +219,12 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
 
   const l = listing;
   const pageLang = await getServerLang();
-  const photos = l.photoUrls && l.photoUrls.length ? l.photoUrls : [];
+  // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
+  // (dzdlala.com blocks hotlinking on the preview domain). Fixes existing
+  // listings without Firestore updates.
+  const rewriteDefaultImg = (u: string) =>
+    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
+  const photos = (l.photoUrls && l.photoUrls.length ? l.photoUrls : []).map(rewriteDefaultImg);
   // 0.0.0.1s per-index thumbnail preference (js/app.js detailInnerHtml):
   // photo_thumbs, then legacy thumbUrls, then the full photo.
   // Round 158: the `|| p` fallback is the known slow path — only for
