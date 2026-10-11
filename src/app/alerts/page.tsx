@@ -502,12 +502,18 @@ export default function AlertsPage() {
     }
     setSaving(true);
     try {
+      // 11 Oct 2026: auto-swap min/max — reversed range never matches.
+      let minP = fMin === '' ? null : Number(fMin);
+      let maxP = fMax === '' ? null : Number(fMax);
+      if (minP !== null && maxP !== null && minP > maxP) {
+        [minP, maxP] = [maxP, minP];
+      }
       const payload = {
         query: fQ.trim(),
         categoryId: fCat || '',
         wilayaCode: fWilaya === '' ? null : Number(fWilaya),
-        minPrice: fMin === '' ? null : Number(fMin),
-        maxPrice: fMax === '' ? null : Number(fMax),
+        minPrice: minP,
+        maxPrice: maxP,
       };
       const col = client.db.collection(`users/${user.uid}/savedSearches`);
       if (editingId) {
