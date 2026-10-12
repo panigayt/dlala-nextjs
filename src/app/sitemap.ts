@@ -62,12 +62,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     },
-    ...GUIDE_SLUGS.map((slug) => ({
+    // Round 5: dedupe — GUIDE_SLUGS also contains the literal price-guide
+    // slug (for the /guides index); skip it here when it matches the dynamic
+    // slug so each URL is emitted exactly once per language.
+    ...GUIDE_SLUGS.filter((slug) => slug !== priceGuideSlug(priceGuideYear())).map((slug) => ({
       url: `${BASE}/guides/${slug}`,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     })),
-    ...GUIDE_SLUGS.map((slug) => ({
+    ...GUIDE_SLUGS.filter((slug) => slug !== priceGuideSlug(priceGuideYear())).map((slug) => ({
       url: `${BASE}/fr/guides/${slug}`,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
