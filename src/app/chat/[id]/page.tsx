@@ -827,7 +827,10 @@ function ChatInner() {
     } catch (e) {
       // Retry-after-commit: the batch may have committed server-side
       // while the response was lost. Check the deterministic id first.
-      if ((e as { code?: string })?.code === 'permission-denied') {
+      // 12 Oct 2026: also check on deadline-exceeded (timeout), not just
+      // permission-denied — timeouts can commit server-side too.
+      const code = (e as { code?: string })?.code;
+      if (code === 'permission-denied' || code === 'deadline-exceeded') {
         try {
           const check = await client.db
             .collection('conversations')
@@ -896,6 +899,8 @@ function ChatInner() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user || !file) return;
+    // 12 Oct 2026: reset URL ref per send — prevents retry sending previous photo.
+    publicUrlRef.current = null;
     // 11 Oct 2026: throttle FIRST — was uploading to R2 before the 3s check,
     // orphaning every throttled photo + wasting bandwidth.
     if (sendInFlightRef.current) {
