@@ -1,0 +1,18 @@
+CSP PRODUCTION DEPLOYMENT NOTE — dlala-nextjs
+Date: 2026-10-12
+
+FINDING: The Next.js site uses 8 inline <script> blocks (Next.js framework +
+React Flight data). Two of them (~60KB each) contain per-request dynamic data,
+so their SHA-256 hashes change on every page load. Static hash allowlisting
+is IMPOSSIBLE.
+
+CONSEQUENCE: The site CANNOT work under the current dzdlala.com production
+CSP (script-src without 'unsafe-inline'). Verified: white screen in Firefox
+under exact production CSP.
+
+OPTIONS IF MOVING TO PRODUCTION:
+1. Add 'unsafe-inline' to script-src in firebase.json CSP (simplest, weakens XSS protection)
+2. Keep the site on Vercel (current CSP already allows 'unsafe-inline')
+
+This requires Zak's explicit decision via Firebase Console. Do NOT modify
+production CSP without his authorization.
