@@ -447,6 +447,8 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       <button className="drawer-link" onClick={openReportDialog}>{t('reportProblem')}</button>
       <div className="drawer-sep" role="separator" aria-hidden="true" />
       {navLink(ACCOUNT_ENTRIES.find((e) => e.key === 'settings')!, closeDrawerInstant)}
+      {/* 11 Oct 2026: alerts in drawer — mobile users had no alerts link. */}
+      {navLink(ACCOUNT_ENTRIES.find((e) => e.key === 'alerts')!, closeDrawerInstant)}
     </>
   );
 
