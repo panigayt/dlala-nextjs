@@ -265,11 +265,14 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         try {
           const storage = fb.storage() as unknown as {
             ref: (p: string) => { delete: () => Promise<void> };
+            refFromURL: (url: string) => { delete: () => Promise<void> };
           };
           await Promise.all(
             urls.map(async (u) => {
               try {
-                await storage.ref(u).delete();
+                // 11 Oct 2026: refFromURL (was ref — silent no-op on full URLs).
+                const r = /^https?:\/\//i.test(u) ? storage.refFromURL(u) : storage.ref(u);
+                await r.delete();
               } catch {
                 // ignore missing objects
               }
