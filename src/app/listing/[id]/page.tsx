@@ -128,6 +128,8 @@ function seoForListing(
   const metadata: Metadata = {
     title: seo.title,
     description: seo.description,
+    // 11 Oct 2026: canonical — prevents duplicate-content indexing.
+    alternates: { canonical: url },
     openGraph: {
       // Round 133: 'product' was the legacy og:type, but Next 16's metadata
       // renderer throws `Invalid OpenGraph type: product` (exhaustive switch
@@ -159,12 +161,13 @@ export async function generateMetadata({
   try {
     const { id } = await params;
     const listing = await getListing(id);
-    if (!listing) return { title: 'DLALA' };
+    // 11 Oct 2026: noindex on 404 — deleted listings must not be indexed.
+    if (!listing) return { title: 'DLALA', robots: { index: false, follow: false } };
     // Round 133: localize the tab title to the reader's language
     // (dlala_lang cookie; localStorage is client-only).
     return seoForListing(listing, id, await getServerLang()).metadata;
   } catch {
-    return { title: 'DLALA' };
+    return { title: 'DLALA', robots: { index: false, follow: false } };
   }
 }
 
