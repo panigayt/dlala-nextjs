@@ -77,6 +77,10 @@ type StorageLike = {
     put: (f: Blob) => Promise<{ ref: { getDownloadURL: () => Promise<string> } }>;
     delete: () => Promise<void>;
   };
+  // 11 Oct 2026: for full https:// URLs (orphan cleanup was dead without this).
+  refFromURL: (url: string) => {
+    delete: () => Promise<void>;
+  };
 };
 
 export default function AccountPage() {
@@ -337,7 +341,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       const delNewAvatar = async () => {
         if (newPhotoFile && photoPath && photoPath !== oldPhotoPath && /^https:\/\//i.test(photoPath)) {
           try {
-            await storage.ref(photoPath).delete();
+            await storage.refFromURL(photoPath).delete();
           } catch {
             // ignore
           }
@@ -360,7 +364,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       // Best-effort: remove the orphaned old avatar.
       if (newPhotoFile && oldPhotoPath && oldPhotoPath !== photoPath && /^https:\/\//i.test(oldPhotoPath)) {
         try {
-          await storage.ref(oldPhotoPath).delete();
+          await storage.refFromURL(oldPhotoPath).delete();
         } catch {
           // keep going
         }
@@ -445,7 +449,7 @@ function AccountContent({ user }: { user: CompatUser }) {
         for (const [f, oldUrl, nu] of pairs) {
           if (f && nu && nu !== oldUrl && /^https:\/\//i.test(nu)) {
             try {
-              await storage.ref(nu).delete();
+              await storage.refFromURL(nu).delete();
             } catch {
               // ignore
             }
@@ -466,7 +470,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       for (const [f, oldUrl, nu] of pairs) {
         if (f && oldUrl && oldUrl !== nu && /^https:\/\//i.test(oldUrl)) {
           try {
-            await storage.ref(oldUrl).delete();
+            await storage.refFromURL(oldUrl).delete();
           } catch {
             // keep going
           }
