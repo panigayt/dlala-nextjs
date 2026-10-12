@@ -950,7 +950,8 @@ function PublishForm({
         const curSnap = await client.db.collection('listings').doc(editId).get();
         const cur = curSnap.exists ? (curSnap.data() as Record<string, unknown>) : {};
         const oldPrice = Number(cur.price || 0);
-        const priceDropped = effPrice < oldPrice;
+        // 11 Oct 2026: category change is not a price drop (was false alerts).
+        const priceDropped = effPrice < oldPrice && cat === String(cur.categoryId || '');
         // Upload any newly picked photos (with variants + hashes)
         const up = await uploadNewPhotos(photos, user.uid, editId, idToken);
         // Merge: existing kept photos first, then new uploads (legacy mergeEditPhotos)
