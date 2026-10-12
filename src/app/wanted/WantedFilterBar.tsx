@@ -55,6 +55,7 @@ export default function WantedFilterBar({ f }: { f: WantedFilters }) {
         ) : null}
         <input
           name="q"
+          key={f.q}
           defaultValue={f.q}
           placeholder={t('search')}
           className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder-zinc-400 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 text-base"

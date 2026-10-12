@@ -41,6 +41,7 @@ export default function WilayaSelect({ f }: { f: Filters }) {
       </label>
       <select
         id="wWilaya"
+        key={f.wilaya}
         defaultValue={f.wilaya}
         onChange={onChange}
         className="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-100 text-base"
