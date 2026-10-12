@@ -1220,12 +1220,17 @@ export function cardTitle(l: ListingCard, lang = 'ar'): string {
 export function cardImage(l: ListingCard): string {
   // Prefer W320 thumbnail (photo_thumbs[0]), fall back to photoUrls[0].
   // Mirrors the 0.0.0.1w R2 client behavior.
+  // 12 Oct 2026: rewrite dzdlala.com default ad images to local paths —
+  // job/wanted ads store absolute production URLs, which the preview CSP
+  // blocks (img-src has no dzdlala.com). Central fix for all card renderers.
+  const rewrite = (u: string) =>
+    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
   const thumbs = l.photo_thumbs;
-  if (Array.isArray(thumbs) && thumbs[0]) return thumbs[0] as string;
+  if (Array.isArray(thumbs) && thumbs[0]) return rewrite(thumbs[0] as string);
   const urls = l.photoUrls;
-  if (Array.isArray(urls) && urls[0]) return urls[0];
+  if (Array.isArray(urls) && urls[0]) return rewrite(urls[0]);
   const turls = l.thumbUrls;
-  if (Array.isArray(turls) && turls[0]) return turls[0];
+  if (Array.isArray(turls) && turls[0]) return rewrite(turls[0]);
   return '';
 }
 

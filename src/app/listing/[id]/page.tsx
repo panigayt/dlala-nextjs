@@ -116,12 +116,14 @@ function seoForListing(
   const url = `${SITE}/listing/${encodeURIComponent(id)}`;
   // 11 Oct 2026: rewrite default photos — dzdlala.com blocks hotlinking,
   // so OG crawlers get a blocked image without this.
+  // 12 Oct 2026: cardImage() now rewrites centrally; ensure absolute URL
+  // for OG + JSON-LD (Google prefers absolute image URLs).
   const rawImage = cardImage(l) || `${SITE}/icon-512.png`;
-  const image = rawImage.replace('https://dzdlala.com/img/default_ads/', `${SITE}/img/default_ads/`);
+  const image = rawImage.startsWith('http') ? rawImage : `${SITE}${rawImage}`;
   const jsonLd = listingJsonLd({
     title: title || 'DLALA',
     description: seo.description,
-    image: cardImage(l) || null,
+    image,
     brand: listingBrandName(l.answers),
     url,
     price: Number(l.price) || 0,

@@ -182,6 +182,8 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   const [hasMore, setHasMore] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
+  // 12 Oct 2026: per-card remove error feedback (was silent console.error).
+  const [removeErr, setRemoveErr] = useState<string | null>(null);
   const cursorRef = useRef<unknown>(null);
   const mounted = useRef(true);
   // 0.0.0.22 (Zak): instant paint — a snapshot already painted stays and
@@ -382,6 +384,8 @@ function FavoritesContent({ user }: { user: CompatUser }) {
         // 11 Oct 2026: don't nuke the grid on single-card remove failure.
         // The card stays; user can retry by tapping ✕ again.
         // (was setError → full-page error wiped all cards.)
+        // 12 Oct 2026: show per-card error feedback (was silent).
+        if (mounted.current) setRemoveErr(listingId);
       } finally {
         if (mounted.current) setRemoving(null);
       }
@@ -511,6 +515,11 @@ function FavoritesContent({ user }: { user: CompatUser }) {
                     >
                       ✕
                     </button>
+                    {removeErr === lid && (
+                      <p className="absolute bottom-2 start-2 end-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                        {t('errorGeneric')}
+                      </p>
+                    )}
                   </div>
                 );
               })}
