@@ -517,20 +517,23 @@ function PublishForm({
   const readDraft = () => {
     if (editId || typeof window === 'undefined') return null;
     try {
-      return JSON.parse(localStorage.getItem('dlala_publish_draft') || 'null');
+      const d = JSON.parse(localStorage.getItem('dlala_publish_draft') || 'null');
+      // 11 Oct 2026: 7-day TTL — stale drafts must not resurrect.
+      if (!d || (d.ts && Date.now() - d.ts > 7 * 24 * 3600 * 1000)) return null;
+      return d;
     } catch {
       return null;
     }
   };
-  const [isWanted, setIsWanted] = useState(initialMode === 'wanted');
+  const [isWanted, setIsWanted] = useState(() => readDraft()?.isWanted ?? initialMode === 'wanted');
   const router = useRouter();
   const [title, setTitle] = useState(() => readDraft()?.title || '');
   const [cat, setCat] = useState(() => readDraft()?.cat || '');
   const [wilaya, setWilaya] = useState(() => readDraft()?.wilaya || '');
   const [price, setPrice] = useState(() => readDraft()?.price || '');
-  const [condition, setCondition] = useState('');
-  const [qty, setQty] = useState('1');
-  const [negotiable, setNegotiable] = useState(false);
+  const [condition, setCondition] = useState(() => readDraft()?.condition || '');
+  const [qty, setQty] = useState(() => readDraft()?.qty || '1');
+  const [negotiable, setNegotiable] = useState(() => readDraft()?.negotiable || false);
   const [desc, setDesc] = useState(() => readDraft()?.desc || '');
   const [answers, setAnswers] = useState<Record<string, string>>(() => readDraft()?.answers || {});
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
@@ -554,12 +557,13 @@ function PublishForm({
       try {
         localStorage.setItem(
           'dlala_publish_draft',
-          JSON.stringify({ title, cat, wilaya, price, desc, answers })
+          // 11 Oct 2026: save all fields + TTL (was dropping condition/isWanted).
+          JSON.stringify({ title, cat, wilaya, price, desc, answers, condition, qty, negotiable, isWanted, ts: Date.now() })
         );
       } catch { /* ignore */ }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [title, cat, wilaya, price, desc, answers, editId]);
+  }, [title, cat, wilaya, price, desc, answers, condition, qty, negotiable, isWanted, editId]);
 
   // Edit mode: load existing listing
   useEffect(() => {
