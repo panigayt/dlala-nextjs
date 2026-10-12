@@ -39,10 +39,10 @@ async function fetchAllLiveListings() {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE, changeFrequency: 'hourly', priority: 1 },
-    { url: `${BASE}/search`, changeFrequency: 'hourly', priority: 0.8 },
+    // 11 Oct 2026: /search removed — blocked in robots.txt (was Search Console warning).
     { url: `${BASE}/wanted`, changeFrequency: 'hourly', priority: 0.7 },
     { url: `${BASE}/announcements`, changeFrequency: 'daily', priority: 0.5 },
-    { url: `${BASE}/auth`, changeFrequency: 'monthly', priority: 0.3 },
+    // 11 Oct 2026: /auth removed — auth-gated utility (production parity).
     { url: `${BASE}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${BASE}/terms`, changeFrequency: 'yearly', priority: 0.2 },
     // Round 129: SEO guides (production parity — the production sitemap
