@@ -5,7 +5,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/api/', '/chat/', '/conversations', '/account', '/settings'],
+      // 11 Oct 2026: added /search and /publish — thin/form content.
+      disallow: ['/api/', '/chat/', '/conversations', '/account', '/settings', '/search', '/publish'],
     },
     sitemap: 'https://dlala-nextjs.vercel.app/sitemap.xml',
   };

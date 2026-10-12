@@ -30,7 +30,11 @@ import SearchPage from '@/components/SearchPage';
 // localStorage is client-only). Legacy js/app.js PAGE_TITLES has no search
 // key — pageTitleKey() falls back to title_home, mirrored here.
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: t('title_home', await getServerLang()) };
+  // 11 Oct 2026: noindex — query-param search URLs are thin content.
+  return {
+    title: t('title_home', await getServerLang()),
+    robots: { index: false, follow: false },
+  };
 }
 
 async function getResults(f: SearchFilters): Promise<SearchResult> {
