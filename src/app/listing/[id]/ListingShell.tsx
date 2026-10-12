@@ -23,6 +23,7 @@ import {
 import { isConditionExempt } from '@/lib/seo';
 import { answerRows } from '@/lib/answers';
 import TimeAgo from '@/components/TimeAgo';
+import BlurUpImage from '@/components/BlurUpImage';
 import FollowButton from '@/components/FollowButton';
 import ReportUserButton from '@/components/ReportUserButton';
 
@@ -289,11 +290,12 @@ function SimilarCard({ l }: { l: ListingCard }) {
     >
       <div className="relative aspect-[4/3] bg-zinc-100">
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
+          // 12 Oct 2026 (Round 9): BlurUpImage parity with ListingCardView —
+          // broken images get the placeholder fallback instead of a broken icon.
+          <BlurUpImage
+            listing={l}
+            img={img}
             alt={title}
-            loading="lazy"
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (

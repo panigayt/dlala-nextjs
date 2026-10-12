@@ -43,6 +43,7 @@ const nextConfig: NextConfig = {
               "connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.r2.dev https://*.r2.cloudflarestorage.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
               "font-src 'self' data:",
               "frame-src 'self'",
+              "frame-ancestors 'self'",
               "object-src 'none'",
               "base-uri 'self'",
             ].join("; "),

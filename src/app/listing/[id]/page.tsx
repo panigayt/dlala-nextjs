@@ -215,6 +215,38 @@ async function NotFoundView() {
   );
 }
 
+// Round 9 (12 Oct 2026): transient fetch-failure UI. fetchListing() THROWS
+// (not null) on network/5xx/429 — the listing may well exist, so the 404
+// "doesn't exist" messaging is wrong here. HTTP 200 is kept (a 404 must
+// only be served for genuinely missing listings, via notFound(); the
+// metadata already carries noindex from generateMetadata's fetchFailed
+// branch). The retry link is a native <a> — a full document reload
+// re-runs this server component and retries the Firestore fetch, so no
+// client island is needed.
+async function TransientErrorView({ id }: { id: string }) {
+  const lang = await getServerLang();
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-16 text-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="text-6xl font-bold text-emerald-700">D</div>
+      <h1 className="mt-4 text-2xl font-bold" lang="ar" dir="rtl">تعذّر تحميل الإعلان</h1>
+      <p className="mt-2 text-zinc-600" lang="ar" dir="rtl">
+        حدث خطأ مؤقت أثناء تحميل هذا الإعلان. قد يكون الإعلان موجوداً — حاول مرة أخرى.
+      </p>
+      <p className="mt-1 text-zinc-600" lang="fr">Impossible de charger cette annonce pour le moment. Veuillez réessayer.</p>
+      <p className="mt-1 text-zinc-600" lang="en">This listing could not be loaded right now. Please try again.</p>
+      <div className="mt-6 flex items-center justify-center gap-3">
+        <a
+          href={`/listing/${encodeURIComponent(id)}`}
+          className="inline-block rounded-lg bg-emerald-700 text-white px-6 py-3 font-medium"
+        >
+          {t('retry', lang)}
+        </a>
+        <NotFoundCta />
+      </div>
+    </div>
+  );
+}
+
 
 function ListingSkeleton() {
   return (
@@ -244,7 +276,17 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
     notFound();
   }
 
-  if (error || !listing) {
+  // Round 9 (12 Oct 2026): a THROWN fetch is a transient failure
+  // (network/5xx/429 — fetchListing throws `listing-rest-<status>`), NOT a
+  // missing listing (fetchListing returns null for 404/403). The old code
+  // rendered the 404 "doesn't exist" view here at HTTP 200, conflating the
+  // two. Keep HTTP 200 with a retry UI; genuinely missing listings still
+  // go through notFound() above (and in generateMetadata) for a real 404.
+  if (error) {
+    return <TransientErrorView id={id} />;
+  }
+
+  if (!listing) {
     return <NotFoundView />;
   }
 

@@ -15,20 +15,22 @@ export default function Error({
   }, [error]);
 
   // 11 Oct 2026: dir follows language (was hardcoded rtl).
+  // 12 Oct 2026 (Round 9): show ONLY the current language's message
+  // (was rendering ar + fr + en stacked).
   const { lang, t } = useLang();
+  const msg =
+    lang === 'fr'
+      ? "Une erreur inattendue s'est produite"
+      : lang === 'en'
+        ? 'An unexpected error occurred'
+        : 'حدث خطأ غير متوقع';
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="max-w-md w-full rounded-xl bg-white shadow-sm p-8 text-center">
         <div className="text-4xl mb-4">⚠️</div>
-        <h1 className="text-xl font-bold text-zinc-900 mb-2" lang="ar">
-          حدث خطأ غير متوقع
+        <h1 className="text-xl font-bold text-zinc-900 mb-6" lang={lang}>
+          {msg}
         </h1>
-        <p className="text-zinc-600 mb-1" lang="fr" dir="ltr">
-          Une erreur inattendue s'est produite
-        </p>
-        <p className="text-zinc-600 mb-6" lang="en" dir="ltr">
-          An unexpected error occurred
-        </p>
         <div className="flex gap-2 justify-center">
           <button
             type="button"

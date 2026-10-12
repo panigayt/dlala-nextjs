@@ -839,19 +839,42 @@ function PublishForm({
     return true;
   };
 
-  // Upload new photos to R2: main + w320/w640/w1024/w32 variants (best-effort).
-  // Returns { urls, hashes, thumbs } aligned 1:1 (legacy uploadPhotos parity).
+  // Upload new photos to R2: main + w320/w640/w1024/w32 variants.
+  // Returns { urls, hashes, thumbs, variantsOk } aligned 1:1 (legacy
+  // uploadPhotos parity).
+  // 12 Oct 2026: variant uploads RETRY transient failures (were single-
+  // attempt best-effort, silently swallowed). A photo-changing edit leaves
+  // photoVariants=true on the doc — the field is NOT in the v122/v123
+  // owner-edit allowlist, so the client cannot clear it — and missing
+  // variant files would 404 the derived URLs (BlurUpImage). variantsOk[i]
+  // is false only after all retries failed; the edit flow refuses to save
+  // a photo set it knows is stale.
   const uploadNewPhotos = async (
     list: ProcessedPhoto[],
     uid: string,
     listingId: string,
     idToken: string
-  ): Promise<{ urls: string[]; hashes: string[]; thumbs: (string | null)[] }> => {
+  ): Promise<{ urls: string[]; hashes: string[]; thumbs: (string | null)[]; variantsOk: boolean[] }> => {
     const urls: string[] = [];
     const hashes: string[] = [];
     const thumbs: (string | null)[] = [];
-    if (!list.length) return { urls, hashes, thumbs };
+    const variantsOk: boolean[] = [];
+    if (!list.length) return { urls, hashes, thumbs, variantsOk };
     setProgress(t('progUploading').replace('{x}', '0').replace('{y}', String(list.length)));
+    // 12 Oct 2026: retry helper for variant PUTs — transient R2/network
+    // failures must not silently leave photoVariants=true with no files.
+    // Returns the public URL on success, null after all retries failed.
+    const putWithRetry = async (file: File, key: string): Promise<string | null> => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await uploadToR2(file, key, idToken);
+          return res.publicUrl;
+        } catch {
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+        }
+      }
+      return null;
+    };
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       const ts = Date.now();
@@ -863,33 +886,28 @@ function PublishForm({
       urls.push(publicUrl);
       hashes.push(p.hash || '');
       // Variants: w320 thumb (photo_thumbs content), w640/w1024 heroes, w32 LQIP.
-      // Best-effort — failures are swallowed, never fail publish.
-      const uploadVariant = async (vf: File | null, vprefix: string): Promise<void> => {
-        if (!vf) return;
-        try {
-          await uploadToR2(vf, r2KeyFor(uid, listingId, `${vprefix}_${ts}_${i}.webp`), idToken);
-        } catch { /* variant failed — progressive enhancement */ }
-      };
+      let photoOk = true;
       if (p.thumb) {
-        try {
-          const tr = await uploadToR2(p.thumb, r2KeyFor(uid, listingId, `w320_${ts}_${i}.webp`), idToken);
-          thumbs.push(tr.publicUrl);
-        } catch {
-          thumbs.push(null);
-        }
+        const thumbUrl = await putWithRetry(p.thumb, r2KeyFor(uid, listingId, `w320_${ts}_${i}.webp`));
+        thumbs.push(thumbUrl);
+        if (!thumbUrl) photoOk = false;
       } else {
         thumbs.push(null);
       }
-      await uploadVariant(p.w640, 'w640');
-      await uploadVariant(p.w1024, 'w1024');
-      await uploadVariant(p.lqip, 'w32');
+      const w640Url = p.w640 ? await putWithRetry(p.w640, r2KeyFor(uid, listingId, `w640_${ts}_${i}.webp`)) : '';
+      const w1024Url = p.w1024 ? await putWithRetry(p.w1024, r2KeyFor(uid, listingId, `w1024_${ts}_${i}.webp`)) : '';
+      const w32Url = p.lqip ? await putWithRetry(p.lqip, r2KeyFor(uid, listingId, `w32_${ts}_${i}.webp`)) : '';
+      if (p.w640 && !w640Url) photoOk = false;
+      if (p.w1024 && !w1024Url) photoOk = false;
+      if (p.lqip && !w32Url) photoOk = false;
+      variantsOk.push(photoOk);
       setProgress(
         t('progUploading')
           .replace('{x}', String(i + 1))
           .replace('{y}', String(list.length))
       );
     }
-    return { urls, hashes, thumbs };
+    return { urls, hashes, thumbs, variantsOk };
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -958,6 +976,17 @@ function PublishForm({
         const priceDropped = effPrice < oldPrice && cat === String(cur.categoryId || '');
         // Upload any newly picked photos (with variants + hashes)
         const up = await uploadNewPhotos(photos, user.uid, editId, idToken);
+        // 12 Oct 2026: stale-photoVariants guard. The doc keeps
+        // photoVariants=true — the field is NOT in the v122/v123 owner-edit
+        // allowlist, so this client cannot clear it. If new photos were added
+        // but their variant files are still missing after retries, the
+        // derived variant URLs (BlurUpImage) would 404. Refuse to save the
+        // photo change instead of persisting a known-stale flag (the
+        // just-uploaded mains become orphans; retrying the edit re-uploads).
+        if (photos.length && cur.photoVariants === true && up.variantsOk.some((ok) => !ok)) {
+          fail(t('variantUploadFailed'));
+          return;
+        }
         // Merge: existing kept photos first, then new uploads (legacy mergeEditPhotos)
         const mergedUrls = existingPhotos.map((p) => p.url).concat(up.urls);
         const mergedHashes = existingPhotos.map((p) => p.hash || '').concat(up.hashes);

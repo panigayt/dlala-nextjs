@@ -1555,9 +1555,32 @@ function ChatInner() {
                 className="rounded-lg mb-1"
                 style={{ width: 'auto', height: 'auto', maxHeight: '16rem' }}
                 onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
+                  // 12 Oct 2026: broken chat photos show a visible placeholder
+                  // instead of silently collapsing (was display:none).
+                  const img = e.target as HTMLImageElement;
+                  img.style.display = 'none';
+                  const ph = img
+                    .closest('a')
+                    ?.querySelector<HTMLElement>('[data-chat-photo-fallback]');
+                  if (ph) ph.style.display = 'inline-flex';
                 }}
               />
+              <span
+                data-chat-photo-fallback
+                style={{ display: 'none' }}
+                className="items-center justify-center gap-2 rounded-lg mb-1 bg-black/10 px-6 py-10 text-xs min-w-[12rem]"
+                role="img"
+                aria-label={st('photoLabel')}
+              >
+                <span aria-hidden="true">🖼️</span>
+                <span>
+                  {lang === 'ar'
+                    ? 'تعذّر تحميل الصورة'
+                    : lang === 'fr'
+                      ? 'Image indisponible'
+                      : 'Image unavailable'}
+                </span>
+              </span>
             </a>
           )}
           {p ? (

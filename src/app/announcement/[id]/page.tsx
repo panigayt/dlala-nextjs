@@ -19,6 +19,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
+import { notFound } from 'next/navigation';
 import { fetchAnnouncement, annLocalized, type Announcement } from '@/lib/firestore';
 import { t } from '@/lib/i18n-strings';
 import { getServerLang } from '@/lib/server-lang';
@@ -46,19 +47,40 @@ export async function generateMetadata({
   // (dlala_lang cookie; localStorage is client-only).
   const lang = await getServerLang();
   const suffix = lang === 'ar' ? 'دلالة' : 'Dlala';
+  let a: Announcement | null = null;
+  let fetchFailed = false;
   try {
-    const a = await getAnnouncement(id);
-    // 11 Oct 2026: noindex on inactive/missing (soft-404).
-    if (!a || a.active !== true) {
-      return {
-        title: t('title_announcement', lang),
-        robots: { index: false, follow: false },
-      };
-    }
-    const title = a ? annLocalized(a.title, lang) : '';
+    a = await getAnnouncement(id);
+  } catch {
+    // Transient fetch failure — fall through to the noindex fallback below
+    // (the page renders the error UI itself). A 404 must only be served for
+    // genuinely missing announcements, never for a failed fetch.
+    fetchFailed = true;
+  }
+  // Round 9 (12 Oct 2026): a missing/inactive announcement must be a real
+  // HTTP 404, not a soft-404. notFound() inside the <Suspense> boundary
+  // (AnnouncementDetail) runs after streaming has started, so the response
+  // keeps status 200 (Next.js docs: "The response starts streaming from the
+  // <Suspense> boundary before notFound() runs, so it keeps its 200
+  // status"). Calling notFound() here — generateMetadata runs before
+  // streaming starts — returns a proper 404 with the not-found.tsx
+  // boundary UI. The fetch is already on the critical path (SEO metadata
+  // needs the announcement), so no extra latency is added for valid docs.
+  if ((!a || a.active !== true) && !fetchFailed) notFound();
+  // 11 Oct 2026: noindex on inactive/missing as belt-and-braces (the
+  // not-found boundary also injects noindex); reached only on fetch
+  // failure, where the page keeps its error UI at HTTP 200.
+  if (!a || a.active !== true) {
+    return {
+      title: t('title_announcement', lang),
+      robots: { index: false, follow: false },
+    };
+  }
+  try {
+    const title = annLocalized(a.title, lang);
     const fullTitle = title ? `${title} — ${suffix}` : t('title_announcement', lang);
     // 11 Oct 2026: description + OG tags (share button needs previews).
-    const desc = a ? annLocalized(a.body, lang).slice(0, 160) : '';
+    const desc = annLocalized(a.body, lang).slice(0, 160);
     return {
       title: fullTitle,
       description: desc || undefined,

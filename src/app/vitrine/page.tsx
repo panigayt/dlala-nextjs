@@ -351,12 +351,15 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
                             onChange={() => toggle(a.id)}
                             className="w-5 h-5 accent-emerald-700"
                           />
-                          {thumbOf(a) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={thumbOf(a)} alt="" className="w-12 h-12 rounded-lg object-cover" />
-                          ) : (
-                            <div className="w-12 h-12 rounded-lg bg-zinc-200 flex items-center justify-center text-zinc-400">📷</div>
-                          )}
+                          <div className="relative w-12 h-12 shrink-0">
+                            <div className="absolute inset-0 rounded-lg bg-zinc-200 flex items-center justify-center text-zinc-400">📷</div>
+                            {thumbOf(a) && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={thumbOf(a)} alt="" className="absolute inset-0 w-12 h-12 rounded-lg object-cover"
+                                // 12 Oct 2026: hide broken image so the 📷 placeholder shows.
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            )}
+                          </div>
                           <span className="flex-1 text-sm truncate">{titleOf(a, lang)}</span>
                         </label>
                       );

@@ -407,21 +407,27 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
           <div>
             {/* Hero */}
             <div className="rounded-2xl bg-white shadow-sm overflow-hidden mb-4">
-              {coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverUrl} alt="" className="w-full h-32 object-cover" />
-              ) : (
-                <div className="w-full h-32 bg-gradient-to-l from-emerald-700 to-emerald-500" />
-              )}
-              <div className="p-4 flex items-center gap-3">
-                {logoUrl ? (
+              <div className="relative w-full h-32">
+                <div className="absolute inset-0 bg-gradient-to-l from-emerald-700 to-emerald-500" />
+                {coverUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
-                ) : (
-                  <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-bold">
+                  <img src={coverUrl} alt="" className="absolute inset-0 w-full h-32 object-cover"
+                    // 12 Oct 2026: hide broken image so the gradient placeholder shows.
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                )}
+              </div>
+              <div className="p-4 flex items-center gap-3">
+                <div className="relative w-14 h-14 shrink-0">
+                  <div className="absolute inset-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-bold">
                     {(storeName || '?').charAt(0)}
                   </div>
-                )}
+                  {logoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoUrl} alt="" className="absolute inset-0 w-14 h-14 rounded-full object-cover"
+                      // 12 Oct 2026: hide broken image so the letter placeholder shows.
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  )}
+                </div>
                 <div>
                   <div className="font-bold text-zinc-900">{storeName || user.displayName}</div>
                   <div className="text-xs text-amber-600 font-bold">★ {t('proMerchant')}</div>
@@ -526,11 +532,12 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
                   <div key={a.id} className="rounded-xl border border-zinc-200 overflow-hidden">
                     <a href={`/listing/${a.id}`} className="block">
                       <div className="aspect-[4/3] bg-zinc-100 relative">
-                        {thumbOf(a) ? (
+                        <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+                        {thumbOf(a) && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={thumbOf(a)} alt={titleOf(a, lang)} className="w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+                          <img src={thumbOf(a)} alt={titleOf(a, lang)} className="absolute inset-0 w-full h-full object-cover" loading="lazy"
+                            // 12 Oct 2026: hide broken image so the 📷 placeholder shows.
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         )}
                       </div>
                       <div className="p-3">
@@ -571,21 +578,27 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
               👁 {t('previewNote')}
             </div>
             <div className="rounded-2xl bg-white shadow-sm overflow-hidden mb-4">
-              {coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverUrl} alt="" className="w-full h-40 object-cover" />
-              ) : (
-                <div className="w-full h-40 bg-gradient-to-l from-emerald-700 to-emerald-500" />
-              )}
-              <div className="p-4 flex items-center gap-3">
-                {logoUrl ? (
+              <div className="relative w-full h-40">
+                <div className="absolute inset-0 bg-gradient-to-l from-emerald-700 to-emerald-500" />
+                {coverUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="" className="w-16 h-16 rounded-full object-cover" />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold">
+                  <img src={coverUrl} alt="" className="absolute inset-0 w-full h-40 object-cover"
+                    // 12 Oct 2026: hide broken image so the gradient placeholder shows.
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                )}
+              </div>
+              <div className="p-4 flex items-center gap-3">
+                <div className="relative w-16 h-16 shrink-0">
+                  <div className="absolute inset-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold">
                     {(storeName || '?').charAt(0)}
                   </div>
-                )}
+                  {logoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoUrl} alt="" className="absolute inset-0 w-16 h-16 rounded-full object-cover"
+                      // 12 Oct 2026: hide broken image so the letter placeholder shows.
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  )}
+                </div>
                 <div>
                   <div className="font-bold text-lg text-zinc-900">{storeName}</div>
                   <div className="text-xs text-amber-600 font-bold">★ {t('proMerchant')}</div>
@@ -600,12 +613,13 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
                   href={`/listing/${a.id}`}
                   className="block rounded-xl bg-white shadow-sm overflow-hidden"
                 >
-                  <div className="aspect-[4/3] bg-zinc-100">
-                    {thumbOf(a) ? (
+                  <div className="aspect-[4/3] bg-zinc-100 relative">
+                    <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+                    {thumbOf(a) && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbOf(a)} alt={titleOf(a, lang)} className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+                      <img src={thumbOf(a)} alt={titleOf(a, lang)} className="absolute inset-0 w-full h-full object-cover" loading="lazy"
+                        // 12 Oct 2026: hide broken image so the 📷 placeholder shows.
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     )}
                   </div>
                   <div className="p-3">
@@ -633,10 +647,12 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
             )}
             <label className="block text-sm font-medium text-zinc-700 mb-1">{t('storeCoverLabel')}</label>
             <div className="rounded-lg bg-zinc-100 h-28 mb-2 overflow-hidden">
-              {coverUrl ? (
+              {coverUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverUrl} alt="" className="w-full h-full object-cover" />
-              ) : null}
+                <img src={coverUrl} alt="" className="w-full h-full object-cover"
+                  // 12 Oct 2026: hide broken image so the gray box shows (was broken-image icon).
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              )}
             </div>
             <input
               type="file"
@@ -659,12 +675,15 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
             <label className="block text-sm font-medium text-zinc-700 mb-1">{t('storeLogoLabel')}</label>
             <div className="flex items-center gap-3 mb-4">
-              {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-zinc-200 flex items-center justify-center text-2xl text-zinc-400">{(storeName || '?')[0].toUpperCase()}</div>
-              )}
+              <div className="relative w-14 h-14 shrink-0">
+                <div className="absolute inset-0 rounded-full bg-zinc-200 flex items-center justify-center text-2xl text-zinc-400">{(storeName || '?')[0].toUpperCase()}</div>
+                {logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="" className="absolute inset-0 w-14 h-14 rounded-full object-cover"
+                    // 12 Oct 2026: hide broken image so the letter placeholder shows.
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                )}
+              </div>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
@@ -737,12 +756,15 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
                       }`}>
                         {picked ? idx + 1 : '+'}
                       </span>
-                      {thumbOf(a) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={thumbOf(a)} alt="" className="w-12 h-12 rounded-lg object-cover" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-zinc-200 flex items-center justify-center text-zinc-400">📷</div>
-                      )}
+                      <div className="relative w-12 h-12 shrink-0">
+                        <div className="absolute inset-0 rounded-lg bg-zinc-200 flex items-center justify-center text-zinc-400">📷</div>
+                        {thumbOf(a) && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={thumbOf(a)} alt="" className="absolute inset-0 w-12 h-12 rounded-lg object-cover"
+                            // 12 Oct 2026: hide broken image so the 📷 placeholder shows.
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        )}
+                      </div>
                       <span className="flex-1 text-sm truncate">{titleOf(a, lang)}</span>
                       {picked && (
                         <span className="flex gap-1" onClick={(e) => e.stopPropagation()}>

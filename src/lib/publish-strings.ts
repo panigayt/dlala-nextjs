@@ -76,6 +76,7 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   publishLimitDaily: { ar: "وصلت إلى الحد اليومي للنشر — حاول مجدداً غداً", fr: "Limite quotidienne de publication atteinte — réessayez demain", en: "Daily publishing limit reached — try again tomorrow" },
   publishNetError: { ar: "تعذّر الاتصال — تحقق من الإنترنت وحاول مجدداً", fr: "Connexion impossible — vérifiez internet et réessayez", en: "Connection failed — check your internet and try again" },
   publishUploadTimeout: { ar: "انتهت مهلة رفع الصور — تحقق من الاتصال وحاول مجدداً", fr: "Délai de téléversement dépassé — vérifiez la connexion et réessayez", en: "Photo upload timed out — check connection and retry" },
+  variantUploadFailed: { ar: "تعذّر إنشاء نسخ الصور — تحقق من الاتصال وحاول مجدداً", fr: "Impossible de générer les variantes d'image — vérifiez la connexion et réessayez", en: "Could not generate image variants — check connection and retry" },
   qArea: { ar: "المساحة (م²)", fr: "Surface (m²)", en: "Area (m²)" },
   qAvailability: { ar: "التوفر", fr: "Disponibilité", en: "Availability" },
   qBattery: { ar: "حالة البطارية", fr: "État de la batterie", en: "Battery health" },

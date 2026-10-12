@@ -489,11 +489,12 @@ function FavoritesContent({ user }: { user: CompatUser }) {
                       className="block rounded-xl bg-white shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                     >
                       <div className="relative aspect-[4/3] bg-zinc-100">
-                        {img ? (
+                        <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+                        {img && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={img} alt={listingTitle(live, lang)} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-zinc-300 text-4xl">📷</div>
+                          <img src={img} alt={listingTitle(live, lang)} loading="lazy" className="absolute inset-0 w-full h-full object-cover"
+                            // 12 Oct 2026: hide broken image so the 📷 placeholder shows (was broken-image icon).
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         )}
                         {dropped && (
                           <span className="absolute top-2 start-2 rounded bg-red-600 text-white text-xs px-2 py-1 font-bold">
