@@ -703,7 +703,6 @@ function PublishForm({
       );
       const dropped = done.length - keepIdx.length;
       final = keepIdx.map((ki) => done[ki]);
-      if (dropped > 0) console.log(`[pub] dropped ${dropped} duplicate photo(s) within ad`);
     }
     setPhotos((p) => [...p, ...final].slice(0, MAX_PHOTOS));
     setProgress(null);
@@ -927,7 +926,6 @@ function PublishForm({
       newHashes: photos.map((p) => p.hash).filter(Boolean),
       excludeId: editId || undefined,
     });
-    console.log(`[pub] duplicate check: ${Date.now() - dupT0}ms`);
     setProgress(null);
     if (dup) {
       fail(t(dup === 'photo' ? 'duplicatePhotoWarn' : 'duplicateTitleWarn'));
