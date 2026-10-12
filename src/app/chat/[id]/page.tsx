@@ -270,6 +270,8 @@ function ChatInner() {
   const [showPill, setShowPill] = useState(false);
 
   const clientRef = useRef<FirebaseClient | null>(null);
+  // 11 Oct 2026: phone flow in-flight guard.
+  const phoneBusy = useRef(false);
   const userRef = useRef<CompatUser | null>(null);
   const convRef = useRef<ConvData | null>(null);
   const msgsRef = useRef<Msg[]>([]);
@@ -1086,7 +1088,9 @@ function ChatInner() {
   async function answerPhone(status: 'accepted' | 'declined') {
     const client = clientRef.current;
     const c = convRef.current;
-    if (!client || !c || blockedSendGuard()) return;
+    // 11 Oct 2026: in-flight guard — double-tap double-counted declines.
+    if (!client || !c || blockedSendGuard() || phoneBusy.current) return;
+    phoneBusy.current = true;
     const prevStatus = c.phoneRequestStatus;
     const next = { ...c, phoneRequestStatus: status };
     convRef.current = next;
@@ -1110,6 +1114,8 @@ function ChatInner() {
       convRef.current = rb;
       setConv(rb);
       showToast(st('errorGeneric'));
+    } finally {
+      phoneBusy.current = false;
     }
   }
 
