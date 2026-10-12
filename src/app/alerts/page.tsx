@@ -237,6 +237,24 @@ function notifTitle(n: Notif, t: (k: string) => string, lang: Lang = 'ar'): stri
     // Fallback: use non-empty title so the UI never shows blank.
     return t('newMessage');
   }
+  // 11 Oct 2026: 4 missing templates — were falling back to "new message".
+  const d = (n.data || {}) as Record<string, unknown>;
+  const str = (v: unknown) => String(v == null ? '' : v);
+  if (n.type === 'saved_search_match') {
+    return t('notifSavedSearchMatch')
+      .split('{title}').join(str(d.title))
+      .split('{price}').join(formatPrice(Number(d.price) || 0, lang))
+      .split('{wilaya}').join(str(d.wilaya));
+  }
+  if (n.type === 'new_favorite') {
+    return t('notifNewFavorite').split('{title}').join(str(d.title));
+  }
+  if (n.type === 'phone_request') {
+    return t('notifPhoneRequest').split('{listingTitle}').join(str(d.listingTitle));
+  }
+  if (n.type === 'deal_confirmed') {
+    return t('notifDealConfirmed').split('{name}').join(str(d.name));
+  }
   // 11 Oct 2026: Final fallback — NEVER return blank.
   // Some legacy notifications have empty title and unhandled type.
   const title = n.title || '';
