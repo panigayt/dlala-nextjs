@@ -1602,7 +1602,6 @@ function ChatInner() {
               >
                 {listingChip.photo && (
                   <NextImage
-                    unoptimized
                     src={listingChip.photo}
                     alt=""
                     width={20}

@@ -829,7 +829,10 @@ function PublishForm({
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       const ts = Date.now();
-      const key = r2KeyFor(uid, listingId, `${ts}_${i}.webp`);
+      // 11 Oct 2026: use actual file extension — was hardcoded .webp but
+      // encodePhoto falls back to .jpg on browsers without WebP.
+      const ext = p.file.name.match(/\.\w+$/)?.[0] || '.webp';
+      const key = r2KeyFor(uid, listingId, `${ts}_${i}${ext}`);
       const { publicUrl } = await uploadToR2(p.file, key, idToken);
       urls.push(publicUrl);
       hashes.push(p.hash || '');

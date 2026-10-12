@@ -444,7 +444,6 @@ export default function ConversationsPage() {
                       '📢'
                     ) : li && li.photo ? (
                       <Image
-                        unoptimized
                         src={li.photo}
                         alt=""
                         fill
