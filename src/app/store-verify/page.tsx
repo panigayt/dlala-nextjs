@@ -23,7 +23,8 @@ import {
 } from '@/lib/firebase-client';
 import { WILAYAS } from '@/lib/wilayas';
 import { useLang } from '@/lib/i18n';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 
 function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
   const { t, lang } = useLang();

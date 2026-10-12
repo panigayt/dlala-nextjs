@@ -19,7 +19,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang } from '@/lib/i18n';

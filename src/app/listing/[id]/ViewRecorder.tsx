@@ -21,7 +21,8 @@
 
 import { useEffect } from 'react';
 import { getFirebaseClient } from '@/lib/firebase-client';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 
 function viewDateStr(): string {
   const now = new Date();

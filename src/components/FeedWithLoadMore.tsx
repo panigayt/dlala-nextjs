@@ -18,7 +18,8 @@ import { interleaveWanted, resultsCountText, cardImage, type ListingCard, type V
 import { tasteRankDefault } from '@/lib/taste';
 import { useAuthState } from '@/lib/firebase-client';
 import { useLang } from '@/lib/i18n';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import {
   applyFollowBoost,
   newFromFollows,

@@ -21,7 +21,8 @@ import HomeHeader from '@/components/HomeHeader';
 import TipsTicker from '@/components/TipsTicker';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
 import ListingCardView from '@/components/ListingCardView';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 // Round 166 (0.0.0.39 parity, js/home.js 0.0.0.1m): verified-store gold cards
 // atop filtered results when the text query matches a storeName/@username.
 import StoreMatchCards from '@/app/search/StoreMatchCards';

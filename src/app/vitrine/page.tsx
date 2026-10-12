@@ -24,7 +24,8 @@ import {
   type CompatUser,
 } from '@/lib/firebase-client';
 import { useLang, type Lang } from '@/lib/i18n';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 
 const ACTIVATE_FN_URL =
   'https://europe-west3-dlala-85cea.cloudfunctions.net/activateVitrine';

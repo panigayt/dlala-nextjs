@@ -18,7 +18,8 @@ import {
   CompatUser,
   btnSecondaryCls,
 } from '@/lib/firebase-client';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { formatPrice } from '@/lib/firestore';
 import { useLang, getLang, type Lang } from '@/lib/i18n';
 import { chatSt } from './chat-strings';

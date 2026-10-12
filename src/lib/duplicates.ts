@@ -6,7 +6,8 @@
 // near-duplicate titles (Arabic-aware) or already-used photos in the
 // seller's own live listings of the same category block publish/edit.
 
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import type { CompatFirestore } from '@/lib/firebase-client';
 
 export type DuplicateKind = 'title' | 'photo';

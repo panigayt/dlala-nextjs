@@ -18,7 +18,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
+import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';

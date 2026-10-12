@@ -22,7 +22,8 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
+import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';

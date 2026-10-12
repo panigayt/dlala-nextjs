@@ -9,7 +9,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { getFirebase, withTimeout, type CompatUser } from '@/lib/firebase-compat';
+import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';

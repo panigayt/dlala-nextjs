@@ -14,7 +14,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuthState } from '@/lib/firebase-client';
 import { useLang, type Lang } from '@/lib/i18n';
-import { withTimeout } from '@/lib/firebase-compat';
+import { } from '@/lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { localizedTitle } from '@/lib/ratings';
 import {
   computeStoreAnalytics,
