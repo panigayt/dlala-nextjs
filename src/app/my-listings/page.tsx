@@ -324,9 +324,12 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const resendVerification = useCallback(async () => {
     try {
       await withTimeout(user.sendEmailVerification(), 15000);
-      window.alert(t('verifyEmailBody'));
+      // 12 Oct 2026: inline success (was window.alert).
+      setError(null);
+      setNotice(t('emailSent'));
     } catch {
-      window.alert(t('authConnectionProblem'));
+      setNotice(null);
+      setError(t('authConnectionProblem'));
     }
   }, [user, t]);
 

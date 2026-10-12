@@ -705,7 +705,6 @@ function PublishForm({
         done.map((p) => p.hash),
         [...existingPhotos.map((p) => p.hash), ...photos.map((p) => p.hash)]
       );
-      const dropped = done.length - keepIdx.length;
       final = keepIdx.map((ki) => done[ki]);
     }
     setPhotos((p) => [...p, ...final].slice(0, MAX_PHOTOS));
@@ -922,7 +921,6 @@ function PublishForm({
     // live listings of the same category block publish/edit before any
     // upload happens. Fails open (checkDuplicates returns null) on timeout.
     setProgress(t('progChecking'));
-    const dupT0 = Date.now();
     const dup = await checkDuplicates({
       db: client.db,
       uid: user.uid,
