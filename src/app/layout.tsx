@@ -37,14 +37,22 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // 12 Oct 2026: lang/dir from cookie (was hardcoded ar/rtl, causing FR/EN flash).
-  const cookieStore = await cookies();
-  const lang = cookieStore.get('dlala_lang')?.value || 'ar';
-  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={lang} dir={dir}>
+    <html lang="ar" dir="rtl">
       <head>
+        {/* 12 Oct 2026: pre-paint lang/dir from the dlala_lang cookie.
+            The root layout must stay a SYNC server component — awaiting
+            cookies() here forces every route dynamic and breaks the
+            production build ("/_not-found" + "/account" prerender errors).
+            This inline script runs before first paint, so FR/EN users never
+            see an Arabic-flash; no-JS/crawlers keep the ar/rtl fallback.
+            (Preview CSP allows 'unsafe-inline' for scripts.) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var m=document.cookie.match(/(?:^|;\\s*)dlala_lang=(fr|en|ar)/);var l=m?m[1]:'ar';document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';}catch(e){}`,
+          }}
+        />
         {/* Round 160 — 0.0.0.39 index.html parity: preconnect to the image
             and data hosts so the first card image / Firestore fetch skips
             DNS+TCP+TLS setup (saves ~200-500ms on mobile). */}
