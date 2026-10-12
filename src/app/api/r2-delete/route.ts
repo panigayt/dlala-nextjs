@@ -35,17 +35,21 @@ async function verifyUid(idToken: string): Promise<string | null> {
   const apiKey =
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
   try {
+    // 11 Oct 2026: timeout + disabled-user check (was hung + allowed disabled).
     const verifyRes = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
+        signal: AbortSignal.timeout(8000),
       }
     );
     if (!verifyRes.ok) return null;
     const data = await verifyRes.json();
-    return data?.users?.[0]?.localId || null;
+    const user = data?.users?.[0];
+    if (!user || user.disabled) return null;
+    return user.localId || null;
   } catch {
     return null;
   }
