@@ -28,13 +28,13 @@ export default function GlobalError({
                 onClick={reset}
                 className="rounded-lg bg-emerald-700 px-4 py-2 text-white font-medium"
               >
-                حاول مجددا
+                حاول مجددا / Réessayer / Try again
               </button>
               <a
                 href="/"
                 className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-700"
               >
-                الرئيسية
+                الرئيسية / Accueil / Home
               </a>
             </div>
           </div>

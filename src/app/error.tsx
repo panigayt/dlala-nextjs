@@ -15,7 +15,7 @@ export default function Error({
   }, [error]);
 
   // 11 Oct 2026: dir follows language (was hardcoded rtl).
-  const { lang } = useLang();
+  const { lang, t } = useLang();
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="max-w-md w-full rounded-xl bg-white shadow-sm p-8 text-center">
@@ -35,13 +35,13 @@ export default function Error({
             onClick={reset}
             className="rounded-lg bg-emerald-700 px-4 py-2 text-white font-medium hover:bg-emerald-800"
           >
-            حاول مجددا
+            {t('retry')}
           </button>
           <a
             href="/"
             className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-700 hover:bg-zinc-50"
           >
-            الرئيسية
+            {t('home')}
           </a>
         </div>
       </div>

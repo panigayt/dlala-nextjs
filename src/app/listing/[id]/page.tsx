@@ -176,9 +176,10 @@ export async function generateMetadata({
   }
 }
 
-function NotFoundView() {
+async function NotFoundView() {
+  const lang = await getServerLang();
   return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center" dir="rtl">
+    <div className="max-w-2xl mx-auto px-4 py-16 text-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="text-6xl font-bold text-emerald-700">D</div>
       <h1 className="mt-4 text-4xl font-bold">404</h1>
       <h2 className="mt-2 text-xl" lang="ar" dir="rtl">هذا الإعلان غير موجود</h2>
