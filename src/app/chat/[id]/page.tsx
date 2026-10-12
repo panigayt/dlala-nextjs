@@ -252,6 +252,8 @@ function ChatInner() {
   // 11 Oct 2026: tracks the uploaded R2 URL across the sendPhoto flow so a
   // failed send retains it for retry (was orphaned + retry was a no-op).
   const publicUrlRef = useRef<string | null>(null);
+  // 11 Oct 2026: prevents double-tap duplicate deal confirmations.
+  const dealConfirmInFlightRef = useRef(false);
   const [statusBar, setStatusBar] = useState<{
     mode: 'info' | 'error';
     text: string;
@@ -1167,6 +1169,9 @@ function ChatInner() {
   async function dealConfirmYes() {
     const user = userRef.current;
     if (!user || blockedSendGuard()) return;
+    // 11 Oct 2026: in-flight guard — double-tap sent duplicate requests.
+    if (dealConfirmInFlightRef.current) return;
+    dealConfirmInFlightRef.current = true;
     try {
       const token = await user.getIdToken();
       const ctl = new AbortController();
@@ -1193,6 +1198,8 @@ function ChatInner() {
       showToast(dealConfirmErr(data && data.error));
     } catch {
       showToast(st('errorGeneric'));
+    } finally {
+      dealConfirmInFlightRef.current = false;
     }
   }
 
