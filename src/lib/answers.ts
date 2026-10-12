@@ -10,7 +10,7 @@
 // for listings from either writer.
 
 import { PUB_STR } from './publish-strings';
-import { BRAND_LATIN } from './seo';
+import { BRAND_LATIN, brandLatinName } from './seo';
 import { formatPrice } from './firestore';
 
 // Legacy short key -> q* label key.
@@ -82,7 +82,9 @@ function valueFor(v: unknown, lang: 'ar' | 'fr' | 'en' = 'ar'): string {
   const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
   // Option values (osAndroid, fuelPetrol…) resolve to their label;
   // free text (brand names, numbers) renders as-is. Mirrors answerLabel().
-  // Brand codes (cbToyota…) resolve via BRAND_LATIN.
+  // Brand codes (cbToyota…) resolve via BRAND_LATIN; Other codes via brandLatinName.
+  // 12 Oct 2026: pbOther/cbOther were showing raw code (was missing).
+  if (/^(cb|pb)[A-Z]/.test(s)) return brandLatinName(s, lang);
   if (BRAND_LATIN[s]) return BRAND_LATIN[s];
   return PUB_STR[s]?.[lang] || PUB_STR[s]?.ar || s;
 }
