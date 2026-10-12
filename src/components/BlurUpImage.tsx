@@ -163,7 +163,7 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
       className={className ? `img-blurup ${className}` : 'img-blurup'}
       data-hi={hi}
       data-noretry="1"
-      {...(priority ? { 'data-prio': 'high' } : {})}
+      {...(priority ? { 'data-prio': 'high', fetchpriority: 'high' } : {})}
       loading={eager ? 'eager' : 'lazy'}
       decoding="async"
     />
