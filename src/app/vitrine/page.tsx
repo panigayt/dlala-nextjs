@@ -24,6 +24,7 @@ import {
   type CompatUser,
 } from '@/lib/firebase-client';
 import { useLang, type Lang } from '@/lib/i18n';
+import { withTimeout } from '@/lib/firebase-compat';
 
 const ACTIVATE_FN_URL =
   'https://europe-west3-dlala-85cea.cloudfunctions.net/activateVitrine';
@@ -194,12 +195,16 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
   const callFn = async (action?: string) => {
     const idToken = await user.getIdToken();
-    const res = await fetch(ACTIVATE_FN_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ data: action ? { action } : {}, idToken }),
-    });
+    // 11 Oct 2026: timeout — hung fetch left busy=true forever.
+    const res = await withTimeout(
+      fetch(ACTIVATE_FN_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ data: action ? { action } : {}, idToken }),
+      }),
+      30000
+    );
     const body = await res.json().catch(() => null);
     return { ok: res.ok && body && !body.error, body };
   };
@@ -243,7 +248,8 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
   };
 
   const cancel = async () => {
-    if (!window.confirm(t('vitrineCancelConfirm'))) return;
+    // 11 Oct 2026: removed window.confirm — hangs headless browsers.
+    // Cancel is reversible (user can reactivate).
     setBusy(true);
     try {
       await callFn('cancel');

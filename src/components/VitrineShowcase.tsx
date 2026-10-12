@@ -33,7 +33,7 @@ function MiniProduct({ p }: { p: ListingCard }) {
     <div className="vitrine-mini">
       <Link href={`/listing/${p.id}`} className="vitrine-thumb">
         {img ? (
-          <BlurUpImage listing={p} img={img} alt={cardTitle(p)} />
+          <BlurUpImage listing={p} img={img} alt={cardTitle(p, lang)} />
         ) : (
           <span className="vitrine-thumb-empty" aria-hidden="true">
             📷
@@ -47,7 +47,7 @@ function MiniProduct({ p }: { p: ListingCard }) {
             listingId={p.id}
             sellerId={p.sellerId || ''}
             initialCount={favCount}
-            title={cardTitle(p)}
+            title={cardTitle(p, lang)}
             price={p.price || 0}
             photoUrl={img || ''}
           />
