@@ -146,7 +146,7 @@ export function GuideBreadcrumbs({ items, lang }: { items: Breadcrumb[]; lang?: 
 export function PriceGuideView({ d, lang }: { d: PriceGuideData; lang: GuideLang }) {
   return (
     <div className="guide-page" dir={lang === 'ar' ? 'rtl' : 'ltr'} lang={lang}>
-      <GuideBreadcrumbs items={d.breadcrumbs} />
+      <GuideBreadcrumbs items={d.breadcrumbs} lang={lang} />
       <div dangerouslySetInnerHTML={{ __html: d.bodyHtml }} />
       {/* Per-listing JSON-LD pattern (listing page): crawlers read JSON-LD
           anywhere in the HTML. '<' is escaped by JSON.stringify. */}

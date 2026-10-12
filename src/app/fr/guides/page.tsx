@@ -44,7 +44,7 @@ export default async function GuidesIndexFrPage() {
   const d = renderIndexData(LANG);
   return (
     <div className="guide-page" dir="ltr" lang="fr">
-      <GuideBreadcrumbs items={d.breadcrumbs} />
+      <GuideBreadcrumbs items={d.breadcrumbs} lang="fr" />
       <div dangerouslySetInnerHTML={{ __html: d.bodyHtml }} />
       <script
         type="application/ld+json"

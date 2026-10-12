@@ -130,7 +130,7 @@ export default async function GuideArticleFrPage({
   if (!d) notFound();
   return (
     <div className="guide-page" dir="ltr" lang="fr">
-      <GuideBreadcrumbs items={d.breadcrumbs} />
+      <GuideBreadcrumbs items={d.breadcrumbs} lang="fr" />
       <div dangerouslySetInnerHTML={{ __html: d.bodyHtml }} />
       <script
         type="application/ld+json"
