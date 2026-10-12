@@ -1011,13 +1011,19 @@ async function runSearchPipeline(
 
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   // Sort: legacy fSort (الأحدث / السعر من الأقل / السعر من الأعلى).
-  // A price orderBy with other filters may need a composite index — the
-  // index-error fallback below then sorts client-side.
+  // 12 Oct 2026: Firestore cannot serve a range filter on price together
+  // with orderBy on a DIFFERENT field (createdAt) — the first orderBy must
+  // be the range field, and no composite index can fix that shape. When a
+  // price range is present without an explicit price sort, order by price
+  // server-side (served by the existing index) and restore the newest-first
+  // order client-side below.
   const priceDir =
     f.sort === 'priceAsc' ? 'ASCENDING' : f.sort === 'priceDesc' ? 'DESCENDING' : null;
   const orderBy = priceDir
     ? [{ field: { fieldPath: 'price' }, direction: priceDir }]
-    : [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }];
+    : usePriceRange
+      ? [{ field: { fieldPath: 'price' }, direction: 'ASCENDING' }]
+      : [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }];
   const runQuery = async (useFilters: unknown[]) => {
     const r = await fetch(url, {
       method: 'POST',
@@ -1078,6 +1084,14 @@ async function runSearchPipeline(
       const asc = priceDir === 'ASCENDING';
       docs.sort((a, b) => (asc ? 1 : -1) * ((a.price ?? 0) - (b.price ?? 0)));
     }
+  }
+
+  // 12 Oct 2026 (paired with the orderBy fix above): the server ordered by
+  // price (range field) so the query is index-servable; restore the default
+  // newest-first order here. Skipped when the user explicitly sorts by price
+  // (priceDir) — that order is already correct.
+  if (!priceDir && usePriceRange) {
+    docs.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
   }
 
   // HOM-1 (16 Sep 2026, production parity): keep all-wilayas wanted ads
