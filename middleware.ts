@@ -17,7 +17,7 @@ export function middleware(request: NextRequest) {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' https://www.gstatic.com https://*.googleapis.com`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.r2.dev https://firebasestorage.googleapis.com https://*.googleapis.com",
+    "img-src 'self' data: blob: https://img.dzdlala.com https://*.r2.dev https://firebasestorage.googleapis.com https://*.googleapis.com",
     "connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.r2.dev https://*.r2.cloudflarestorage.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
     "font-src 'self' data:",
     "frame-src 'self'",
