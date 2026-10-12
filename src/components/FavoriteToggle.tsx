@@ -32,7 +32,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
-import { } from '@/lib/firebase-compat';
+// (11 Oct 2026: withTimeout moved to @/lib/timeout — no firebase-compat needed.)
 import { withTimeout } from '@/lib/timeout';
 import { tasteNoteFav } from '@/lib/taste';
 import { authLoginHref } from '@/lib/auth-return';
