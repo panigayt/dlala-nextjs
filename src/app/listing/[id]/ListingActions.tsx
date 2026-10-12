@@ -375,14 +375,15 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         batch.set(trackRef, { createdAt: client.FieldValue.serverTimestamp() });
       }
       await withTimeout(batch.commit(), 15000);
-      if (mounted.current) setFav(!snap.exists);
-      // js/taste.js tasteNoteFav (via js/app.js toggleFavorite): a
-      // successful toggle IS new behavior — the taste stamp refreshes even
-      // before the favorites snapshot does.
-      try {
-        tasteNoteFav(listingId);
-      } catch {
-        /* never break the favorite toggle */
+      const added = !snap.exists;
+      if (mounted.current) setFav(added);
+      // 11 Oct 2026: only on ADD — recording on remove pollutes taste.
+      if (added) {
+        try {
+          tasteNoteFav(listingId);
+        } catch {
+          /* never break the favorite toggle */
+        }
       }
     } catch (e) {
       console.error(e);

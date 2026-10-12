@@ -215,13 +215,14 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
             setFav(added);
           }
         }
-        // js/app.js toggleFavorite parity: a successful toggle IS new
-        // behavior — the taste stamp refreshes even before the favorites
-        // snapshot does. Never breaks the toggle.
-        try {
-          tasteNoteFav(listingId);
-        } catch {
-          /* never break the favorite toggle */
+        // 11 Oct 2026: only on ADD — recording on remove pollutes taste.
+        // (favorites/page.tsx already fixed; this aligns the toggle paths.)
+        if (added) {
+          try {
+            tasteNoteFav(listingId);
+          } catch {
+            /* never break the favorite toggle */
+          }
         }
       } catch (err) {
         console.error(err);
