@@ -33,6 +33,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description: desc,
+    // 12 Oct 2026: canonical for SEO (was missing).
+    alternates: { canonical: 'https://dlala-nextjs.vercel.app/' },
     openGraph: {
       title,
       description: desc,
