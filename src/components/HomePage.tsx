@@ -21,6 +21,7 @@ import HomeHeader from '@/components/HomeHeader';
 import TipsTicker from '@/components/TipsTicker';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
 import ListingCardView from '@/components/ListingCardView';
+import { withTimeout } from '@/lib/firebase-compat';
 // Round 166 (0.0.0.39 parity, js/home.js 0.0.0.1m): verified-store gold cards
 // atop filtered results when the text query matches a storeName/@username.
 import StoreMatchCards from '@/app/search/StoreMatchCards';
@@ -171,9 +172,13 @@ export default function HomePage({
 
   async function fetchFiltered(f: SearchFilters, limit: number) {
     const qs = filtersToQuery(f);
-    const res = await fetch(`/api/search?${qs}${qs ? '&' : ''}limit=${limit}`, {
-      cache: 'no-store',
-    });
+    // 11 Oct 2026: timeout — stuck filter on weak connections.
+    const res = await withTimeout(
+      fetch(`/api/search?${qs}${qs ? '&' : ''}limit=${limit}`, {
+        cache: 'no-store',
+      }),
+      20000
+    );
     if (!res.ok) throw new Error(`search-api-${res.status}`);
     return res.json();
   }

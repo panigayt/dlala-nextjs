@@ -253,7 +253,11 @@ export default function FeedWithLoadMore({
   // (Round 139 fix, extracted so both click-load and background prefetch
   // share the exact same shaping).
   async function fetchFeedPage(offset: number): Promise<FeedPage> {
-    const res = await fetch(`/api/feed?offset=${offset}`, { cache: 'no-store' });
+    // 11 Oct 2026: timeout — stuck load-more on weak connections.
+    const res = await withTimeout(
+      fetch(`/api/feed?offset=${offset}`, { cache: 'no-store' }),
+      20000
+    );
     if (!res.ok) throw new Error(`feed-${res.status}`);
     const page: FeedPage = await res.json();
     const freshRegular: ListingCard[] = (page.regular || []).map((c) => {
