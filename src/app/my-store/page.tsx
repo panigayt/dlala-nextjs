@@ -231,11 +231,17 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
       batch.update(client.db.collection('users').doc(user.uid), {
         vitrineIds: client.FieldValue.arrayRemove(id),
       });
-      // 12 Oct 2026: also prune vitrineSellers registry (was left stale).
-      batch.update(client.db.collection('vitrineSellers').doc(user.uid), {
-        vitrineIds: client.FieldValue.arrayRemove(id),
-      });
+      // 12 Oct 2026 (R7 Team 7): prune vitrineSellers AFTER commit, best-effort.
+      // batch.update() on a missing registry doc would fail the entire
+      // delete (syncVitrineRegistry deletes the doc when ineligible).
       await batch.commit();
+      try {
+        await client.db.collection('vitrineSellers').doc(user.uid).update({
+          vitrineIds: client.FieldValue.arrayRemove(id),
+        });
+      } catch {
+        /* registry doc absent: nothing to prune */
+      }
       // R2 photo cleanup (best-effort) — the server skips non-R2 values
       // and enforces uid ownership; unstored variants are derived server-side.
       try {
