@@ -9,7 +9,7 @@ import {
   MIN_LISTINGS,
 } from '@/lib/model-pages';
 
-const BASE = 'https://dlala-nextjs.vercel.app';
+const BASE = 'https://dzdlala.com';
 
 // Production sitemap (10 Oct 2026 monitor): 1,261 URLs — 1,195 live listing
 // URLs + 66 non-listing URLs. The old code capped listings at 100, so ~1,100
@@ -52,6 +52,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // rolls with the year; the model/category landing pages are still open.
     { url: `${BASE}/guides`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE}/fr/guides`, changeFrequency: 'weekly', priority: 0.7 },
+    // 12 Oct 2026: English guides (Round 8) — same weekly/0.7 as AR/FR.
+    { url: `${BASE}/en/guides`, changeFrequency: 'weekly', priority: 0.7 },
     {
       url: `${BASE}/guides/${priceGuideSlug(priceGuideYear())}`,
       changeFrequency: 'weekly' as const,
@@ -59,6 +61,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: `${BASE}/fr/guides/${priceGuideSlug(priceGuideYear())}`,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    },
+    {
+      url: `${BASE}/en/guides/${priceGuideSlug(priceGuideYear())}`,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     },
@@ -72,6 +79,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     ...GUIDE_SLUGS.filter((slug) => slug !== priceGuideSlug(priceGuideYear())).map((slug) => ({
       url: `${BASE}/fr/guides/${slug}`,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
+    // 12 Oct 2026: English guides (Round 8).
+    ...GUIDE_SLUGS.filter((slug) => slug !== priceGuideSlug(priceGuideYear())).map((slug) => ({
+      url: `${BASE}/en/guides/${slug}`,
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     })),

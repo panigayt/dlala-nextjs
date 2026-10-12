@@ -196,7 +196,7 @@ export function aggregateModelPrices(
 // Format "1 500 000 دج" / "1 500 000 DZD" (Zak's LTR price rule).
 export function fmtDzd(n: unknown, lang: GuideLang): string {
   const grouped = String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return lang === 'fr' ? `${grouped} DZD` : `${grouped} دج`;
+  return lang === 'ar' ? `${grouped} دج` : `${grouped} DZD`;
 }
 
 // Build the live HTML table for one section from aggregated rows.
@@ -205,18 +205,20 @@ export function priceSectionTable(
   lang: GuideLang,
   rowsByModel: Record<string, PriceRow>,
 ): string {
-  const isFr = lang === 'fr';
   const models = PRICE_MODELS.filter((m) => m.section === sectionKey);
   const rows = models
     .map((m) => ({ m, r: rowsByModel[m.key] }))
     .filter(({ r }) => r);
   if (!rows.length) return '';
-  const head = isFr
-    ? `<tr><th>Modèle</th><th>Prix médian</th><th>Fourchette de prix</th><th>Annonces</th></tr>`
-    : `<tr><th>الموديل</th><th>السعر المتوسط</th><th>النطاق السعري</th><th>عدد الإعلانات</th></tr>`;
+  const head =
+    lang === 'fr'
+      ? `<tr><th>Modèle</th><th>Prix médian</th><th>Fourchette de prix</th><th>Annonces</th></tr>`
+      : lang === 'en'
+        ? `<tr><th>Model</th><th>Median price</th><th>Price range</th><th>Listings</th></tr>`
+        : `<tr><th>الموديل</th><th>السعر المتوسط</th><th>النطاق السعري</th><th>عدد الإعلانات</th></tr>`;
   const body = rows
     .map(({ m, r }) => {
-      const name = isFr ? m.fr : m.ar;
+      const name = lang === 'ar' ? m.ar : m.fr;
       const label = m.modelSlug
         ? `<a href="${SITE}/voitures/modeles/${m.modelSlug}">${escHtml(name)}</a>`
         : escHtml(name);
@@ -237,8 +239,8 @@ export interface Faq {
 }
 
 export function priceGuideFaqs(lang: GuideLang): Faq[] {
-  return lang === 'fr'
-    ? [
+  if (lang === 'fr')
+    return [
         {
           q: "D'où viennent ces prix ?",
           a: 'Ces prix sont tirés des annonces publiées sur le site Dlala. Ils sont mis à jour en continu avec chaque nouvelle annonce.',
@@ -251,8 +253,23 @@ export function priceGuideFaqs(lang: GuideLang): Faq[] {
           q: 'Pourquoi certains modèles n’apparaissent-ils pas ?',
           a: 'Aucun modèle n’est affiché avec moins de 5 annonces, afin de garantir la fiabilité du prix médian.',
         },
-      ]
-    : [
+      ];
+  if (lang === 'en')
+    return [
+        {
+          q: 'Where do these prices come from?',
+          a: 'These prices are calculated from listings published on the Dlala website. They are updated continuously with every new listing.',
+        },
+        {
+          q: 'What is the median price?',
+          a: 'It is the middle price of the published listings: half of the listings are cheaper, the other half more expensive. It is barely affected by outlier prices.',
+        },
+        {
+          q: 'Why do some models not appear?',
+          a: 'No model is shown with fewer than 5 listings, to keep the median price reliable.',
+        },
+      ];
+  return [
         {
           q: 'من أين تأتي هذه الأسعار؟',
           a: 'هذه الأسعار مأخوذة من الإعلانات المنشورة في موقع دلالة، وتُحدَّث باستمرار مع كل إعلان جديد.',
@@ -308,11 +325,11 @@ export function renderPriceGuideData({
   body: string;
   stats: PriceStats;
 }): PriceGuideData {
-  const isFr = lang === 'fr';
   const canonical = guideUrl(priceGuideSlug(year), lang);
   const hreflangs: Hreflang[] = [
     { h: 'ar', href: guideUrl(priceGuideSlug(year), 'ar') },
     { h: 'fr', href: guideUrl(priceGuideSlug(year), 'fr') },
+    { h: 'en', href: guideUrl(priceGuideSlug(year), 'en') },
     { h: 'x-default', href: guideUrl(priceGuideSlug(year), 'ar') },
   ];
   const title = String(meta.title || '').replace(/202\d/g, String(year));
@@ -329,42 +346,49 @@ export function renderPriceGuideData({
   // C-R58-1 (0.0.0.33): a segment with no qualifying models must NEVER
   // render an empty section — the explanatory note renders for every
   // empty segment.
+  const emptySegmentNote =
+    lang === 'fr'
+      ? 'Pas encore assez d’annonces pour ce segment — les prix apparaîtront ici dès que 5 annonces seront publiées.'
+      : lang === 'en'
+        ? 'Not enough listings for this segment yet — prices will appear here once 5 listings are published.'
+        : 'لا توجد إعلانات كافية بعد لهذه الفئة — ستظهر الأسعار هنا فور توفر 5 إعلانات.';
   articleHtml = articleHtml.replace(
     /<p>&lt;!-- LIVE-PRICES:([a-z]+) --&gt;<\/p>/g,
     (mm: string, key: string) => {
       const t = priceSectionTable(key, lang, rowsByModel);
       return (
         t ||
-        `<p class="live-note">${
-          isFr
-            ? 'Pas encore assez d’annonces pour ce segment — les prix apparaîtront ici dès que 5 annonces seront publiées.'
-            : 'لا توجد إعلانات كافية بعد لهذه الفئة — ستظهر الأسعار هنا فور توفر 5 إعلانات.'
-        }</p>`
+        `<p class="live-note">${emptySegmentNote}</p>`
       );
     },
   );
   const updatedNote = live
     ? `<p class="live-note">${
-        isFr
+        lang === 'fr'
           ? `Données calculées à partir de ${stats.totalAds} annonces · mises à jour en continu.`
-          : `محسوبة من ${stats.totalAds} إعلان · تُحدَّث باستمرار.`
+          : lang === 'en'
+            ? `Calculated from ${stats.totalAds} listings · updated continuously.`
+            : `محسوبة من ${stats.totalAds} إعلان · تُحدَّث باستمرار.`
       }</p>`
     : `<p class="live-note">${
-        isFr
+        lang === 'fr'
           ? 'Les prix sont en cours de collecte à partir des annonces publiées — ils apparaîtront ici automatiquement.'
-          : 'الأسعار قيد الجمع من الإعلانات المنشورة — ستظهر هنا تلقائياً.'
+          : lang === 'en'
+            ? 'Prices are being collected from published listings — they will appear here automatically.'
+            : 'الأسعار قيد الجمع من الإعلانات المنشورة — ستظهر هنا تلقائياً.'
       }</p>`;
   articleHtml = articleHtml.replace(/<p>&lt;!-- LIVE-UPDATED --&gt;<\/p>/g, () => updatedNote);
 
   const faqs = priceGuideFaqs(lang);
+  const faqHeading = lang === 'fr' ? 'Questions fréquentes' : lang === 'en' ? 'Frequently asked questions' : 'أسئلة شائعة';
   const faqHtml =
-    `<h2>${isFr ? 'Questions fréquentes' : 'أسئلة شائعة'}</h2>\n` +
+    `<h2>${faqHeading}</h2>\n` +
     faqs.map((f) => `<h3>${escHtml(f.q)}</h3>\n<p>${escHtml(f.a)}</p>`).join('\n');
 
   const modelItems = PRICE_MODELS.filter((m) => rowsByModel[m.key]).map((m, i) => ({
     '@type': 'ListItem',
     position: i + 1,
-    name: isFr ? m.fr : m.ar,
+    name: lang === 'ar' ? m.ar : m.fr,
     url: m.modelSlug ? `${SITE}/voitures/modeles/${m.modelSlug}` : canonical,
   }));
   const jsonLd = JSON.stringify([
@@ -385,7 +409,7 @@ export function renderPriceGuideData({
       '@context': 'https://schema.org',
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: isFr ? 'Accueil' : 'الرئيسية', item: SITE + '/' },
+        { '@type': 'ListItem', position: 1, name: lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية', item: SITE + '/' },
         { '@type': 'ListItem', position: 2, name: title, item: canonical },
       ],
     },
@@ -405,18 +429,22 @@ export function renderPriceGuideData({
       })),
     },
   ]);
+  const pgReadingTime = lang === 'fr' ? 'min de lecture' : lang === 'en' ? 'min read' : 'دقائق قراءة';
+  const pgCta = lang === 'fr' ? 'Voir les annonces sur DLALA' : lang === 'en' ? 'Browse listings on DLALA' : 'تصفح الإعلانات على دلالة';
+  const pgHome = lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية';
+  const pgGuides = lang === 'fr' ? 'Guides' : lang === 'en' ? 'Guides' : 'الأدلة';
   const bodyHtml =
     `<h1>${escHtml(title)}</h1>\n` +
-    `<p><small>${escHtml(meta.category || '')} · ${escHtml(meta.reading_time || '')} ${isFr ? 'min de lecture' : 'دقائق قراءة'}</small></p>\n` +
+    `<p><small>${escHtml(meta.category || '')} · ${escHtml(meta.reading_time || '')} ${pgReadingTime}</small></p>\n` +
     ctaTop(lang) +
     '\n' +
     articleHtml +
     '\n' +
     faqHtml +
-    `\n<p><a href="${SITE}/" class="cta">${isFr ? 'Voir les annonces sur DLALA' : 'تصفح الإعلانات على دلالة'}</a></p>`;
+    `\n<p><a href="${SITE}/" class="cta">${pgCta}</a></p>`;
   const breadcrumbs: Breadcrumb[] = [
-    { label: isFr ? 'Accueil' : 'الرئيسية', href: SITE + '/' },
-    { label: isFr ? 'Guides' : 'الأدلة', href: indexUrl(lang) },
+    { label: pgHome, href: SITE + '/' },
+    { label: pgGuides, href: indexUrl(lang) },
     { label: title },
   ];
   return {
@@ -442,7 +470,7 @@ export function loadPriceGuide(
 ): { meta: Record<string, string>; body: string; slug: string } | null {
   for (let y = year; y >= 2026; y--) {
     const slug = priceGuideSlug(y);
-    const fname = lang === 'fr' ? `${slug}.fr.md` : `${slug}.md`;
+    const fname = lang === 'fr' ? `${slug}.fr.md` : lang === 'en' ? `${slug}.en.md` : `${slug}.md`;
     const fpath = path.join(PRICE_CONTENT_DIR, fname);
     if (!fs.existsSync(fpath)) continue;
     const { meta, body } = parseFrontmatter(fs.readFileSync(fpath, 'utf8'));

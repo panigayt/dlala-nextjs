@@ -340,7 +340,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       return;
     }
     if (user.uid === sellerId) {
-      window.alert(t('ownFavorite'));
+      showToast(setToast, t('ownFavorite'), toastTimer);
       return;
     }
     if (favInFlight.current) return; // same class as M6 fix in toggleFavorite
@@ -566,7 +566,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       }
       const l = d.data() as Record<string, unknown>;
       if (l.sellerId !== user.uid) {
-        window.alert(t('errorGeneric'));
+        showToast(setToast, t('errorGeneric'), toastTimer);
         return;
       }
       const batch = client.db.batch();
@@ -622,7 +622,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       router.push('/');
     } catch (e) {
       console.error(e);
-      window.alert(t('errorGeneric'));
+      showToast(setToast, t('errorGeneric'), toastTimer);
     } finally {
       if (mounted.current) setDeleting(false);
     }

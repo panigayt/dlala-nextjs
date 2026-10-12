@@ -34,13 +34,13 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description: desc,
     // 12 Oct 2026: canonical for SEO (was missing).
-    alternates: { canonical: 'https://dlala-nextjs.vercel.app/' },
+    alternates: { canonical: 'https://dzdlala.com/' },
     openGraph: {
       title,
       description: desc,
       type: 'website',
-      url: 'https://dlala-nextjs.vercel.app/',
-      images: [{ url: 'https://dlala-nextjs.vercel.app/icon.png' }],
+      url: 'https://dzdlala.com/',
+      images: [{ url: 'https://dzdlala.com/icon.png' }],
     },
     twitter: {
       card: 'summary',

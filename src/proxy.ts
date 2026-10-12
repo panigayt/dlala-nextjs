@@ -14,25 +14,26 @@ import type { NextRequest } from 'next/server';
 
 export function proxy(req: NextRequest) {
   const m = req.nextUrl.pathname.match(
-    /^\/(?:(fr)\/)?guides\/(prix-voitures-occasion-(\d{4}))$/,
+    /^\/(?:(fr|en)\/)?guides\/(prix-voitures-occasion-(\d{4}))$/,
   );
   if (m) {
     const year = new Date().getFullYear();
     if (Number(m[3]) !== year) {
       const url = req.nextUrl.clone();
-      url.pathname = `/${m[1] ? 'fr/' : ''}guides/prix-voitures-occasion-${year}`;
+      url.pathname = `/${m[1] ? m[1] + '/' : ''}guides/prix-voitures-occasion-${year}`;
       return NextResponse.redirect(url, 301);
     }
   }
   // Round 134: French UI users get the French guides. /guides is the Arabic
   // canonical; /fr/guides is the French one. The dlala_lang cookie (set by
   // the client on language switch) drives the redirect at request time.
+  // 12 Oct 2026: same for English UI users → /en/guides.
   const langCookie = req.cookies.get('dlala_lang')?.value;
-  if (langCookie === 'fr') {
+  if (langCookie === 'fr' || langCookie === 'en') {
     const gm = req.nextUrl.pathname.match(/^\/guides(\/.*)?$/);
     if (gm) {
       const url = req.nextUrl.clone();
-      url.pathname = `/fr/guides${gm[1] || ''}`;
+      url.pathname = `/${langCookie}/guides${gm[1] || ''}`;
       return NextResponse.redirect(url, 307);
     }
   }
@@ -43,7 +44,10 @@ export const config = {
   matcher: [
     '/guides/prix-voitures-occasion-:year(\\d+)',
     '/fr/guides/prix-voitures-occasion-:year(\\d+)',
+    '/en/guides/prix-voitures-occasion-:year(\\d+)',
     '/guides',
     '/guides/:slug*',
+    '/en/guides',
+    '/en/guides/:slug*',
   ],
 };

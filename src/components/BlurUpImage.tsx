@@ -112,6 +112,9 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
     installBlurUpHandler();
   }, []);
   const isDesktop = useSyncExternalStore(subscribeDesktopWidth, getDesktopWidth, () => false);
+  // Rules of Hooks (12 Oct 2026): this must be unconditional — inside the
+  // !lqip branch the hook order shifted when lqip changed between renders.
+  const [broken, setBroken] = useState(false);
 
   const lqip = lqipUrlFor(listing);
   // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
@@ -120,7 +123,6 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
   if (!lqip) {
     // No derivable LQIP (old listings, non-variant URLs): today's behavior.
     // 12 Oct 2026: on broken image, replace with placeholder div (was display:none leaving blank).
-    const [broken, setBroken] = useState(false);
     if (broken) {
       return <div className={`${className} bg-zinc-200 flex items-center justify-center`} aria-label={alt} />;
     }

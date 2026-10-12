@@ -14,18 +14,20 @@
 // profile card, infos tab via useLang(); js/i18n.js onLangChange parity;
 // same pattern as the home page Round 107 and search Round 109).
 
-// 12 Oct 2026: noindex for nonexistent sellers (was crawlable soft-404).
+// 12 Oct 2026: missing seller → real HTTP 404 via notFound() (pre-streaming;
+// notFound() inside <Suspense> keeps status 200 — see listing page fix).
 export async function generateMetadata({ params }: { params: Promise<{ uid: string }> }) {
   const { uid } = await params;
   const seller = await getSeller(uid);
   if (!seller) {
-    return { title: 'DLALA', robots: { index: false, follow: false } };
+    notFound();
   }
   return { title: `DLALA — ${seller.name || 'Seller'}` };
 }
 
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
+import { notFound } from 'next/navigation';
 import SellerPage from '@/components/SellerPage';
 import {
   fetchSeller,
@@ -84,13 +86,21 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
   let listings: ListingCard[] = [];
   let ratings: SellerRating[] | null = null;
   let ratingsFailed = false;
+  let sellerFailed = false;
   try {
     const [s, ls] = await Promise.all([getSeller(uid), getSellerListings(uid)]);
     seller = s;
     listings = ls;
   } catch {
-    // Missing seller renders the trilingual 404 inside <SellerPage>.
-    seller = null;
+    // Fetch failure: render the in-page error view (not a 404 — a transient
+    // error must not tell crawlers the profile is gone).
+    sellerFailed = true;
+  }
+
+  // Round 8: missing seller → real HTTP 404 via the root not-found boundary
+  // (trilingual 404 page). Same pattern as src/app/listing/[id]/page.tsx.
+  if (!seller && !sellerFailed) {
+    notFound();
   }
 
   if (seller) {

@@ -23,6 +23,7 @@
 //   skipped on metered/2G.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent, Ref } from 'react';
 import {
   LB_SWIPE_MIN,
   LB_TAP_MAX_DELAY,
@@ -44,6 +45,70 @@ import {
   type ConnectionLike,
 } from './gallery-prewarm';
 import { useLang } from '@/lib/i18n';
+
+// Round 8 Team 10: broken-image fallback chain for every gallery slot
+// (hero, thumbnails, lightbox). Tries each candidate URL once, in order —
+// primary, then the full photo / listing card image — then renders a
+// neutral tile instead of a broken-image icon. Each stage is attempted
+// exactly once, so a dead URL can never loop. The parent remounts via
+// key={primary} whenever the photo changes, which resets the chain for the
+// new photo. Zoom / swipe / selection are untouched: in the lightbox the
+// stage advances swap src on the SAME <img> element (the zoom ref keeps
+// pointing at it), and all touch/keyboard handlers live on the overlay,
+// not the image.
+function SafeImg({
+  candidates,
+  alt,
+  className,
+  tileClassName,
+  imgRef,
+  onDoubleClick,
+  loading,
+  fetchPriority,
+  decoding,
+}: {
+  candidates: string[];
+  alt: string;
+  className?: string;
+  tileClassName?: string;
+  imgRef?: Ref<HTMLImageElement>;
+  onDoubleClick?: (e: ReactMouseEvent<HTMLImageElement>) => void;
+  loading?: 'eager' | 'lazy';
+  fetchPriority?: 'high' | 'low' | 'auto';
+  decoding?: 'async' | 'sync' | 'auto';
+}) {
+  const uniq = candidates.filter((c, i) => !!c && candidates.indexOf(c) === i);
+  const [failed, setFailed] = useState(0);
+  const src = failed < uniq.length ? uniq[failed] : '';
+  if (!src) {
+    return (
+      <div
+        role="img"
+        aria-label={alt}
+        className={
+          (tileClassName || className || '') +
+          ' flex items-center justify-center bg-zinc-100 text-zinc-300 select-none'
+        }
+      >
+        <span className="text-5xl">📷</span>
+      </div>
+    );
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      ref={imgRef}
+      src={src}
+      alt={alt}
+      className={className}
+      loading={loading}
+      fetchPriority={fetchPriority}
+      decoding={decoding}
+      onDoubleClick={onDoubleClick}
+      onError={() => setFailed((f) => f + 1)}
+    />
+  );
+}
 
 export default function Gallery({
   photos,
@@ -318,13 +383,17 @@ export default function Gallery({
         aria-label={t('openPhotoViewer')}
         className="block w-full cursor-zoom-in"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={shownSrc}
+        {/* Round 8 Team 10: broken-image fallback chain (primary →
+            listing card image → neutral tile). key={shownSrc} resets the
+            chain whenever the photo — or the probe-chain upgrade — changes. */}
+        <SafeImg
+          key={shownSrc}
+          candidates={[shownSrc, fallback]}
           alt={`${title} — ${t('photo')} ${sel + 1}/${all.length}`}
           className={
             'w-full aspect-[4/3] object-cover g-hero' + (shownSharp ? '' : ' blurred')
           }
+          tileClassName="w-full aspect-[4/3]"
           fetchPriority="high"
           decoding="async"
         />
@@ -344,15 +413,18 @@ export default function Gallery({
               }
             >
               {/* 11 Oct 2026: only first thumb eager — 8 high-priority requests
-                  competed with hero on weak connections. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={thumbs[i] || p}
+                  competed with hero on weak connections.
+                  Round 8 Team 10: broken-image fallback chain (strip thumb →
+                  full photo → listing card image → neutral tile). */}
+              <SafeImg
+                key={thumbs[i] || p}
+                candidates={[thumbs[i] || p, p, fallback]}
                 alt=""
                 loading={i === 0 ? "eager" : "lazy"}
                 fetchPriority={i === 0 ? "high" : "low"}
                 decoding="async"
                 className="w-20 h-20 object-cover"
+                tileClassName="w-20 h-20"
               />
             </button>
           ))}
@@ -404,12 +476,17 @@ export default function Gallery({
               </button>
             </>
           )}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={imgRef}
-            src={all[lbIdx]}
+          {/* Round 8 Team 10: broken-image fallback chain (full photo →
+              listing card image → neutral tile). Stage advances swap src on
+              the SAME element, so the zoom ref (LBZ-1) keeps working and the
+              overlay's touch/keyboard handlers are unaffected. */}
+          <SafeImg
+            key={all[lbIdx]}
+            candidates={[all[lbIdx], fallback]}
             alt={`${title} — ${t('photo')} ${lbIdx + 1}/${all.length}`}
             className="max-w-full max-h-full object-contain"
+            tileClassName="w-[min(90vw,640px)] aspect-[4/3]"
+            imgRef={imgRef}
             decoding="async"
             // LBZ-1: double-click (desktop) toggles zoom at the pointer.
             onDoubleClick={(e) => {

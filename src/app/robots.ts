@@ -8,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
       // 11 Oct 2026: added /search and /publish — thin/form content.
       disallow: ['/api/', '/chat/', '/conversations', '/account', '/settings', '/search', '/publish'],
     },
-    sitemap: 'https://dlala-nextjs.vercel.app/sitemap.xml',
+    sitemap: 'https://dzdlala.com/sitemap.xml',
   };
 }

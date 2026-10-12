@@ -27,12 +27,12 @@ import { getServerLang } from '@/lib/server-lang';
 import SearchPage from '@/components/SearchPage';
 
 // Round 133: <title> follows the reader's language (dlala_lang cookie;
-// localStorage is client-only). Legacy js/app.js PAGE_TITLES has no search
-// key — pageTitleKey() falls back to title_home, mirrored here.
+// localStorage is client-only). 12 Oct 2026 (Round 8): dedicated
+// title_search — the page must not read "Dlala — Home".
 export async function generateMetadata(): Promise<Metadata> {
   // 11 Oct 2026: noindex — query-param search URLs are thin content.
   return {
-    title: t('title_home', await getServerLang()),
+    title: t('title_search', await getServerLang()),
     robots: { index: false, follow: false },
   };
 }

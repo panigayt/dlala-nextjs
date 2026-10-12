@@ -242,7 +242,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         }
         const l = snap.data();
         if (l.sellerId !== user.uid) {
-          window.alert(t('errorGeneric'));
+          // 12 Oct 2026: inline error (was window.alert).
+          setError(t('errorGeneric'));
           return;
         }
         const title = listingTitle(l, lang);
@@ -337,14 +338,20 @@ function MyListingsContent({ user }: { user: CompatUser }) {
     try {
       await withTimeout(user.reload(), 15000);
     } catch {
-      window.alert(t('authConnectionProblem'));
+      // 12 Oct 2026: inline error (was window.alert).
+      setNotice(null);
+      setError(t('authConnectionProblem'));
       return;
     }
     // Re-check via fresh auth state — reload the page if now verified.
     const fb = await getFirebase().catch(() => null);
     const cu = fb?.auth().currentUser;
     if (cu && cu.emailVerified) window.location.reload();
-    else window.alert(t('stillNotVerified'));
+    else {
+      // 12 Oct 2026: inline info (was window.alert).
+      setError(null);
+      setNotice(t('stillNotVerified'));
+    }
   }, [user, t]);
 
   return (

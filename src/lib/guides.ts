@@ -15,7 +15,7 @@ import path from 'path';
 
 import { SITE } from './seo';
 
-export type GuideLang = 'ar' | 'fr';
+export type GuideLang = 'ar' | 'fr' | 'en';
 
 const CONTENT_DIR = path.join(process.cwd(), 'src', 'lib', 'guides-content');
 
@@ -167,7 +167,7 @@ export interface LoadedGuide {
 
 export function loadGuide(slug: string, lang: GuideLang): LoadedGuide | null {
   if (!(GUIDE_SLUGS as readonly string[]).includes(slug)) return null;
-  const fname = lang === 'fr' ? `${slug}.fr.md` : `${slug}.md`;
+  const fname = lang === 'fr' ? `${slug}.fr.md` : lang === 'en' ? `${slug}.en.md` : `${slug}.md`;
   const fpath = path.join(CONTENT_DIR, fname);
   if (!fs.existsSync(fpath)) return null;
   const { meta, body } = parseFrontmatter(fs.readFileSync(fpath, 'utf8'));
@@ -187,18 +187,26 @@ export function listGuides(lang: GuideLang): LoadedGuide[] {
 // URL helpers — VERBATIM from the Cloud Function (SITE = port base).
 // ---------------------------------------------------------------------------
 export function guideUrl(slug: string, lang: GuideLang): string {
-  return lang === 'fr' ? `${SITE}/fr/guides/${slug}` : `${SITE}/guides/${slug}`;
+  return lang === 'en'
+    ? `${SITE}/en/guides/${slug}`
+    : lang === 'fr'
+      ? `${SITE}/fr/guides/${slug}`
+      : `${SITE}/guides/${slug}`;
 }
 
 export function indexUrl(lang: GuideLang): string {
-  return lang === 'fr' ? `${SITE}/fr/guides` : `${SITE}/guides`;
+  return lang === 'en' ? `${SITE}/en/guides` : lang === 'fr' ? `${SITE}/fr/guides` : `${SITE}/guides`;
 }
 
 // Top CTA banner (design 2, Zak-approved 28 Sep 2026) — VERBATIM.
 export function ctaTop(lang: GuideLang): string {
-  const isFr = lang === 'fr';
-  const head = isFr ? 'Découvrez toutes les annonces sur Dlala' : 'تصفح موقع دلالة و اكتشف كل الاعلانات';
-  const btn = isFr ? 'Cliquez ici' : 'اضغط هنا';
+  const head =
+    lang === 'fr'
+      ? 'Découvrez toutes les annonces sur Dlala'
+      : lang === 'en'
+        ? 'Browse Dlala and discover all listings'
+        : 'تصفح موقع دلالة و اكتشف كل الاعلانات';
+  const btn = lang === 'fr' ? 'Cliquez ici' : lang === 'en' ? 'Click here' : 'اضغط هنا';
   return `<div class="cta-top"><span class="h">${escHtml(head)}</span><a class="b" href="${SITE}/">${escHtml(btn)}</a></div>`;
 }
 
@@ -232,11 +240,11 @@ export interface GuidePageData {
 export function renderArticleData(slug: string, lang: GuideLang): GuidePageData | null {
   const g = loadGuide(slug, lang);
   if (!g) return null;
-  const isFr = lang === 'fr';
   const canonical = guideUrl(slug, lang);
   const hreflangs: Hreflang[] = [
     { h: 'ar', href: guideUrl(slug, 'ar') },
     { h: 'fr', href: guideUrl(slug, 'fr') },
+    { h: 'en', href: guideUrl(slug, 'en') },
     { h: 'x-default', href: guideUrl(slug, 'ar') },
   ];
   // The page shell already renders the frontmatter title as the single <h1>;
@@ -249,7 +257,7 @@ export function renderArticleData(slug: string, lang: GuideLang): GuidePageData 
     .filter((r) => r.slug !== slug && r.meta.category === g.meta.category)
     .slice(0, 3);
   const relatedHtml = related.length
-    ? `<h2>${isFr ? 'Guides liés' : 'أدلة ذات صلة'}</h2>\n<ul>` +
+    ? `<h2>${lang === 'fr' ? 'Guides liés' : lang === 'en' ? 'Related guides' : 'أدلة ذات صلة'}</h2>\n<ul>` +
       related.map((r) => `<li><a href="${guideUrl(r.slug, lang)}">${escHtml(r.meta.title)}</a></li>`).join('\n') +
       `</ul>`
     : '';
@@ -266,15 +274,19 @@ export function renderArticleData(slug: string, lang: GuideLang): GuidePageData 
     image: `${SITE}/icon-512.png`,
     publisher: { '@type': 'Organization', name: 'DLALA', url: SITE },
   });
+  const readingTime = lang === 'fr' ? 'min de lecture' : lang === 'en' ? 'min read' : 'دقائق قراءة';
+  const ctaSee = lang === 'fr' ? 'Voir les annonces sur DLALA' : lang === 'en' ? 'Browse listings on DLALA' : 'تصفح الإعلانات على دلالة';
   const bodyHtml =
     `<h1>${escHtml(g.meta.title)}</h1>\n` +
-    `<p><small>${escHtml(g.meta.category || '')} · ${escHtml(g.meta.reading_time || '')} ${isFr ? 'min de lecture' : 'دقائق قراءة'}</small></p>\n` +
+    `<p><small>${escHtml(g.meta.category || '')} · ${escHtml(g.meta.reading_time || '')} ${readingTime}</small></p>\n` +
     ctaTop(lang) + '\n' +
     articleHtml + '\n' + relatedHtml +
-    `\n<p><a href="${SITE}/" class="cta">${isFr ? 'Voir les annonces sur DLALA' : 'تصفح الإعلانات على دلالة'}</a></p>`;
+    `\n<p><a href="${SITE}/" class="cta">${ctaSee}</a></p>`;
+  const homeLabel = lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية';
+  const guidesLabel = lang === 'fr' ? 'Guides' : lang === 'en' ? 'Guides' : 'الأدلة';
   const breadcrumbs: Breadcrumb[] = [
-    { label: isFr ? 'Accueil' : 'الرئيسية', href: SITE + '/' },
-    { label: isFr ? 'Guides' : 'الأدلة', href: indexUrl(lang) },
+    { label: homeLabel, href: SITE + '/' },
+    { label: guidesLabel, href: indexUrl(lang) },
     { label: g.meta.title },
   ];
   return {
@@ -291,21 +303,26 @@ export function renderArticleData(slug: string, lang: GuideLang): GuidePageData 
 
 export function renderIndexData(lang: GuideLang): GuidePageData {
   const guides = listGuides(lang);
-  const isFr = lang === 'fr';
-  const title = isFr ? "Guides d\u2019achat | DLALA" : 'أدلة الشراء | دلالة';
-  const description = isFr
-    ? 'Guides pratiques pour acheter en toute confiance en Algérie : voitures d\u2019occasion, téléphones, prix du marché, et comment éviter les arnaques.'
-    : 'أدلة عملية للشراء بثقة في الجزائر: السيارات المستعملة، الهواتف، أسعار السوق، وكيفية تجنب النصب.';
+  const title =
+    lang === 'fr' ? "Guides d\u2019achat | DLALA" : lang === 'en' ? 'Buying guides | DLALA' : 'أدلة الشراء | دلالة';
+  const description =
+    lang === 'fr'
+      ? 'Guides pratiques pour acheter en toute confiance en Algérie : voitures d\u2019occasion, téléphones, prix du marché, et comment éviter les arnaques.'
+      : lang === 'en'
+        ? 'Practical guides for buying with confidence in Algeria: used cars, phones, market prices, and how to avoid scams.'
+        : 'أدلة عملية للشراء بثقة في الجزائر: السيارات المستعملة، الهواتف، أسعار السوق، وكيفية تجنب النصب.';
   const canonical = indexUrl(lang);
   const hreflangs: Hreflang[] = [
     { h: 'ar', href: indexUrl('ar') },
     { h: 'fr', href: indexUrl('fr') },
+    { h: 'en', href: indexUrl('en') },
     { h: 'x-default', href: indexUrl('ar') },
   ];
+  const minLabel = lang === 'fr' ? 'min' : lang === 'en' ? 'min' : 'دقائق';
   const cards = guides.map((g) =>
     `<article><h2><a href="${guideUrl(g.slug, lang)}">${escHtml(g.meta.title)}</a></h2>` +
     `<p>${escHtml(g.meta.description)}</p>` +
-    `<p><small>${escHtml(g.meta.category || '')} · ${escHtml(g.meta.reading_time || '')} ${isFr ? 'min' : 'دقائق'}</small></p></article>`
+    `<p><small>${escHtml(g.meta.category || '')} · ${escHtml(g.meta.reading_time || '')} ${minLabel}</small></p></article>`
   ).join('\n<hr>\n');
   const jsonLd = JSON.stringify({
     '@context': 'https://schema.org',
@@ -315,10 +332,14 @@ export function renderIndexData(lang: GuideLang): GuidePageData {
     url: canonical,
     inLanguage: lang,
   });
-  const bodyHtml = `<h1>${escHtml(isFr ? "Guides d\u2019achat" : 'أدلة الشراء')}</h1>\n<p>${escHtml(description)}</p>\n<p><a href="${SITE}/" class="cta">${isFr ? 'Parcourir les annonces DLALA en toute sécurité' : 'تصفح إعلانات دلالة بأمان'}</a></p>\n${cards}`;
+  const h1 = lang === 'fr' ? "Guides d\u2019achat" : lang === 'en' ? 'Buying guides' : 'أدلة الشراء';
+  const ctaBrowse = lang === 'fr' ? 'Parcourir les annonces DLALA en toute sécurité' : lang === 'en' ? 'Browse DLALA listings safely' : 'تصفح إعلانات دلالة بأمان';
+  const bodyHtml = `<h1>${escHtml(h1)}</h1>\n<p>${escHtml(description)}</p>\n<p><a href="${SITE}/" class="cta">${ctaBrowse}</a></p>\n${cards}`;
+  const homeLabel = lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية';
+  const guidesLabel = lang === 'fr' ? 'Guides' : lang === 'en' ? 'Guides' : 'الأدلة';
   const breadcrumbs: Breadcrumb[] = [
-    { label: isFr ? 'Accueil' : 'الرئيسية', href: SITE + '/' },
-    { label: isFr ? 'Guides' : 'الأدلة' },
+    { label: homeLabel, href: SITE + '/' },
+    { label: guidesLabel },
   ];
   return { title, description, canonical, hreflangs, jsonLd, bodyHtml, breadcrumbs, meta: {} };
 }

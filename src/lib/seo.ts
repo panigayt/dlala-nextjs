@@ -19,9 +19,9 @@
 // NOTE: crawlers that don't run JS (WhatsApp/FB/Twitter) need a server
 // renderer for link previews — same honest limit as legacy.
 
-// Canonical site base. Must match the BASE in src/app/sitemap.ts
-// (final domain is dzdlala.com; this preview deploys to vercel).
-export const SITE = 'https://dlala-nextjs.vercel.app';
+// Canonical site base (production domain). Must match the BASE in
+// src/app/sitemap.ts.
+export const SITE = 'https://dzdlala.com';
 
 import { t, type Lang } from './i18n-strings';
 

@@ -163,11 +163,31 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  const { id } = await params;
+  let listing: ListingDetail | null = null;
+  let fetchFailed = false;
   try {
-    const { id } = await params;
-    const listing = await getListing(id);
-    // 11 Oct 2026: noindex on 404 — deleted listings must not be indexed.
-    if (!listing) return { title: 'DLALA', robots: { index: false, follow: false } };
+    listing = await getListing(id);
+  } catch {
+    // Transient fetch failure — fall through to the noindex fallback below
+    // (the page renders the not-found UI itself). A 404 must only be served
+    // for genuinely missing listings, never for a failed fetch.
+    fetchFailed = true;
+  }
+  // Round 8 (12 Oct 2026): a missing listing must be a real HTTP 404, not a
+  // soft 404. The existing notFound() inside ListingContent runs after the
+  // <Suspense> boundary has started streaming, so the response keeps status
+  // 200 (Next.js docs: "The response starts streaming from the <Suspense>
+  // boundary before notFound() runs, so it keeps its 200 status"). Calling
+  // notFound() here — generateMetadata runs before streaming starts —
+  // returns a proper 404 with the not-found.tsx boundary UI. The fetch is
+  // already on the critical path (SEO metadata needs the listing), so no
+  // extra latency is added for valid listings.
+  if (!listing && !fetchFailed) notFound();
+  // 11 Oct 2026: noindex on 404 — deleted listings must not be indexed
+  // (kept as belt-and-braces; the not-found boundary also injects noindex).
+  if (!listing) return { title: 'DLALA', robots: { index: false, follow: false } };
+  try {
     // Round 133: localize the tab title to the reader's language
     // (dlala_lang cookie; localStorage is client-only).
     return seoForListing(listing, id, await getServerLang()).metadata;

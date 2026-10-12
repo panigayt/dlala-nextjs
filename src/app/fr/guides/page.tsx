@@ -20,7 +20,8 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: {
         ar: d.hreflangs[0].href,
         fr: d.hreflangs[1].href,
-        'x-default': d.hreflangs[2].href,
+        en: d.hreflangs[2].href,
+        'x-default': d.hreflangs[3].href,
       },
     },
     openGraph: {
