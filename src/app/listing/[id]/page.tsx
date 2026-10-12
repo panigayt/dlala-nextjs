@@ -114,7 +114,10 @@ function seoForListing(
     siteTagline: t('seoTagline', lang),
   });
   const url = `${SITE}/listing/${encodeURIComponent(id)}`;
-  const image = cardImage(l) || `${SITE}/icon-512.png`;
+  // 11 Oct 2026: rewrite default photos — dzdlala.com blocks hotlinking,
+  // so OG crawlers get a blocked image without this.
+  const rawImage = cardImage(l) || `${SITE}/icon-512.png`;
+  const image = rawImage.replace('https://dzdlala.com/img/default_ads/', `${SITE}/img/default_ads/`);
   const jsonLd = listingJsonLd({
     title: title || 'DLALA',
     description: seo.description,
