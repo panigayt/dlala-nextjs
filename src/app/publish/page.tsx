@@ -624,7 +624,11 @@ function PublishForm({
           setAnswers(mapped);
         }
         // Fix 7: load existing photos with hashes + thumbs (legacy editListing.photoUrls)
-        const pUrls = Array.isArray(d.photoUrls) ? d.photoUrls : [];
+        // 12 Oct 2026: filter out dzdlala.com default_ads URLs — they fail v122
+        // listingPhotoUrlsOk (not R2/Storage URLs) and would block the save.
+        const pUrls = (Array.isArray(d.photoUrls) ? d.photoUrls : []).filter(
+          (u: string) => typeof u === 'string' && !u.includes('dzdlala.com/img/default_ads/')
+        );
         const pHashes = Array.isArray(d.photoHashes) ? d.photoHashes : [];
         const pThumbs = Array.isArray(d.photo_thumbs) ? d.photo_thumbs : [];
         setExistingPhotos(
