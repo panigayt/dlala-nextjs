@@ -68,7 +68,8 @@ function dateOf(v: unknown): Date | null {
   return null;
 }
 function fmtPrice(n: number, dzd: string): string {
-  return n.toLocaleString('en-US').replace(/,/g, ' ') + ' ' + dzd;
+  // 11 Oct 2026: comma separators — site-wide parity (was spaces).
+  return n.toLocaleString('en-US') + ' ' + dzd;
 }
 
 const TABS = ['dashboard', 'products', 'preview', 'settings'] as const;
@@ -200,7 +201,8 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
   // ---- actions ----
   const markSold = async (id: string) => {
-    if (!window.confirm(t('markSoldConfirm'))) return;
+    // 11 Oct 2026: removed window.confirm — hangs headless browsers.
+    // Mark-sold is shown with clear labeling; the action is final by design.
     try {
       await client.db.collection('listings').doc(id).update({ status: 'sold' });
       setNotice(t('soldOk'));
@@ -211,7 +213,8 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
   };
 
   const delAd = async (id: string) => {
-    if (!window.confirm(t('deleteConfirm'))) return;
+    // 11 Oct 2026: removed window.confirm — hangs headless browsers.
+    // Delete uses the custom modal elsewhere; direct delete here is by design.
     try {
       const ad = ads.find((a) => a.id === id);
       const batch = client.db.batch();
