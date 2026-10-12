@@ -85,6 +85,15 @@ export function getFirebase(): Promise<FirebaseCompat> {
     try {
       // Bundled SDK — no CDN loading needed
       if (firebase.apps.length === 0) firebase.initializeApp(FIREBASE_CONFIG);
+      // 12 Oct 2026: Defensive — ensure auth namespace is attached.
+      // In production Turbopack builds, side-effect imports can fail to
+      // register, causing "firebase.auth is not a function".
+      if (typeof (firebase as unknown as { auth?: unknown }).auth !== 'function') {
+        await import('firebase/compat/auth');
+      }
+      if (typeof (firebase as unknown as { firestore?: unknown }).firestore !== 'function') {
+        await import('firebase/compat/firestore');
+      }
       try {
         await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       } catch {
