@@ -830,6 +830,9 @@ function PublishForm({
     if (!isWanted && !['beauty', 'services', 'jobs'].includes(cat) && !isLand) {
       if (!condition) { fail(t('selectCondition')); return false; }
     }
+    // 11 Oct 2026: photo count guard — max enforced only at pick-time (race).
+    const totalPhotos = photos.length + existingPhotos.length;
+    if (totalPhotos > 10) { fail(t('errorGeneric')); return false; }
     return true;
   };
 
