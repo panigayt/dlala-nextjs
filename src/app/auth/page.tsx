@@ -188,6 +188,8 @@ export default function AuthPage() {
         unsubRef.current = fb.auth().onAuthStateChanged((u) => {
           if (!mounted.current || !u) return;
           if (u.emailVerified) {
+            // 11 Oct 2026: clear password from memory after successful auth.
+            setPassword('');
             router.push(returnTarget());
           } else {
             setVerifyEmail(u.email || '');
@@ -282,6 +284,8 @@ export default function AuthPage() {
       if (!mounted.current) return;
       setLoading(false);
       if (verified) {
+        // 11 Oct 2026: clear password from memory after successful auth.
+        setPassword('');
         router.push(returnTarget());
       } else {
         showVerifyGate(cred.user);
@@ -504,6 +508,8 @@ export default function AuthPage() {
       const verified = !!u.emailVerified;
       setVerifyDone(verified);
       if (verified) {
+        // 11 Oct 2026: clear password from memory after successful auth.
+        setPassword('');
         router.push(returnTarget());
       } else {
         // Still not verified — say so plainly, don't leave them guessing.
