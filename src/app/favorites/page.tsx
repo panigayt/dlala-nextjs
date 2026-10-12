@@ -27,7 +27,6 @@ import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
-import { tasteNoteFav } from '@/lib/taste';
 
 const FAV_PAGE = 60;
 
@@ -365,6 +364,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   const removeFavorite = useCallback(
     async (listingId: string) => {
       setRemoving(listingId);
+      setRemoveErr(null); // clear previous error on retry
       try {
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as DbLike;
@@ -527,7 +527,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
 
             <div className="mt-6 text-center">
               <p className="text-sm text-zinc-500 mb-3">
-                {cards.length}
+                {t('favorites')}: {cards.length}
               </p>
               {hasMore && (
                 <button
