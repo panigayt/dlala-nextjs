@@ -349,6 +349,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // <title> per page (js/app.js PAGE_TITLES — verbatim js/i18n.ar.js)
     title_home: 'دلالة — الرئيسية', title_publish: 'انشر إعلان — دلالة',
     meta_home_desc: 'دلالة — سوق الجزائر للإعلانات المبوبة: سيارات، هواتف، عقارات والمزيد',
+    photoLimitReached: 'الحد الأقصى 10 صور لكل إعلان',
     title_favorites: 'المفضلة — دلالة', title_myFollows: 'متابعاتي — دلالة',
     title_conversations: 'المحادثات — دلالة', title_chat: 'المحادثة — دلالة',
     title_account: 'حسابي — دلالة', title_myListings: 'إعلاناتي — دلالة',
@@ -701,6 +702,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // <title> per page (js/app.js PAGE_TITLES — verbatim js/i18n.fr.js)
     title_home: 'Dlala — Accueil', title_publish: 'Publier — Dlala',
     meta_home_desc: 'Dlala — le marché algérien des petites annonces : voitures, téléphones, immobilier et plus',
+    photoLimitReached: 'Maximum 10 photos par annonce',
     title_favorites: 'Favoris — Dlala', title_myFollows: 'Mes abonnements — Dlala',
     title_conversations: 'Conversations — Dlala', title_chat: 'Conversation — Dlala',
     title_account: 'Mon compte — Dlala', title_myListings: 'Mes annonces — Dlala',
@@ -1055,6 +1057,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // <title> per page (js/app.js PAGE_TITLES — verbatim js/i18n.en.js)
     title_home: 'Dlala — Home', title_publish: 'Post an ad — Dlala',
     meta_home_desc: 'Dlala — Algeria classifieds marketplace: cars, phones, real estate and more',
+    photoLimitReached: 'Maximum 10 photos per listing',
     title_favorites: 'Favorites — Dlala', title_myFollows: 'My follows — Dlala',
     title_conversations: 'Messages — Dlala', title_chat: 'Chat — Dlala',
     title_account: 'My account — Dlala', title_myListings: 'My listings — Dlala',

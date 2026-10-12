@@ -835,7 +835,8 @@ function PublishForm({
     }
     // 11 Oct 2026: photo count guard — max enforced only at pick-time (race).
     const totalPhotos = photos.length + existingPhotos.length;
-    if (totalPhotos > 10) { fail(t('errorGeneric')); return false; }
+    // 12 Oct 2026: dedicated message (was generic error).
+    if (totalPhotos > 10) { fail(t('photoLimitReached')); return false; }
     return true;
   };
 
