@@ -228,7 +228,7 @@ export default function FeedWithLoadMore({
         } catch {
           /* session storage unavailable: rotation stays 0 */
         }
-        const noRepeat = vitrineNoRepeatLoad();
+        const noRepeat = vitrineNoRepeatLoad(refreshedUid.current ?? undefined);
         const sel = selectVitrineShowcases({
           listings,
           usersById,
