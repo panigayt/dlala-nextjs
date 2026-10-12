@@ -23,7 +23,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'offset-too-large' }, { status: 400 });
   }
   try {
-    const docs = await fetchFeed(PAGE_SIZE, offset);
+    // 11 Oct 2026: server-side timeout (was hanging until platform timeout).
+    const docs = await Promise.race([
+      fetchFeed(PAGE_SIZE, offset),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('feed-timeout')), 15000)
+      ),
+    ]);
     // The feed query can return wanted docs mixed in (legacy splits them
     // client-side); the regular pool for pagination excludes them.
     const regular = docs.filter((d) => !d.isWanted);
@@ -31,10 +37,11 @@ export async function GET(req: NextRequest) {
       { regular, hasMore: docs.length >= PAGE_SIZE },
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
-  } catch (e) {
+  } catch {
+    // 11 Oct 2026: stable error code — was leaking internal messages.
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'feed-error' },
-      { status: 500 }
+      { error: 'feed-unavailable' },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
