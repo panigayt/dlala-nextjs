@@ -605,6 +605,22 @@ function PublishForm({
           // Phones
           if (raw.os && !raw.qOs) mapped.qOs = raw.os;
           if (raw.storage && !raw.qStorage) mapped.qStorage = raw.storage;
+          // 11 Oct 2026: map ALL required keys (was cars/phones only — 11
+          // categories couldn't be edited at all).
+          if (raw.gender && !raw.qGender) mapped.qGender = raw.gender;
+          if (raw.type && !raw.qBeautyType) mapped.qBeautyType = raw.type;
+          if (raw.brand && !raw.qBrand) mapped.qBrand = raw.brand;
+          if (raw.condition && !raw.qBeautyCond) mapped.qBeautyCond = raw.condition;
+          if (raw.brand && !raw.qPhoneBrand) mapped.qPhoneBrand = raw.brand;
+          if (raw.veloType && !raw.qVeloType) mapped.qVeloType = raw.veloType;
+          if (raw.trotType && !raw.qTrotType) mapped.qTrotType = raw.trotType;
+          if (raw.domain && !raw.qMachineDomain) mapped.qMachineDomain = raw.domain;
+          if (raw.forVehicle && !raw.qSpareFor) mapped.qSpareFor = raw.forVehicle;
+          if (raw.jobType && !raw.qJobType) mapped.qJobType = raw.jobType;
+          if (raw.purpose && !raw.qPurpose) mapped.qPurpose = raw.purpose;
+          if (raw.propertyType && !raw.qPropertyType) mapped.qPropertyType = raw.propertyType;
+          if (raw.area && !raw.qArea) mapped.qArea = raw.area;
+          if (raw.pricing && !raw.qPricing) mapped.qPricing = raw.pricing;
           setAnswers(mapped);
         }
         // Fix 7: load existing photos with hashes + thumbs (legacy editListing.photoUrls)
@@ -943,10 +959,25 @@ function PublishForm({
         const mergedThumbs = existingPhotos.map((p) => p.thumb).concat(up.thumbs);
         // Canonicalize answer keys for Firestore (same Q_TO_SHORT as publish flow).
         // Edit mode must send short keys (brand, year...) not q* form keys.
+        // 11 Oct 2026: use FULL mapping (was 9 keys — 30+ keys denied by v122).
         const Q_TO_SHORT_EDIT: Record<string, string> = {
-          qCarBrand: 'brand', qYear: 'year', qMileage: 'mileage',
-          qFuel: 'fuel', qGear: 'gear', qModel: 'model',
-          qOs: 'os', qStorage: 'storage', qBrand: 'brand',
+          qArea: 'area', qAvailability: 'availability', qBattery: 'battery',
+          qBatteryRange: 'batteryRange', qBeautyType: 'type', qBeautyCond: 'condition',
+          qBrand: 'brand', qCarBrand: 'brand', qPhoneBrand: 'brand',
+          qTrotBrand: 'brand', qMachineBrand: 'brand',
+          qCarModel: 'model', qModel: 'model',
+          qCondition: 'condition', qContract: 'contract',
+          qExperience: 'experience', qFuel: 'fuel', qGear: 'gear',
+          qGender: 'gender', qJobTitle: 'jobTitle', qJobType: 'jobType',
+          qListingPurpose: 'purpose', qPurpose: 'purpose',
+          qMachineDomain: 'domain', qMachineYear: 'year',
+          qMileage: 'mileage', qOs: 'os', qPricing: 'pricing',
+          qProductType: 'type', qProfession: 'profession',
+          qPropertyType: 'propertyType', qRooms: 'rooms', qSalary: 'salary',
+          qSector: 'sector', qSpareFor: 'forVehicle',
+          qSpareModel: 'compatibleModel', qStorage: 'storage',
+          qTrotType: 'trotType', qVeloType: 'veloType', qVolume: 'volume',
+          qWheelSize: 'wheelSize', qYear: 'year',
         };
         const canonAnswers: Record<string, string> = {};
         for (const [k, v] of Object.entries(answers)) {
