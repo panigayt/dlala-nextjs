@@ -23,6 +23,7 @@ import {
 } from '@/lib/firebase-client';
 import { WILAYAS } from '@/lib/wilayas';
 import { useLang } from '@/lib/i18n';
+import { withTimeout } from '@/lib/firebase-compat';
 
 function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
   const { t, lang } = useLang();
@@ -41,7 +42,11 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
   const load = async () => {
     setState('loading');
     try {
-      const d = await client.db.collection('users').doc(user.uid).get();
+      // 11 Oct 2026: timeout — hung load left spinner forever.
+      const d = await withTimeout(
+        client.db.collection('users').doc(user.uid).get(),
+        15000
+      );
       const u = d.exists ? (d.data() as Record<string, unknown>) : {};
       if ((u.storeTier as string) === 'verified') {
         window.location.replace('/my-store#settings');
@@ -79,7 +84,11 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
       };
       const b = bio.trim();
       if (b) data.storeBio = b.slice(0, 500);
-      await client.db.collection('users').doc(user.uid).update(data);
+      // 11 Oct 2026: timeout — stuck disabled button on stalled network.
+      await withTimeout(
+        client.db.collection('users').doc(user.uid).update(data),
+        20000
+      );
       setShowDialog(false);
       setState('requested');
     } catch {
