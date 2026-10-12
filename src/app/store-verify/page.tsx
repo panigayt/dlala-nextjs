@@ -23,7 +23,7 @@ import {
 } from '@/lib/firebase-client';
 import { WILAYAS } from '@/lib/wilayas';
 import { useLang } from '@/lib/i18n';
-import { } from '@/lib/firebase-compat';
+// 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 
 function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
