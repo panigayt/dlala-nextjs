@@ -12,7 +12,7 @@
 // Listings without derivable variants render today's plain <img> — zero
 // behavior change, zero extra requests (old listings, non-variant URLs).
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { lqipUrlFor, variantUrlFor } from '@/lib/image-variants';
 
 export interface BlurUpListing {
@@ -119,7 +119,11 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
     u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
   if (!lqip) {
     // No derivable LQIP (old listings, non-variant URLs): today's behavior.
-    // Add onError to hide broken images gracefully (don't show "?" icon).
+    // 12 Oct 2026: on broken image, replace with placeholder div (was display:none leaving blank).
+    const [broken, setBroken] = useState(false);
+    if (broken) {
+      return <div className={`${className} bg-zinc-200 flex items-center justify-center`} aria-label={alt} />;
+    }
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -128,10 +132,7 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
         loading={eager ? 'eager' : 'lazy'}
         decoding="async"
         className={className}
-        onError={(e) => {
-          // Hide broken image, show placeholder background via CSS
-          (e.target as HTMLImageElement).style.display = 'none';
-        }}
+        onError={() => setBroken(true)}
       />
     );
   }
