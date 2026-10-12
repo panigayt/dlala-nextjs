@@ -242,7 +242,8 @@ export default function FeedWithLoadMore({
         recordVitrineShown(
           sel.shown,
           sel.fallback.slice(0, Math.max(0, chosen.length - sel.shown.length)),
-          noRepeat
+          noRepeat,
+          refreshedUid.current ?? undefined
         );
       } catch {
         /* vitrine must never break the feed */

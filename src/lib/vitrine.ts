@@ -243,10 +243,12 @@ export function selectVitrineShowcases(o: {
 }
 
 // Record shown showcases in the no-repeat state (legacy recordVitrineShown).
+// 12 Oct 2026: uid parameter for per-user isolation (was global key only).
 export function recordVitrineShown(
   showcases: VitrineShowcase[],
   fallbackShown: VitrineShowcase[],
-  noRepeat: NoRepeatState
+  noRepeat: NoRepeatState,
+  uid?: string
 ): NoRepeatState {
   const nowMs = Date.now();
   const next: NoRepeatState = { ...noRepeat };
@@ -267,17 +269,18 @@ export function recordVitrineShown(
     const prev = next[id] || {};
     next[id] = { ...prev, lastShownAt: nowMs, lastSig: vitrineContentSig(s) };
   }
-  vitrineNoRepeatSave(next);
+  vitrineNoRepeatSave(next, uid);
   return next;
 }
 
 // Mark a showcase as interacted (any tap inside the card).
-export function markVitrineInteracted(sellerId: string): void {
+// 12 Oct 2026: uid parameter for per-user isolation (was global key only).
+export function markVitrineInteracted(sellerId: string, uid?: string): void {
   if (typeof window === 'undefined') return;
-  const nr = vitrineNoRepeatLoad();
+  const nr = vitrineNoRepeatLoad(uid);
   if (nr[sellerId] && !nr[sellerId].interacted) {
     nr[sellerId] = { ...nr[sellerId], interacted: true };
-    vitrineNoRepeatSave(nr);
+    vitrineNoRepeatSave(nr, uid);
   }
 }
 

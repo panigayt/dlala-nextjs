@@ -254,6 +254,10 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     setBusy(true);
     try {
       await callFn('cancel');
+      // 12 Oct 2026: sync registry after cancel (was left stale, showcase kept appearing).
+      const udoc = await client.db.collection('users').doc(user.uid).get();
+      const udata = udoc.data() || {};
+      await syncVitrineRegistry(client, user.uid, udata);
       await load();
     } catch {
       setMsg(t('errorGeneric'));
