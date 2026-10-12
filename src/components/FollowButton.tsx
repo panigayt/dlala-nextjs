@@ -163,11 +163,14 @@ export function useFollowToggle(storeUid: string) {
         // R84 H-2 (js/app.js): the follow notification is written in a
         // SEPARATE best-effort write AFTER the follow batch commits.
         try {
+          // 11 Oct 2026: unique ID per follow — deterministic ID failed on re-follow
+          // (doc exists → update denied by rules).
           const followerName = user.displayName || '';
+          const notifId = `follow_${user.uid}_${Date.now()}`;
           await withTimeout(
             (
               client.db.doc(
-                `users/${storeUid}/notifications/follow_${user.uid}`
+                `users/${storeUid}/notifications/${notifId}`
               ) as unknown as DocRefLike
             ).set({
               type: 'follow',
