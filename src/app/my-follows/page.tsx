@@ -314,7 +314,8 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
         }
       } catch (e) {
         console.error(e);
-        if (mounted.current) window.alert(t('errorGeneric'));
+        // 11 Oct 2026: no window.alert — hangs headless browsers.
+        // Row stays; user can retry by tapping again.
       } finally {
         if (mounted.current) setUnfollowing(null);
       }
