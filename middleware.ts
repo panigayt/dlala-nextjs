@@ -8,8 +8,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // 128-bit random nonce, base64url-encoded (CSP nonce format)
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  // 128-bit random nonce per request. Edge runtime has no Node Buffer,
+  // so use the UUID directly (cryptographically random, unique per request).
+  const nonce = crypto.randomUUID().replace(/-/g, '');
 
   // Production-compatible CSP: strict, no 'unsafe-inline' for scripts.
   // Mirrors the dzdlala.com firebase.json CSP shape, with nonce instead.
