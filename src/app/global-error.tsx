@@ -15,24 +15,24 @@ export default function GlobalError({
 
   return (
     <html lang="ar" dir="rtl">
-      <body>
-        <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4">
-          <div className="max-w-md w-full rounded-xl bg-white shadow-sm p-8 text-center">
-            <div className="text-4xl mb-4">⚠️</div>
-            <h1 className="text-xl font-bold text-zinc-900 mb-6">
+      <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ minHeight: '100vh', backgroundColor: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ maxWidth: '28rem', width: '100%', borderRadius: '0.75rem', backgroundColor: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', padding: '2rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.25rem', marginBottom: '1rem' }}>⚠️</div>
+            <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#18181b', marginBottom: '1.5rem' }}>
               حدث خطأ غير متوقع / An unexpected error occurred
             </h1>
-            <div className="flex gap-2 justify-center">
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
               <button
                 type="button"
                 onClick={reset}
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-white font-medium"
+                style={{ borderRadius: '0.5rem', backgroundColor: '#047857', padding: '0.5rem 1rem', color: '#fff', fontWeight: '500', border: 'none', cursor: 'pointer' }}
               >
                 حاول مجددا / Réessayer / Try again
               </button>
               <a
                 href="/"
-                className="rounded-lg border border-zinc-300 px-4 py-2 font-medium text-zinc-700"
+                style={{ borderRadius: '0.5rem', border: '1px solid #d4d4d8', padding: '0.5rem 1rem', fontWeight: '500', color: '#3f3f46', textDecoration: 'none' }}
               >
                 الرئيسية / Accueil / Home
               </a>

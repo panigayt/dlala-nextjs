@@ -14,6 +14,16 @@
 // profile card, infos tab via useLang(); js/i18n.js onLangChange parity;
 // same pattern as the home page Round 107 and search Round 109).
 
+// 12 Oct 2026: noindex for nonexistent sellers (was crawlable soft-404).
+export async function generateMetadata({ params }: { params: Promise<{ uid: string }> }) {
+  const { uid } = await params;
+  const seller = await getSeller(uid);
+  if (!seller) {
+    return { title: 'DLALA', robots: { index: false, follow: false } };
+  }
+  return { title: `DLALA — ${seller.name || 'Seller'}` };
+}
+
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import SellerPage from '@/components/SellerPage';
