@@ -177,7 +177,12 @@ function SettingsContent({ user }: { user: CompatUser }) {
   const clearCache = useCallback(() => {
     let ok = true;
     try {
-      localStorage.removeItem('dlala_feed_cache');
+      // 11 Oct 2026: clear the REAL caches (was dead dlala_feed_cache key).
+      const prefixes = ['dlala_snap_', 'dlala_feed_state_', 'dlala_taste_views_', 'dlala_vitrine_no_repeat'];
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && prefixes.some((p) => k.startsWith(p))) localStorage.removeItem(k);
+      }
       localStorage.removeItem('dlala_publish_draft');
       for (let i = sessionStorage.length - 1; i >= 0; i--) {
         const k = sessionStorage.key(i);
@@ -446,7 +451,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
             </span>
             <span className={goCls} aria-hidden="true">‹</span>
           </button>
-          <a href={`/chat?id=${encodeURIComponent('supp_' + user.uid)}`} className={rowCls}>
+          <a href={`/chat/${encodeURIComponent('supp_' + user.uid)}`} className={rowCls}>
             <span className={icoCls} aria-hidden="true">💬</span>
             <span className="flex-1">
               <span className="block font-medium text-zinc-900">{t('contactSupport')}</span>
