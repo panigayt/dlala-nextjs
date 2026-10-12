@@ -231,6 +231,10 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
       batch.update(client.db.collection('users').doc(user.uid), {
         vitrineIds: client.FieldValue.arrayRemove(id),
       });
+      // 12 Oct 2026: also prune vitrineSellers registry (was left stale).
+      batch.update(client.db.collection('vitrineSellers').doc(user.uid), {
+        vitrineIds: client.FieldValue.arrayRemove(id),
+      });
       await batch.commit();
       // R2 photo cleanup (best-effort) — the server skips non-R2 values
       // and enforces uid ownership; unstored variants are derived server-side.
