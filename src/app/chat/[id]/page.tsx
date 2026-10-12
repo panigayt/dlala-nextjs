@@ -248,6 +248,9 @@ function ChatInner() {
   const [proposalOpen, setProposalOpen] = useState(false);
   const [proposalAmt, setProposalAmt] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
+  // 11 Oct 2026: tracks the uploaded R2 URL across the sendPhoto flow so a
+  // failed send retains it for retry (was orphaned + retry was a no-op).
+  const publicUrlRef = useRef<string | null>(null);
   const [statusBar, setStatusBar] = useState<{
     mode: 'info' | 'error';
     text: string;
@@ -886,6 +889,17 @@ function ChatInner() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user || !file) return;
+    // 11 Oct 2026: throttle FIRST — was uploading to R2 before the 3s check,
+    // orphaning every throttled photo + wasting bandwidth.
+    if (sendInFlightRef.current) {
+      showToast(st('tooFast'));
+      return;
+    }
+    if (Date.now() - lastSendAtRef.current < 3000) {
+      showToast(st('tooFast'));
+      return;
+    }
+    if (blockedSendGuard()) return;
     if (!file.type || !file.type.startsWith('image/')) {
       showToast(st('imageSendError'));
       return;
@@ -937,6 +951,7 @@ function ChatInner() {
       });
       if (!res.ok) throw new Error('upload-url');
       const { url, publicUrl } = await res.json();
+      publicUrlRef.current = publicUrl;
       const put = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'image/jpeg' },
@@ -950,9 +965,10 @@ function ChatInner() {
         setStatusBar({ mode: 'error', text: st('chatSendFailed') });
       }
     } catch (e) {
-      // Show specific error for debugging (upload-url vs r2-put vs send-message)
+      // 11 Oct 2026: retain imageUrl on failure — retry was a silent no-op
+      // (fresh mid with no imageUrl hit the early return).
       const msg = e instanceof Error ? e.message : 'unknown';
-      setFailedSend({ mid: mintMessageId(user.uid) });
+      setFailedSend({ imageUrl: publicUrlRef.current || undefined, mid: mintMessageId(user.uid) });
       setStatusBar({ mode: 'error', text: `${st('chatSendFailed')} [${msg}]` });
       showToast(`${st('imageSendError')} [${msg}]`);
     } finally {
