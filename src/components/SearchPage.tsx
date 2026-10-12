@@ -300,7 +300,8 @@ export default function SearchPage({
         {hasFilter ? (
           error || !data ? (
             <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">
-              {t('searchFailed')} ({error}).
+              {/* 11 Oct 2026: no raw error leak — technical details stay in console. */}
+              {t('searchFailed')}.
             </div>
           ) : (
             <SearchResultsGrid

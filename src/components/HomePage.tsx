@@ -246,7 +246,8 @@ export default function HomePage({
 
         {error && !filtered ? (
           <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">
-            ⚠️ {t('errorGeneric')} ({error}){' '}
+            {/* 11 Oct 2026: no raw error leak — technical details stay in console. */}
+            ⚠️ {t('errorGeneric')}{' '}
             <button
               type="button"
               onClick={() => window.location.reload()}
