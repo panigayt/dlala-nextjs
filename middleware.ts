@@ -33,16 +33,7 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// Apply to all routes except static assets and API routes that don't need CSP
+// Apply to all routes except static assets
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico
-     * - API routes that return JSON (they don't render HTML)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|api/).*)',
-  ],
+  matcher: '/((?!_next/static|_next/image|favicon.ico).*)',
 };
