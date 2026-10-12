@@ -261,10 +261,21 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           vitrineIds: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
         });
         // 12 Oct 2026: also prune vitrineSellers registry (was left dangling).
-        batch.update(db.doc('vitrineSellers/' + user.uid), {
-          vitrineIds: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
-        });
+        // Best-effort AFTER the batch — the registry doc may not exist
+        // (syncVitrineRegistry deletes it when ineligible), and batch.update()
+        // on a missing doc would fail the entire delete.
         await withTimeout(batch.commit(), 20000);
+        try {
+          await (
+            fb.firestore().doc('vitrineSellers/' + user.uid) as unknown as {
+              update: (d: Record<string, unknown>) => Promise<unknown>;
+            }
+          ).update({
+            vitrineIds: (fb.firestore as unknown as { FieldValue: { arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
+          });
+        } catch {
+          /* registry doc absent: nothing to prune */
+        }
         // Photo cleanup (best-effort): legacy Firebase Storage URLs first,
         // then R2 (the server skips non-R2 values and enforces uid ownership).
         const urls: string[] = [
