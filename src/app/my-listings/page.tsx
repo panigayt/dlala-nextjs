@@ -179,8 +179,13 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as {
           doc: (p: string) => { update: (d: Record<string, unknown>) => Promise<void> };
+          FieldValue: { serverTimestamp: () => unknown };
         };
-        await withTimeout(db.doc('listings/' + id).update({ status: 'sold' }), 15000);
+        // 12 Oct 2026: include updatedAt for sitemap/feed ordering.
+        await withTimeout(db.doc('listings/' + id).update({
+          status: 'sold',
+          updatedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+        }), 15000);
         // Full reload instead of React state update (automation-compatible)
         window.location.reload();
       } catch (e) {
@@ -189,7 +194,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           // Write may have committed — reload to show server truth.
           load();
         } else if (mounted.current) {
-          window.alert(t('errorGeneric'));
+          // 12 Oct 2026: inline error (was window.alert).
+          setError(t('errorGeneric'));
         }
       } finally {
         if (mounted.current) setActionBusy(null);
@@ -254,6 +260,10 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         batch.update(db.doc('users/' + user.uid), {
           vitrineIds: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
         });
+        // 12 Oct 2026: also prune vitrineSellers registry (was left dangling).
+        batch.update(db.doc('vitrineSellers/' + user.uid), {
+          vitrineIds: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
+        });
         await withTimeout(batch.commit(), 20000);
         // Photo cleanup (best-effort): legacy Firebase Storage URLs first,
         // then R2 (the server skips non-R2 values and enforces uid ownership).
@@ -291,7 +301,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         window.location.reload();
       } catch (e) {
         console.error(e);
-        if (mounted.current) window.alert(t('errorGeneric'));
+        // 12 Oct 2026: inline error (was window.alert).
+        if (mounted.current) setError(t('errorGeneric'));
       } finally {
         if (mounted.current) setActionBusy(null);
       }
