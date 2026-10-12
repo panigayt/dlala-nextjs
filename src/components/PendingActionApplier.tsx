@@ -6,7 +6,9 @@
 // layout, so it covers every page — like the legacy global handler.
 
 import { useEffect, useRef } from 'react';
-import { useAuthState } from '@/lib/firebase-client';
+// Round 12: firebase-client user → CDN path. The new useAuthState() loads
+// the modular SDK from gstatic lazily inside its effect (0 bundle bytes).
+import { useAuthState } from '@/lib/firebase';
 import { applyPendingAction } from '@/lib/pending-action';
 
 export default function PendingActionApplier() {

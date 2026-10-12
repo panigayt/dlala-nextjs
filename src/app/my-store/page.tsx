@@ -10,6 +10,9 @@
 //   - Products: own listings with edit / mark-sold / delete (no renew).
 //   - Preview: public storefront preview.
 //   - Settings: cover/logo/name/bio editor (R2 uploads) + vitrine picker.
+//
+// Round 12: Firebase compat SDK → modular (getFirebaseCdn path via the new
+// useRequireAuth; client.fsMod carries the firestore namespace).
 
 'use client';
 
@@ -22,7 +25,7 @@ import {
   btnSecondaryCls,
   type FirebaseClient,
   type CompatUser,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
 import { useLang } from '@/lib/i18n';
@@ -82,6 +85,9 @@ function tabFromHash(): Tab {
 
 function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
   const { t, lang } = useLang();
+  // Round 12: modular firestore namespace — replaces client.db chaining and
+  // client.FieldValue.*. Read/write shapes are unchanged (owner-gated).
+  const { db, fsMod } = client;
   const [guard, setGuard] = useState<'loading' | 'ok' | 'denied' | 'error'>('loading');
   const [userData, setUserData] = useState<Record<string, unknown> | null>(null);
   const [ads, setAds] = useState<Listing[]>([]);
@@ -120,8 +126,8 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
       let u: Record<string, unknown> | null = null;
       let readFailed = false;
       try {
-        const d = await client.db.collection('users').doc(user.uid).get();
-        if (d.exists) u = d.data() || {};
+        const d = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
+        if (d.exists()) u = d.data() || {};
       } catch {
         readFailed = true;
       }
@@ -151,8 +157,19 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
       // Load listings + conversations
       try {
         const [adsSnap, convSnap] = await Promise.all([
-          client.db.collection('listings').where('sellerId', '==', user.uid).limit(200).get(),
-          client.db.collection('conversations').where('participants', 'array-contains', user.uid).get(),
+          fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'listings'),
+              fsMod.where('sellerId', '==', user.uid),
+              fsMod.limit(200)
+            )
+          ),
+          fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'conversations'),
+              fsMod.where('participants', 'array-contains', user.uid)
+            )
+          ),
         ]);
         if (cancelled) return;
         const a = adsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as object) }) as Listing);
@@ -175,7 +192,7 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
           setVitrineIds(pruned);
           setVitrineMsg(t('vitrinePruned'));
           try {
-            await client.db.collection('users').doc(user.uid).update({ vitrineIds: pruned });
+            await fsMod.updateDoc(fsMod.doc(db, 'users', user.uid), { vitrineIds: pruned });
           } catch { /* ignore */ }
         }
       } catch {
@@ -192,19 +209,26 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
   const reload = useCallback(async () => {
     try {
-      const adsSnap = await client.db.collection('listings').where('sellerId', '==', user.uid).limit(200).get();
+      const adsSnap = await fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'listings'),
+          fsMod.where('sellerId', '==', user.uid),
+          fsMod.limit(200)
+        )
+      );
       const a = adsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as object) }) as Listing);
       a.sort((x, y) => (dateOf(y.createdAt)?.getTime() || 0) - (dateOf(x.createdAt)?.getTime() || 0));
       setAds(a);
     } catch { /* ignore */ }
-  }, [client, user.uid]);
+    // db/fsMod are stable destructured members of client (shared singleton).
+  }, [user.uid, db, fsMod]);
 
   // ---- actions ----
   const markSold = async (id: string) => {
     // 11 Oct 2026: removed window.confirm — hangs headless browsers.
     // Mark-sold is shown with clear labeling; the action is final by design.
     try {
-      await client.db.collection('listings').doc(id).update({ status: 'sold' });
+      await fsMod.updateDoc(fsMod.doc(db, 'listings', id), { status: 'sold' });
       setNotice(t('soldOk'));
       await reload();
     } catch {
@@ -217,27 +241,27 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
     // Delete uses the custom modal elsewhere; direct delete here is by design.
     try {
       const ad = ads.find((a) => a.id === id);
-      const batch = client.db.batch();
-      batch.set(client.db.collection('deletedAds').doc(), {
+      const batch = fsMod.writeBatch(db);
+      batch.set(fsMod.doc(fsMod.collection(db, 'deletedAds')), {
         sellerId: user.uid,
         listingId: id,
         title: ad ? titleOf(ad, lang) : '',
         sellerName: user.displayName || '',
-        deletedAt: client.FieldValue.serverTimestamp(),
+        deletedAt: fsMod.serverTimestamp(),
         reason: 'owner',
         adminId: '',
       });
-      batch.delete(client.db.collection('listings').doc(id));
-      batch.update(client.db.collection('users').doc(user.uid), {
-        vitrineIds: client.FieldValue.arrayRemove(id),
+      batch.delete(fsMod.doc(db, 'listings', id));
+      batch.update(fsMod.doc(db, 'users', user.uid), {
+        vitrineIds: fsMod.arrayRemove(id),
       });
       // 12 Oct 2026 (R7 Team 7): prune vitrineSellers AFTER commit, best-effort.
       // batch.update() on a missing registry doc would fail the entire
       // delete (syncVitrineRegistry deletes the doc when ineligible).
       await batch.commit();
       try {
-        await client.db.collection('vitrineSellers').doc(user.uid).update({
-          vitrineIds: client.FieldValue.arrayRemove(id),
+        await fsMod.updateDoc(fsMod.doc(db, 'vitrineSellers', user.uid), {
+          vitrineIds: fsMod.arrayRemove(id),
         });
       } catch {
         /* registry doc absent: nothing to prune */
@@ -288,7 +312,7 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
     try {
       const idToken = await user.getIdToken();
       void idToken;
-      await client.db.collection('users').doc(user.uid).update({
+      await fsMod.updateDoc(fsMod.doc(db, 'users', user.uid), {
         storeName: storeName.trim().slice(0, 60),
         storeBio: storeBio.trim().slice(0, 500),
         ...(coverUrl ? { storeCoverUrl: coverUrl } : {}),
@@ -326,16 +350,17 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
     setVitrineMsg(null);
     try {
       const ids = vitrineIds.slice(0, 8);
-      await client.db.collection('users').doc(user.uid).update({ vitrineIds: ids });
+      await fsMod.updateDoc(fsMod.doc(db, 'users', user.uid), { vitrineIds: ids });
       // Sync registry
       const u = userData || {};
-      await client.db.collection('vitrineSellers').doc(user.uid).set(
+      await fsMod.setDoc(
+        fsMod.doc(db, 'vitrineSellers', user.uid),
         {
           sellerId: user.uid,
           storeTier: 'verified',
           vitrineIds: ids,
           vitrineBoostUntil: u.vitrineBoostUntil || null,
-          updatedAt: client.FieldValue.serverTimestamp(),
+          updatedAt: fsMod.serverTimestamp(),
         },
         { merge: true }
       );

@@ -20,7 +20,7 @@
 // ignored and must never break the listing page.
 
 import { useEffect } from 'react';
-import { getFirebaseClient } from '@/lib/firebase-client';
+import { getFirebaseCdn } from '@/lib/firebase';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 
@@ -62,14 +62,14 @@ function mintAnonId(): string | null {
 
 async function writeView(listingId: string, uid: string): Promise<void> {
   try {
-    const client = await getFirebaseClient();
+    const { db, fsMod } = await getFirebaseCdn();
     const date = viewDateStr();
-    const batch = client.db.batch();
-    batch.set(client.db.doc(`listingViews/${listingId}_${uid}_${date}`), {
+    const batch = fsMod.writeBatch(db);
+    batch.set(fsMod.doc(db, `listingViews/${listingId}_${uid}_${date}`), {
       listingId,
       uid,
       date,
-      createdAt: client.FieldValue.serverTimestamp(),
+      createdAt: fsMod.serverTimestamp(),
     });
     await withTimeout(batch.commit(), 15000).catch(() => {
       /* best-effort: a failed write is silently ignored */
@@ -94,14 +94,14 @@ export default function ViewRecorder({
       if (timer) clearTimeout(timer);
       if (unsub) unsub();
     };
-    getFirebaseClient()
-      .then((client) => {
+    getFirebaseCdn()
+      .then(({ auth, authMod }) => {
         if (done) return;
         // Firebase fires the first onAuthStateChanged callback with the
         // restored auth state, so one subscription settles signed-in vs
         // signed-out without risking an anonymous record for a signed-in
         // user whose auth was still restoring.
-        unsub = client.auth.onAuthStateChanged((u) => {
+        unsub = authMod.onAuthStateChanged(auth, (u) => {
           if (done) return;
           done = true;
           cleanup();

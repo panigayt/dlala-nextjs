@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
@@ -152,7 +152,7 @@ export default function ReportUserButton({
     // the listing actions: the cached user object stays stale after the
     // user clicks the link in another tab).
     try {
-      await user.reload();
+      await client.authMod.reload(user);
     } catch {
       /* offline — use cached */
     }
@@ -166,6 +166,7 @@ export default function ReportUserButton({
 
   const onSendReport = useCallback(async () => {
     if (!user || !client || repSending) return;
+    const { db, fsMod, authMod } = client;
     setRepSending(true);
     setRepError(null);
     // Hoisted so the catch block can clean up an uploaded evidence photo
@@ -179,7 +180,7 @@ export default function ReportUserButton({
         if (!f.type.startsWith('image/') || f.size > 8 * 1024 * 1024) {
           throw new Error('photo');
         }
-        idToken = await user.getIdToken();
+        idToken = await authMod.getIdToken(user);
         // R2 upload keys must match listings/{uid}/{x}/{filename} (server
         // validates the shape and the uid segment) — the report evidence
         // photo lives under the reporter's own namespace.
@@ -193,7 +194,7 @@ export default function ReportUserButton({
       reportId = `${user.uid}_user_${uid}`;
       const reporterName = ((user.displayName || user.email || '') as string).split('@')[0];
       await withTimeout(
-        client.db.doc(`reports/${reportId}`).set({
+        fsMod.setDoc(fsMod.doc(db, `reports/${reportId}`), {
           reporterId: user.uid,
           reporterName,
           targetType: 'user',
@@ -204,7 +205,7 @@ export default function ReportUserButton({
           details: repDetails.trim(),
           photoUrl,
           status: 'new',
-          createdAt: client.FieldValue.serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         }),
         20000
       );
@@ -221,11 +222,14 @@ export default function ReportUserButton({
       // (retry-after-commit).
       if (photoUrl && (e as { code?: string })?.code === 'permission-denied') {
         try {
-          const existing = await withTimeout(client.db.doc(`reports/${reportId}`).get(), 8000);
+          const existing = await withTimeout(
+            fsMod.getDoc(fsMod.doc(db, `reports/${reportId}`)),
+            8000
+          );
           const data = existing.data() as { photoUrl?: string } | undefined;
-          const committed = existing.exists && data && data.photoUrl === photoUrl;
+          const committed = existing.exists() && data && data.photoUrl === photoUrl;
           if (!committed) {
-            const tok = idToken || (await user.getIdToken());
+            const tok = idToken || (await authMod.getIdToken(user));
             await deleteR2Objects([photoUrl], tok).catch(() => {});
           }
         } catch {

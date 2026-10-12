@@ -14,7 +14,10 @@
 //
 // Kept DOM-free and React-free so the logic is unit-testable (node harness).
 
-import type { CompatUser, FirebaseClient } from './firebase-client';
+// 12 Oct 2026 (Round 12): migrated to the modular Firebase SDK
+// (@/lib/firebase). The exported signatures are unchanged; internals use
+// fsMod.* and exists() (compat property → modular method).
+import type { CompatUser, FirebaseClient } from '@/lib/firebase';
 import { withTimeout } from './timeout';
 
 export interface RateableDeal {
@@ -42,13 +45,16 @@ export async function fetchRateableDeals(
   me: string,
   otherUid: string
 ): Promise<RateableDeal[]> {
+  const { db, fsMod } = client;
   const snap = await withTimeout(
-    client.db
-      .collection('conversations')
-      .where('participants', 'array-contains', me)
-      .orderBy('updatedAt', 'desc')
-      .limit(50)
-      .get(),
+    fsMod.getDocs(
+      fsMod.query(
+        fsMod.collection(db, 'conversations'),
+        fsMod.where('participants', 'array-contains', me),
+        fsMod.orderBy('updatedAt', 'desc'),
+        fsMod.limit(50)
+      )
+    ),
     15000
   );
   const candidates: Array<{
@@ -69,19 +75,19 @@ export async function fetchRateableDeals(
   const results = await Promise.all(
     candidates.map(async ({ id, c, rateeId }) => {
       const r = await withTimeout(
-        client.db.doc(`ratings/${id}_${me}`).get(),
+        fsMod.getDoc(fsMod.doc(db, `ratings/${id}_${me}`)),
         15000
       );
-      if (r.exists) return null;
+      if (r.exists()) return null;
       let listingTitle = '';
       try {
         const listingId = c.listingId;
         if (typeof listingId === 'string' && listingId) {
           const ld = await withTimeout(
-            client.db.doc(`listings/${listingId}`).get(),
+            fsMod.getDoc(fsMod.doc(db, `listings/${listingId}`)),
             15000
           );
-          if (ld.exists)
+          if (ld.exists())
             listingTitle = localizedTitle((ld.data() || {}).title);
         }
       } catch {
@@ -119,11 +125,12 @@ export async function submitRating({
   const clean = String(comment || '').trim();
   if (!(stars >= 1 && stars <= 5)) throw new Error('stars');
   if (!clean) throw new Error('comment');
+  const { db, fsMod } = client;
   const ratingId = `${conversationId}_${user.uid}`;
   let raterName = '';
   try {
     const me = await withTimeout(
-      client.db.doc(`users/${user.uid}`).get(),
+      fsMod.getDoc(fsMod.doc(db, `users/${user.uid}`)),
       15000
     );
     raterName = (me.data()?.name as string) || '';
@@ -131,16 +138,16 @@ export async function submitRating({
     /* name stays blank */
   }
   const existing = await withTimeout(
-    client.db.doc(`ratings/${ratingId}`).get(),
+    fsMod.getDoc(fsMod.doc(db, `ratings/${ratingId}`)),
     15000
   );
-  if (existing.exists) {
+  if (existing.exists()) {
     const err = new Error('already') as Error & { code?: string };
     err.code = 'already-rated';
     throw err;
   }
   await withTimeout(
-    client.db.doc(`ratings/${ratingId}`).set({
+    fsMod.setDoc(fsMod.doc(db, `ratings/${ratingId}`), {
       conversationId,
       listingId,
       raterId: user.uid,
@@ -148,7 +155,7 @@ export async function submitRating({
       rateeId,
       stars,
       comment: clean,
-      createdAt: client.FieldValue.serverTimestamp(),
+      createdAt: fsMod.serverTimestamp(),
     }),
     15000
   );

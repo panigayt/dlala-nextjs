@@ -10,7 +10,7 @@
 // changes on tab switch (0.0.0.4 parity).
 
 import { useState, type ReactNode } from 'react';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 
 export default function SellerTabs({

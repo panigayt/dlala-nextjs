@@ -18,27 +18,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang } from '@/lib/i18n';
-
-interface DocRefLike {
-  get: () => Promise<{ exists: boolean }>;
-  set: (data: Record<string, unknown>) => Promise<void>;
-}
-
-interface BatchLike {
-  set: (ref: unknown, data: Record<string, unknown>) => void;
-  delete: (ref: unknown) => void;
-  commit: () => Promise<void>;
-}
-
-interface FieldValueLike {
-  serverTimestamp: () => unknown;
-}
 
 // Shared follow toggle logic — mirrors js/app.js (onFollowBtnTap /
 // toggleFollow / paintFollowBtn) and the seller.html follow-btn behavior.
@@ -89,11 +74,12 @@ export function useFollowToggle(storeUid: string) {
         return;
       }
       try {
+        const { db, fsMod } = client;
         const d = await withTimeout(
-          (client.db.doc(`follows/${user.uid}_${storeUid}`) as unknown as DocRefLike).get(),
+          fsMod.getDoc(fsMod.doc(db, `follows/${user.uid}_${storeUid}`)),
           15000
         );
-        if (!cancelled && mounted.current) setFollowing(d.exists);
+        if (!cancelled && mounted.current) setFollowing(d.exists());
       } catch {
         if (!cancelled && mounted.current) setFollowing(false);
       }
@@ -128,13 +114,14 @@ export function useFollowToggle(storeUid: string) {
     if (user.uid === storeUid) return;
     if (inFlight.current) return; // double-tap race guard
     inFlight.current = true;
+    const { db, fsMod } = client;
     const wasOn = !!following;
     setFollowing(!wasOn); // optimistic flip (v101 pattern)
     try {
-      const ref = client.db.doc(`follows/${user.uid}_${storeUid}`);
-      const snap = await withTimeout((ref as unknown as DocRefLike).get(), 15000);
-      const batch = client.db.batch() as unknown as BatchLike;
-      const isFollow = !snap.exists;
+      const ref = fsMod.doc(db, `follows/${user.uid}_${storeUid}`);
+      const snap = await withTimeout(fsMod.getDoc(ref), 15000);
+      const batch = fsMod.writeBatch(db);
+      const isFollow = !snap.exists();
       if (!isFollow) {
         batch.delete(ref);
         // FIX-WEB-005 (js/app.js): the follow notification in the followed
@@ -146,7 +133,7 @@ export function useFollowToggle(storeUid: string) {
         batch.set(ref, {
           followerId: user.uid,
           storeId: storeUid,
-          createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         });
       }
       await withTimeout(batch.commit(), 15000);
@@ -159,26 +146,25 @@ export function useFollowToggle(storeUid: string) {
           const followerName = user.displayName || '';
           const notifId = `follow_${user.uid}_${Date.now()}`;
           await withTimeout(
-            (
-              client.db.doc(
-                `users/${storeUid}/notifications/${notifId}`
-              ) as unknown as DocRefLike
-            ).set({
-              type: 'follow',
-              // Legacy js/app.js parity (v101 follow-notif): the stored title
-              // is written in the FOLLOWER's (writer's) UI language via the
-              // followedYou template — was hardcoded Arabic (Round 131 fix).
-              title: t('followedYou').replace('{name}', followerName),
-              body: '',
-              createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
-              read: false,
-              fromUid: user.uid,
-              data: {
-                followerUid: user.uid,
-                followerName,
-                followedUid: storeUid,
-              },
-            }),
+            fsMod.setDoc(
+              fsMod.doc(db, `users/${storeUid}/notifications/${notifId}`),
+              {
+                type: 'follow',
+                // Legacy js/app.js parity (v101 follow-notif): the stored title
+                // is written in the FOLLOWER's (writer's) UI language via the
+                // followedYou template — was hardcoded Arabic (Round 131 fix).
+                title: t('followedYou').replace('{name}', followerName),
+                body: '',
+                createdAt: fsMod.serverTimestamp(),
+                read: false,
+                fromUid: user.uid,
+                data: {
+                  followerUid: user.uid,
+                  followerName,
+                  followedUid: storeUid,
+                },
+              }
+            ),
             15000
           );
         } catch {
@@ -192,10 +178,10 @@ export function useFollowToggle(storeUid: string) {
       // Ask the server for the truth so the UI self-corrects.
       try {
         const truth = await withTimeout(
-          (client.db.doc(`follows/${user.uid}_${storeUid}`) as unknown as DocRefLike).get(),
+          fsMod.getDoc(fsMod.doc(db, `follows/${user.uid}_${storeUid}`)),
           8000
         );
-        if (mounted.current) setFollowing(truth.exists);
+        if (mounted.current) setFollowing(truth.exists());
       } catch {
         if (mounted.current) setFollowing(wasOn);
       }

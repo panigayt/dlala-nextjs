@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
@@ -262,15 +262,16 @@ export default function SellerActions({
     let cancelled = false;
     (async () => {
       if (!signedIn || !client || !user || user.uid === uid) return;
+      const { db, fsMod } = client;
       try {
         const [mine, theirs] = await Promise.all([
-          withTimeout(client.db.doc(`blocks/${user.uid}_${uid}`).get(), 15000).catch(() => null),
-          withTimeout(client.db.doc(`blocks/${uid}_${user.uid}`).get(), 15000).catch(() => null),
+          withTimeout(fsMod.getDoc(fsMod.doc(db, `blocks/${user.uid}_${uid}`)), 15000).catch(() => null),
+          withTimeout(fsMod.getDoc(fsMod.doc(db, `blocks/${uid}_${user.uid}`)), 15000).catch(() => null),
         ]);
         // User-block docs always carry blockerUid (admin block docs
         // blocks/{uid} never do — belt-and-braces, verbatim js/block.js).
         const iB =
-          !!(mine && mine.exists && (mine.data() as { blockerUid?: string } | undefined)?.blockerUid);
+          !!(mine && mine.exists() && (mine.data() as { blockerUid?: string } | undefined)?.blockerUid);
         void theirs;
         if (!cancelled && mounted.current) setBlocked(iB);
       } catch {
@@ -297,7 +298,7 @@ export default function SellerActions({
     }
     setBlockBusy(true);
     try {
-      const idToken = await user.getIdToken();
+      const idToken = await client.authMod.getIdToken(user);
       const res = await fetch(TOGGLE_BLOCK_URL, {
         method: 'POST',
         mode: 'cors',

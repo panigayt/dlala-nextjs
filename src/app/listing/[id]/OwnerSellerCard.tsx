@@ -5,7 +5,7 @@
 // a compact "✓ إعلانك" (t('yourListing')) indicator.
 
 import type { ReactNode } from 'react';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 
 export default function OwnerSellerCard({

@@ -7,8 +7,11 @@
 // seller's own live listings of the same category block publish/edit.
 
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
+// 12 Oct 2026 (Round 12): migrated to the modular Firebase SDK
+// (@/lib/firebase). Takes the full FirebaseClient (queries via fsMod.*);
+// no firebase-compat/firebase-client imports remain.
 import { withTimeout } from '@/lib/timeout';
-import type { CompatFirestore } from '@/lib/firebase-client';
+import type { FirebaseClient } from '@/lib/firebase';
 
 export type DuplicateKind = 'title' | 'photo';
 
@@ -77,7 +80,7 @@ export function arePhotosDuplicate(a: string, b: string): boolean {
 // --- the pre-publish check (js/publish.js checkDuplicates, byte-exact) ----
 
 interface CheckDuplicatesArgs {
-  db: CompatFirestore;
+  client: FirebaseClient;
   uid: string;
   title: string;
   categoryId: string;
@@ -86,13 +89,14 @@ interface CheckDuplicatesArgs {
 }
 
 export async function checkDuplicates({
-  db,
+  client,
   uid,
   title,
   categoryId,
   newHashes,
   excludeId,
 }: CheckDuplicatesArgs): Promise<DuplicateKind | null> {
+  const { db, fsMod } = client;
   // D1 fix: 500 cap (high-volume sellers silently lost duplicate
   // protection beyond 100 listings). M1 fix: 30s timeout (was: unbounded
   // hang) — fails OPEN to "no duplicate found" rather than blocking
@@ -100,7 +104,13 @@ export async function checkDuplicates({
   let snap;
   try {
     snap = await withTimeout(
-      db.collection('listings').where('sellerId', '==', uid).limit(500).get(),
+      fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'listings'),
+          fsMod.where('sellerId', '==', uid),
+          fsMod.limit(500)
+        )
+      ),
       30000
     );
   } catch (e) {

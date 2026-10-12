@@ -205,6 +205,13 @@ function guidePath(slug: string, lang: GuideLang): string {
       : `/guides/${slug}`;
 }
 
+// Round 12 Team 9: relative twin of indexUrl() — in-content links
+// (breadcrumbs, body CTAs) must be relative; indexUrl() stays absolute
+// (canonical/hreflang/OG/JSON-LD only).
+export function indexPath(lang: GuideLang): string {
+  return lang === 'en' ? `/en/guides` : lang === 'fr' ? `/fr/guides` : `/guides`;
+}
+
 export function indexUrl(lang: GuideLang): string {
   return lang === 'en' ? `${SITE}/en/guides` : lang === 'fr' ? `${SITE}/fr/guides` : `${SITE}/guides`;
 }
@@ -218,7 +225,7 @@ export function ctaTop(lang: GuideLang): string {
         ? 'Browse Dlala and discover all listings'
         : 'تصفح موقع دلالة و اكتشف كل الاعلانات';
   const btn = lang === 'fr' ? 'Cliquez ici' : lang === 'en' ? 'Click here' : 'اضغط هنا';
-  return `<div class="cta-top"><span class="h">${escHtml(head)}</span><a class="b" href="${SITE}/">${escHtml(btn)}</a></div>`;
+  return `<div class="cta-top"><span class="h">${escHtml(head)}</span><a class="b" href="/">${escHtml(btn)}</a></div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -292,12 +299,12 @@ export function renderArticleData(slug: string, lang: GuideLang): GuidePageData 
     `<p><small>${escHtml(g.meta.category || '')} · ${escHtml(g.meta.reading_time || '')} ${readingTime}</small></p>\n` +
     ctaTop(lang) + '\n' +
     articleHtml + '\n' + relatedHtml +
-    `\n<p><a href="${SITE}/" class="cta">${ctaSee}</a></p>`;
+    `\n<p><a href="/" class="cta">${ctaSee}</a></p>`;
   const homeLabel = lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية';
   const guidesLabel = lang === 'fr' ? 'Guides' : lang === 'en' ? 'Guides' : 'الأدلة';
   const breadcrumbs: Breadcrumb[] = [
-    { label: homeLabel, href: SITE + '/' },
-    { label: guidesLabel, href: indexUrl(lang) },
+    { label: homeLabel, href: '/' },
+    { label: guidesLabel, href: indexPath(lang) },
     { label: g.meta.title },
   ];
   return {
@@ -331,7 +338,7 @@ export function renderIndexData(lang: GuideLang): GuidePageData {
   ];
   const minLabel = lang === 'fr' ? 'min' : lang === 'en' ? 'min' : 'دقائق';
   const cards = guides.map((g) =>
-    `<article><h2><a href="${guideUrl(g.slug, lang)}">${escHtml(g.meta.title)}</a></h2>` +
+    `<article><h2><a href="${guidePath(g.slug, lang)}">${escHtml(g.meta.title)}</a></h2>` +
     `<p>${escHtml(g.meta.description)}</p>` +
     `<p><small>${escHtml(g.meta.category || '')} · ${escHtml(g.meta.reading_time || '')} ${minLabel}</small></p></article>`
   ).join('\n<hr>\n');
@@ -345,11 +352,11 @@ export function renderIndexData(lang: GuideLang): GuidePageData {
   });
   const h1 = lang === 'fr' ? "Guides d\u2019achat" : lang === 'en' ? 'Buying guides' : 'أدلة الشراء';
   const ctaBrowse = lang === 'fr' ? 'Parcourir les annonces DLALA en toute sécurité' : lang === 'en' ? 'Browse DLALA listings safely' : 'تصفح إعلانات دلالة بأمان';
-  const bodyHtml = `<h1>${escHtml(h1)}</h1>\n<p>${escHtml(description)}</p>\n<p><a href="${SITE}/" class="cta">${ctaBrowse}</a></p>\n${cards}`;
+  const bodyHtml = `<h1>${escHtml(h1)}</h1>\n<p>${escHtml(description)}</p>\n<p><a href="/" class="cta">${ctaBrowse}</a></p>\n${cards}`;
   const homeLabel = lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية';
   const guidesLabel = lang === 'fr' ? 'Guides' : lang === 'en' ? 'Guides' : 'الأدلة';
   const breadcrumbs: Breadcrumb[] = [
-    { label: homeLabel, href: SITE + '/' },
+    { label: homeLabel, href: '/' },
     { label: guidesLabel },
   ];
   return { title, description, canonical, hreflangs, jsonLd, bodyHtml, breadcrumbs, meta: {} };

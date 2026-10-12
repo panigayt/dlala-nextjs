@@ -17,6 +17,10 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+// 12 Oct 2026 (Round 12): migrated to the modular Firebase SDK
+// (@/lib/firebase; firebase-client users → getFirebaseCdn()). The
+// photoVariants clear-half flow (Round 11) and the R2 presigned-upload
+// flow are preserved exactly — see the comments at their sites.
 import {
   useRequireAuth,
   LoadingSpinner,
@@ -24,7 +28,7 @@ import {
   btnCls,
   type FirebaseClient,
   type CompatUser,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES, dzPriceWords } from '@/lib/categories';
 import { pubT } from '@/lib/publish-strings';
@@ -511,6 +515,7 @@ function PublishForm({
   editId: string | null;
   initialMode: string | null;
 }) {
+  const { db, fsMod, authMod } = client;
   const { lang } = useLang();
   const t = useCallback((k: string) => pubT(k, lang), [lang]);
   // Draft restore — read once via lazy initializer (client-only, no effect)
@@ -570,8 +575,8 @@ function PublishForm({
     if (!editId) return;
     (async () => {
       try {
-        const snap = await client.db.collection('listings').doc(editId).get();
-        if (!snap.exists) {
+        const snap = await fsMod.getDoc(fsMod.doc(db, 'listings', editId));
+        if (!snap.exists()) {
           setError(t('editLoadError'));
           return;
         }
@@ -644,7 +649,7 @@ function PublishForm({
         setError(t('editLoadError'));
       }
     })();
-  }, [editId, client, user.uid, t]);
+  }, [editId, client, db, fsMod, user.uid, t]);
 
   const onPickPhotos = async (files: FileList | null) => {
     if (!files) return;
@@ -916,7 +921,7 @@ function PublishForm({
     setError(null);
 
     // Verified email required
-    try { await user.getIdToken(true); } catch { /* ignore */ }
+    try { await authMod.getIdToken(user, true); } catch { /* ignore */ }
     if (!user.emailVerified) {
       fail(t('mustLogin'));
       return;
@@ -940,7 +945,7 @@ function PublishForm({
     // upload happens. Fails open (checkDuplicates returns null) on timeout.
     setProgress(t('progChecking'));
     const dup = await checkDuplicates({
-      db: client.db,
+      client,
       uid: user.uid,
       title: title.trim(),
       categoryId: cat,
@@ -961,7 +966,7 @@ function PublishForm({
       // Job seekers keep their concrete wilaya despite isWanted=true
       const isSeekerPre = cat === 'jobs' && answers['qJobType'] === 'jobSeeker';
       const wilayaCode = isWanted && !isSeekerPre ? 0 : Number(wilaya || 16);
-      const idToken = await user.getIdToken();
+      const idToken = await authMod.getIdToken(user);
 
       if (editId) {
         // Edit: direct Firestore update (owner only, rules enforce).
@@ -969,8 +974,8 @@ function PublishForm({
         const isSeeker = cat === 'jobs' && answers['qJobType'] === 'jobSeeker';
         const saleQty = isWanted ? 1 : Math.max(1, Number(qty) || 1);
         // Read current doc for version + price-drop detection
-        const curSnap = await client.db.collection('listings').doc(editId).get();
-        const cur = curSnap.exists ? (curSnap.data() as Record<string, unknown>) : {};
+        const curSnap = await fsMod.getDoc(fsMod.doc(db, 'listings', editId));
+        const cur = curSnap.exists() ? (curSnap.data() as Record<string, unknown>) : {};
         const oldPrice = Number(cur.price || 0);
         // 11 Oct 2026: category change is not a price drop (was false alerts).
         const priceDropped = effPrice < oldPrice && cat === String(cur.categoryId || '');
@@ -1028,7 +1033,7 @@ function PublishForm({
           version: Number(cur.version || 0) + 1,
           priceReduced: priceDropped,
           previousPrice: priceDropped ? oldPrice : null,
-          updatedAt: client.FieldValue.serverTimestamp(),
+          updatedAt: fsMod.serverTimestamp(),
           ...(isSeeker ? { isWanted: true } : {}),
         };
         // Only touch photos when the user changed them (picked new or removed existing)
@@ -1044,7 +1049,7 @@ function PublishForm({
           }
         }
         try {
-          await client.db.collection('listings').doc(editId).update(updateDoc);
+          await fsMod.updateDoc(fsMod.doc(db, 'listings', editId), updateDoc);
         } catch {
           // The update itself failed (rules/network) — refuse rather than
           // leave a half-applied edit.
@@ -1068,9 +1073,9 @@ function PublishForm({
         // recipient has a favorite doc for the listing.
         if (priceDropped) {
           try {
-            const favSnap = await client.db
-              .collection(`listingFavoriters/${editId}/users`)
-              .get();
+            const favSnap = await fsMod.getDocs(
+              fsMod.collection(db, 'listingFavoriters', editId, 'users')
+            );
             const notifId = `drop_${editId}_${effPrice}`;
             const sellerUid = user.uid;
             const notifData = {
@@ -1089,12 +1094,10 @@ function PublishForm({
               .filter((favUid) => favUid && favUid !== sellerUid);
             // Chunk at the Firestore 500-op batch limit (legacy Round 14).
             for (let i = 0; i < targets.length; i += 500) {
-              const batch = client.db.batch();
+              const batch = fsMod.writeBatch(db);
               for (const favUid of targets.slice(i, i + 500)) {
                 batch.set(
-                  client.db
-                    .collection(`users/${favUid}/notifications`)
-                    .doc(notifId),
+                  fsMod.doc(db, 'users', favUid, 'notifications', notifId),
                   {
                     type: 'price_drop',
                     fromUid: sellerUid,
@@ -1102,7 +1105,7 @@ function PublishForm({
                     body: '',
                     data: notifData,
                     read: false,
-                    createdAt: client.FieldValue.serverTimestamp(),
+                    createdAt: fsMod.serverTimestamp(),
                   }
                 );
               }
@@ -1118,7 +1121,7 @@ function PublishForm({
       }
 
       // Upload photos to R2 (main + w320/w640/w1024/w32 variants)
-      const listingId = client.db.collection('listings').doc().id;
+      const listingId = fsMod.doc(fsMod.collection(db, 'listings')).id;
       const up = await uploadNewPhotos(photos, user.uid, listingId, idToken);
       const urls = up.urls;
       const thumbs: (string | null)[] = up.thumbs;

@@ -11,11 +11,11 @@ import Image from 'next/image';
 import {
   useRequireAuth,
   LoadingSpinner,
-  CompatDocSnap,
+  CompatQuerySnap,
   FirebaseClient,
   CompatUser,
   btnSecondaryCls,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { formatPrice, timeAgo } from '@/lib/firestore';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 import { convSt } from './conversations-strings';
@@ -151,6 +151,7 @@ export default function ConversationsPage() {
 
   const loadMeta = useCallback(
     async (items: Conv[], uid: string, client: FirebaseClient, lang: Lang) => {
+      const { db, fsMod } = client;
       const otherUids = [
         ...new Set(
           items
@@ -171,8 +172,8 @@ export default function ConversationsPage() {
       const nameEntries = await Promise.all(
         otherUids.map(async (id) => {
           try {
-            const d = await client.db.doc(`users_public/${id}`).get();
-            if (d.exists) {
+            const d = await fsMod.getDoc(fsMod.doc(db, `users_public/${id}`));
+            if (d.exists()) {
               const m = d.data() || {};
               const name =
                 (m.name as string) ||
@@ -190,8 +191,8 @@ export default function ConversationsPage() {
       const listingEntries = await Promise.all(
         listingIds.map(async (id) => {
           try {
-            const d = await client.db.doc(`listings/${id}`).get();
-            if (d.exists) {
+            const d = await fsMod.getDoc(fsMod.doc(db, `listings/${id}`));
+            if (d.exists()) {
               const m = d.data() || {};
               const thumbs =
                 (m.photo_thumbs as (string | null)[]) ||
@@ -231,6 +232,7 @@ export default function ConversationsPage() {
   const subscribe = useCallback(
     (client: FirebaseClient, user: CompatUser, lang: Lang) => {
       const uid = user.uid;
+      const { db, fsMod } = client;
       if (unsubRef.current) {
         try {
           unsubRef.current();
@@ -239,10 +241,7 @@ export default function ConversationsPage() {
         }
         unsubRef.current = null;
       }
-      const base = client.db
-        .collection('conversations')
-        .where('participants', 'array-contains', uid);
-      const onSnap = (snap: { docs: CompatDocSnap[] }) => {
+      const onSnap = (snap: CompatQuerySnap) => {
         setError(null);
         const docs = snap.docs
           .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Conv)
@@ -281,7 +280,15 @@ export default function ConversationsPage() {
       // composite index (participants array-contains + updatedAt desc) that
       // may not exist, causing the list to appear empty. onSnap already
       // sorts client-side via tsMs(), so the server-side orderBy is redundant.
-      unsubRef.current = base.limit(60).onSnapshot(onSnap, onErr);
+      unsubRef.current = fsMod.onSnapshot(
+        fsMod.query(
+          fsMod.collection(db, 'conversations'),
+          fsMod.where('participants', 'array-contains', uid),
+          fsMod.limit(60)
+        ),
+        onSnap,
+        onErr
+      );
     },
     // lang is passed as an argument (not closed over); the effect lists it
     // in deps so a language switch re-subscribes with the new lang
@@ -338,9 +345,10 @@ export default function ConversationsPage() {
     // 11 Oct 2026: removed window.confirm — hangs headless browsers.
     // Hide is reversible (conversation reappears on new message).
     try {
-      await client.db
-        .doc(`conversations/${id}`)
-        .update({ hiddenFor: client.FieldValue.arrayUnion(user.uid) });
+      const { db, fsMod } = client;
+      await fsMod.updateDoc(fsMod.doc(db, `conversations/${id}`), {
+        hiddenFor: fsMod.arrayUnion(user.uid),
+      });
       setConvs((prev) => prev.filter((c) => c.id !== id));
       setHiddenId(id);
       showToast(st('chatHidden'), 6000);
@@ -354,9 +362,10 @@ export default function ConversationsPage() {
     const user = userRef.current;
     if (!client || !user) return;
     try {
-      await client.db
-        .doc(`conversations/${id}`)
-        .update({ hiddenFor: client.FieldValue.arrayRemove(user.uid) });
+      const { db, fsMod } = client;
+      await fsMod.updateDoc(fsMod.doc(db, `conversations/${id}`), {
+        hiddenFor: fsMod.arrayRemove(user.uid),
+      });
       if (clientRef.current && userRef.current)
         subscribe(clientRef.current, userRef.current, lang);
     } catch {

@@ -9,7 +9,7 @@
 //   - Public view renders without auth; sold/hidden docs (403 anonymous)
 //     render the trilingual 404.
 
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -112,12 +112,16 @@ import {
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
 
-async function getListing(id: string): Promise<ListingDetail | null> {
+async function _getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
   // Round 150: listings rarely change — 5min ISR (was 60s).
   cacheLife({ revalidate: 300 });
   return fetchListing(id);
 }
+
+// Round 12 (12 Oct 2026): React cache() dedupes the existence check across
+// generateMetadata + the page body within one request — one Firestore read.
+const getListing = cache(_getListing);
 
 function wilayaName(code: number | undefined, lang: Lang): string {
   if (!code) return '';
@@ -224,15 +228,15 @@ export async function generateMetadata({
     // for genuinely missing listings, never for a failed fetch.
     fetchFailed = true;
   }
-  // Round 8 (12 Oct 2026): a missing listing must be a real HTTP 404, not a
-  // soft 404. The existing notFound() inside ListingContent runs after the
-  // <Suspense> boundary has started streaming, so the response keeps status
-  // 200 (Next.js docs: "The response starts streaming from the <Suspense>
-  // boundary before notFound() runs, so it keeps its 200 status"). Calling
-  // notFound() here — generateMetadata runs before streaming starts —
-  // returns a proper 404 with the not-found.tsx boundary UI. The fetch is
-  // already on the critical path (SEO metadata needs the listing), so no
-  // extra latency is added for valid listings.
+  // Round 12 (12 Oct 2026): the REAL HTTP 404 was INTENDED to come from
+  // notFound() in the page component body — BUT under cacheComponents:true
+  // the page-body await is postponed (x-nextjs-postponed: 1), so the
+  // response keeps HTTP 200 even though the not-found.tsx boundary UI
+  // renders. Verified via curl on a local production build 12 Oct 2026.
+  // A real 404 status needs the check before rendering starts (e.g.
+  // Proxy) — see NEEDS-DECISION report. This notFound() in generateMetadata
+  // is a harmless fallback: the dynamic metadata also streams after the
+  // 200 headers are sent.
   if (!listing && !fetchFailed) notFound();
   // 11 Oct 2026: noindex on 404 — deleted listings must not be indexed
   // (kept as belt-and-braces; the not-found boundary also injects noindex).
@@ -244,25 +248,6 @@ export async function generateMetadata({
   } catch {
     return { title: 'DLALA', robots: { index: false, follow: false } };
   }
-}
-
-async function NotFoundView() {
-  const lang = await getServerLang();
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="text-6xl font-bold text-emerald-700">D</div>
-      <h1 className="mt-4 text-4xl font-bold">404</h1>
-      <h2 className="mt-2 text-xl" lang="ar" dir="rtl">هذا الإعلان غير موجود</h2>
-      <p className="mt-2 text-zinc-600" lang="ar" dir="rtl">
-        ربما تم حذف الإعلان أو أن الرابط غير صحيح.
-      </p>
-      <p className="mt-1 text-zinc-600" lang="fr">Cette annonce n&rsquo;existe pas ou a été supprimée.</p>
-      <p className="mt-1 text-zinc-600" lang="en">This listing does not exist or was removed.</p>
-      <div className="mt-6">
-        <NotFoundCta />
-      </div>
-    </div>
-  );
 }
 
 // Round 9 (12 Oct 2026): transient fetch-failure UI. fetchListing() THROWS
@@ -312,33 +297,17 @@ function ListingSkeleton() {
   );
 }
 
-async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
+async function ListingContent({
+  params,
+  listing,
+}: {
+  params: Promise<{ id: string }>;
+  // Round 12: the existence check already ran in the page body (ONE read
+  // shared via the React-cache-deduped getListing) — listing is guaranteed
+  // non-null here; transient failures never reach this component.
+  listing: ListingDetail;
+}) {
   const { id } = await params;
-  let listing: ListingDetail | null = null;
-  let error: string | null = null;
-  try {
-    listing = await getListing(id);
-  } catch (e) {
-    error = e instanceof Error ? e.message : 'listing-error';
-  }
-
-  if (!listing && !error) {
-    notFound();
-  }
-
-  // Round 9 (12 Oct 2026): a THROWN fetch is a transient failure
-  // (network/5xx/429 — fetchListing throws `listing-rest-<status>`), NOT a
-  // missing listing (fetchListing returns null for 404/403). The old code
-  // rendered the 404 "doesn't exist" view here at HTTP 200, conflating the
-  // two. Keep HTTP 200 with a retry UI; genuinely missing listings still
-  // go through notFound() above (and in generateMetadata) for a real 404.
-  if (error) {
-    return <TransientErrorView id={id} />;
-  }
-
-  if (!listing) {
-    return <NotFoundView />;
-  }
 
   const l = listing;
   const pageLang = await getServerLang();
@@ -597,15 +566,47 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
   );
 }
 
-export default function ListingPage({
+export default async function ListingPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
+
+  // Round 12 (12 Oct 2026): the existence check runs HERE — in the page
+  // component body, before any <Suspense> tree is returned. notFound() at
+  // this point renders the not-found.tsx boundary UI — BUT the response
+  // keeps HTTP 200, not 404: with cacheComponents:true the page-body await
+  // is postponed (x-nextjs-postponed: 1), so the 200 headers are sent
+  // before notFound() throws. Verified via curl on a local production
+  // build 12 Oct 2026. A real 404 status needs the check to run before
+  // rendering starts (e.g. Proxy) — see NEEDS-DECISION report.
+  let listing: ListingDetail | null = null;
+  let fetchFailed = false;
+  try {
+    listing = await getListing(id);
+  } catch {
+    fetchFailed = true;
+  }
+
+  // fetchListing returns null for genuinely missing listings (404/403 —
+  // incl. sold/hidden docs for anonymous readers). That is a real 404.
+  if (!listing && !fetchFailed) notFound();
+
+  // A THROWN fetch (network/5xx/429) is a transient failure — the listing
+  // may well exist. HTTP 200 + retry UI (Round 9), never a 404.
+  if (!listing) {
+    return (
+      <ListingDir>
+        <TransientErrorView id={id} />
+      </ListingDir>
+    );
+  }
+
   return (
     <ListingDir>
       <Suspense fallback={<ListingSkeleton />}>
-        <ListingContent params={params} />
+        <ListingContent params={params} listing={listing} />
       </Suspense>
     </ListingDir>
   );

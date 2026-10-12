@@ -22,7 +22,18 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { type CompatUser } from '@/lib/firebase-compat';
+// 12 Oct 2026 (Round 12): migrated to the modular Firebase SDK
+// (@/lib/firebase; firebase-compat users → getFirebaseBundled()). The lazy
+// dynamic import('@/lib/firebase') at each usage site keeps the SDK off the
+// initial chunk (topology preserved). AuthGate still passes the old compat
+// user type, so the user prop takes the minimal structural shape both the
+// old CompatUser and the modular User satisfy (only uid is used).
+import type {
+  FirebaseDb,
+  FirebaseDocSnap,
+  FirebaseModules,
+  FirebaseQuery,
+} from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -143,27 +154,6 @@ function listingImg(l: LiveListing): string {
   return '';
 }
 
-type DbLike = {
-  collection: (p: string) => {
-    doc: (id: string) => {
-      collection: (p: string) => {
-        orderBy: (f: string, d: string) => {
-          limit: (n: number) => unknown;
-        };
-      };
-    };
-  };
-  doc: (p: string) => {
-    get: () => Promise<{ exists: boolean; id: string; data: () => Record<string, unknown> }>;
-    delete: () => Promise<void>;
-    collection: (p: string) => unknown;
-  };
-  batch: () => {
-    delete: (ref: unknown) => void;
-    commit: () => Promise<void>;
-  };
-};
-
 export default function FavoritesPage() {
   return (
     <AuthGate>
@@ -172,7 +162,7 @@ export default function FavoritesPage() {
   );
 }
 
-function FavoritesContent({ user }: { user: CompatUser }) {
+function FavoritesContent({ user }: { user: { uid: string } }) {
   const { lang, t } = useLang();
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [cards, setCards] = useState<FavCard[] | null>(null);
@@ -183,29 +173,34 @@ function FavoritesContent({ user }: { user: CompatUser }) {
   const [retrying, setRetrying] = useState<string | null>(null);
   // 12 Oct 2026: per-card remove error feedback (was silent console.error).
   const [removeErr, setRemoveErr] = useState<string | null>(null);
-  const cursorRef = useRef<unknown>(null);
+  // Pagination cursor: the last QueryDocumentSnapshot of the previous page.
+  // Modular fsMod.startAfter(snapshot) accepts a DocumentSnapshot — same
+  // semantics as the old compat .startAfter(docSnap) on this query shape
+  // (orderBy createdAt desc on the same subcollection).
+  const cursorRef = useRef<FirebaseDocSnap | null>(null);
   const mounted = useRef(true);
   // 0.0.0.22 (Zak): instant paint — a snapshot already painted stays and
   // the live load refreshes silently (no spinner flash).
   const paintedFromCacheRef = useRef(false);
 
   const hydratePage = useCallback(
-    async (db: DbLike, colQuery: unknown): Promise<{ cards: FavCard[]; lastDoc: unknown; full: boolean }> => {
-      const q = colQuery as {
-        get: () => Promise<{ empty: boolean; size: number; docs: { id: string; data: () => FavItem; ref: unknown }[] }>;
-      };
-      const snap = await withTimeout(q.get(), 20000);
+    async (
+      db: FirebaseDb,
+      fsMod: FirebaseModules['fs'],
+      colQuery: FirebaseQuery
+    ): Promise<{ cards: FavCard[]; lastDoc: FirebaseDocSnap | null; full: boolean }> => {
+      const snap = await withTimeout(fsMod.getDocs(colQuery), 20000);
       const lastDoc = snap.empty ? null : snap.docs[snap.docs.length - 1];
       const hydrated: FavCard[] = await Promise.all(
         snap.docs.map(async (d) => {
           const raw = d.data() as FavItem;
           const fav: FavItem = { listingId: String(raw.listingId || ''), price: raw.price, createdAt: raw.createdAt };
           try {
-            const l = await withTimeout(db.doc('listings/' + fav.listingId).get(), 15000);
+            const l = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'listings/' + fav.listingId)), 15000);
             // Distinguish "deleted" (read succeeded, doc absent) from
             // "unreadable" (read failed — caught below). A failed read must
             // NEVER render as a "removed" placeholder (Round 30).
-            if (!l.exists) return { fav, live: null, status: 'deleted' };
+            if (!l.exists()) return { fav, live: null, status: 'deleted' };
             const data = l.data() as Record<string, unknown>;
             return {
               fav,
@@ -226,20 +221,14 @@ function FavoritesContent({ user }: { user: CompatUser }) {
     setError(null);
     cursorRef.current = null;
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as DbLike & {
-        collection: (p: string) => {
-          doc: (id: string) => {
-            collection: (p: string) => {
-              orderBy: (f: string, d: string) => { limit: (n: number) => unknown };
-            };
-          };
-        };
-      };
-      const col = db.collection('favorites').doc(user.uid).collection('items');
-      const q = col.orderBy('createdAt', 'desc').limit(FAV_PAGE);
-      const { cards: page, lastDoc, full } = await hydratePage(db, q);
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
+      const q = fsMod.query(
+        fsMod.collection(db, 'favorites', user.uid, 'items'),
+        fsMod.orderBy('createdAt', 'desc'),
+        fsMod.limit(FAV_PAGE)
+      );
+      const { cards: page, lastDoc, full } = await hydratePage(db, fsMod, q);
       if (!mounted.current) return;
       // F7 (legacy sweep): if EVERY hydration failed on first load, that is a
       // full-page error state — never show the misleading "no favorites" empty
@@ -277,25 +266,19 @@ function FavoritesContent({ user }: { user: CompatUser }) {
     if (!cursorRef.current || loadingMore) return;
     setLoadingMore(true);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      type MoreDb = {
-        collection: (p: string) => {
-          doc: (id: string) => {
-            collection: (p: string) => {
-              orderBy: (f: string, d: string) => {
-                limit: (n: number) => { startAfter: (c: unknown) => unknown };
-              };
-            };
-          };
-        };
-      };
-      const raw = fb.firestore() as unknown;
-      const db = raw as DbLike;
-      const mdb = raw as MoreDb;
-      const col = mdb.collection('favorites').doc(user.uid).collection('items');
-      const q = col.orderBy('createdAt', 'desc').limit(FAV_PAGE).startAfter(cursorRef.current);
-      const { cards: page, lastDoc, full } = await hydratePage(db, q);
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
+      // startAfter with the previous page's last DocumentSnapshot — modular
+      // equivalent of the old compat .startAfter(docSnap): extracts the
+      // orderBy field values from the snapshot (same subcollection, same
+      // orderBy shape, so the cursor is valid).
+      const q = fsMod.query(
+        fsMod.collection(db, 'favorites', user.uid, 'items'),
+        fsMod.orderBy('createdAt', 'desc'),
+        fsMod.limit(FAV_PAGE),
+        fsMod.startAfter(cursorRef.current)
+      );
+      const { cards: page, lastDoc, full } = await hydratePage(db, fsMod, q);
       if (!mounted.current) return;
       cursorRef.current = lastDoc;
       setCards((prev) => (prev ? [...prev, ...page] : page));
@@ -334,12 +317,11 @@ function FavoritesContent({ user }: { user: CompatUser }) {
     async (listingId: string) => {
       setRetrying(listingId);
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        const db = fb.firestore() as unknown as DbLike;
-        const l = await withTimeout(db.doc('listings/' + listingId).get(), 15000);
+        const { getFirebaseBundled } = await import('@/lib/firebase');
+        const { db, fsMod } = await getFirebaseBundled();
+        const l = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'listings/' + listingId)), 15000);
         if (!mounted.current) return;
-        if (!l.exists) {
+        if (!l.exists()) {
           setCards((prev) =>
             prev ? prev.map((c) => (c.fav.listingId === listingId ? { ...c, status: 'deleted' as const } : c)) : prev
           );
@@ -369,14 +351,13 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       setRemoving(listingId);
       setRemoveErr(null); // clear previous error on retry
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        const db = fb.firestore() as unknown as DbLike;
+        const { getFirebaseBundled } = await import('@/lib/firebase');
+        const { db, fsMod } = await getFirebaseBundled();
         // 11 Oct 2026: atomic batch — prevents orphan listingFavoriters docs
         // (which caused phantom price-drop notifications).
-        const batch = db.batch();
-        batch.delete(db.doc(`favorites/${user.uid}/items/${listingId}`));
-        batch.delete(db.doc(`listingFavoriters/${listingId}/users/${user.uid}`));
+        const batch = fsMod.writeBatch(db);
+        batch.delete(fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`));
+        batch.delete(fsMod.doc(db, `listingFavoriters/${listingId}/users/${user.uid}`));
         await withTimeout(batch.commit(), 15000);
         // 11 Oct 2026: REMOVED tasteNoteFav — it recorded an ADD signal on remove,
         // polluting the taste profile with unfavorited listings.

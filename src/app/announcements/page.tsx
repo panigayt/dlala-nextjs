@@ -38,6 +38,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description: desc,
+    alternates: { canonical: 'https://dzdlala.com/announcements' },
     openGraph: {
       title,
       description: desc,

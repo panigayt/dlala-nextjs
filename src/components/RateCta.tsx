@@ -25,9 +25,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState } from '@/lib/firebase-client';
+// Round 12: firebase-client user → CDN path. btnSecondaryCls is a pure CSS
+// string const on the new module — no SDK loader involved.
+import { useAuthState, btnSecondaryCls } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
-import { btnSecondaryCls } from '@/lib/firebase-client';
 import {
   fetchRateableDeals,
   submitRating,

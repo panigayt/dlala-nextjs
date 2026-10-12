@@ -14,7 +14,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
@@ -66,13 +66,16 @@ export default function RecentFollowers({ uid }: { uid: string }) {
     let cancelled = false;
     (async () => {
       try {
+        const { db, fsMod } = client;
         const snap = await withTimeout(
-          client.db
-            .collection('follows')
-            .where('storeId', '==', uid)
-            .orderBy('createdAt', 'desc')
-            .limit(RECENT_FOLLOWERS_N)
-            .get(),
+          fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'follows'),
+              fsMod.where('storeId', '==', uid),
+              fsMod.orderBy('createdAt', 'desc'),
+              fsMod.limit(RECENT_FOLLOWERS_N)
+            )
+          ),
           15000
         );
         if (snap.docs.length === 0) {
@@ -87,10 +90,10 @@ export default function RecentFollowers({ uid }: { uid: string }) {
             );
             try {
               const p = await withTimeout(
-                client.db.doc(`users_public/${fid}`).get(),
+                fsMod.getDoc(fsMod.doc(db, `users_public/${fid}`)),
                 10000
               );
-              const data = (p.exists ? p.data() || {} : {}) as Record<
+              const data = (p.exists() ? p.data() || {} : {}) as Record<
                 string,
                 unknown
               >;

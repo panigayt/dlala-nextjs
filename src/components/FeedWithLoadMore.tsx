@@ -16,7 +16,11 @@ import ListingCardView from '@/components/ListingCardView';
 import VitrineShowcase from '@/components/VitrineShowcase';
 import { interleaveWanted, resultsCountText, cardImage, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
-import { useAuthState } from '@/lib/firebase-client';
+// Round 12: this file is a firebase-compat user → bundled path. Type-only
+// imports are erased at compile time (zero bundle cost); the loader module
+// itself is fetched lazily inside the hook below, so the SDK stays off the
+// initial home chunk (weak-network critical path).
+import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
@@ -43,15 +47,6 @@ interface FeedPage {
   regular: ListingCard[];
   hasMore: boolean;
 }
-
-// Minimal shape for the follows query (mirrors my-follows/page.tsx DbLike).
-type FollowsDbLike = {
-  collection: (p: string) => {
-    where: (f: string, op: string, v: string) => {
-      limit: (n: number) => { get: () => Promise<{ docs: { data: () => Record<string, unknown> }[] }> };
-    };
-  };
-};
 
 export default function FeedWithLoadMore({
   initialCards,
@@ -154,14 +149,21 @@ export default function FeedWithLoadMore({
     refreshedUid.current = user.uid;
     (async () => {
       try {
-        const db = client.db as unknown as FollowsDbLike;
+        // Round 12: modular Firestore over the bundled path.
+        const { db, fsMod } = client;
         const snap = await withTimeout(
-          db.collection('follows').where('followerId', '==', user.uid).limit(200).get(),
+          fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'follows'),
+              fsMod.where('followerId', '==', user.uid),
+              fsMod.limit(200)
+            )
+          ),
           20000
         );
         const fresh = new Set<string>();
         for (const d of snap.docs) {
-          const sid = d.data()?.storeId;
+          const sid = d.data().storeId;
           if (sid) fresh.add(String(sid));
         }
         if (setsEqual(followedRef.current, fresh)) return; // no pointless reshuffle

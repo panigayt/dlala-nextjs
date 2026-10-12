@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import type { SellerRating } from '@/lib/firestore';
 import { useLang } from '@/lib/i18n';
+import { getFirebaseBundled } from '@/lib/firebase';
+import { withTimeout } from '@/lib/timeout';
 
 export default function RatingsList({
   ratings,
@@ -32,11 +34,10 @@ export default function RatingsList({
 
   useEffect(() => {
     let mounted = true;
-    // Lazy-load the compat SDK — keeps it off the initial page chunk.
-    import('@/lib/firebase-compat')
-      .then(({ getFirebase }) => getFirebase())
-      .then((fb) => {
-      const user = fb.auth().currentUser;
+    // Lazy-load the Firebase SDK — keeps it off the initial page chunk.
+    getFirebaseBundled()
+      .then(({ auth }) => {
+      const user = auth.currentUser;
       if (mounted) setCurrentUid(user ? user.uid : null);
     }).catch(() => {});
     return () => { mounted = false; };
@@ -51,29 +52,16 @@ export default function RatingsList({
     // The button label is clear enough; the action is reversible via admin.
     setReporting(rating.id);
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as {
-        collection: (p: string) => {
-          add: (d: Record<string, unknown>) => Promise<void>;
-          doc: (id: string) => { set: (d: Record<string, unknown>) => Promise<void> };
-        };
-      };
-      const FieldValue = (fb.firestore as unknown as {
-        FieldValue: { serverTimestamp: () => unknown };
-      }).FieldValue;
+      // Lazy-load the Firebase SDK — keeps it off the initial page chunk.
+      const { db, fsMod, auth } = await getFirebaseBundled();
       // Use the existing /reports collection (targetType='review').
       // Rules: only the reviewed user may report; shape validated server-side.
       // 11 Oct 2026: deterministic ID — prevents duplicate reports on retry/reload.
       const reportId = `${currentUid}_review_${rating.id}`;
-      const user = fb.auth().currentUser;
+      const user = auth.currentUser;
       // 11 Oct 2026: 15s timeout — prevents browser hang if Firestore stalls.
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Write timeout')), 15000)
-      );
-      await Promise.race([
-        db.collection('reports').doc(reportId).set({
+      await withTimeout(
+        fsMod.setDoc(fsMod.doc(db, `reports/${reportId}`), {
           reporterId: currentUid,
           reporterName: user?.displayName || '',
           targetType: 'review',
@@ -84,10 +72,10 @@ export default function RatingsList({
           details: `Reported review: ${rating.stars}/5 - ${rating.comment || ''}`.slice(0, 2000),
           photoUrl: '',
           status: 'new',
-          createdAt: FieldValue.serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         }),
-        timeout,
-      ]);
+        15000
+      );
       setMessage(t('reportSent'));
       setMessageIsError(false);
       // 11 Oct 2026: mark as reported — disables the button.

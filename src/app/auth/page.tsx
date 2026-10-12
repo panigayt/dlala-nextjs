@@ -2,10 +2,11 @@
 
 // Dlala auth page — client component (interactive, no SSR needed).
 //
-// Uses the shared Firebase **compat** SDK loader (src/lib/firebase-compat):
-// auth + firestore compat SDKs at runtime from the gstatic CDN (same 10.12.0
-// version the production SPA uses). Runtime <script> injection keeps the SDKs
-// out of the Next.js bundle entirely — zero bundler issues.
+// Uses the shared Firebase **modular** SDK loader (src/lib/firebase):
+// getFirebaseBundled() loads the npm modular SDK (auth + firestore) as an
+// async chunk inside auth handlers/effects only — zero bundle cost up front.
+// Persistence is browserLocalPersistence (set inside the module), so
+// sessions survive deploys.
 //
 // Signup creates the account atomically (js/auth.js parity):
 //  1. Username registry pre-check BEFORE the Auth account is created
@@ -20,13 +21,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-// Lazy: the compat SDK is heavy (~1MB) — it is only loaded inside auth
-// handlers/effects. The type imports below are erased at compile time.
+// Lazy: the Firebase SDK is heavy — it is only loaded inside auth
+// handlers/effects via getFirebaseBundled(). The type imports below are
+// erased at compile time.
 import type {
-  CompatAuth,
   CompatUser,
-  FirebaseCompat,
-} from '../../lib/firebase-compat';
+  FirebaseClient,
+} from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { authReturnTarget } from '../../lib/auth-return';
 import { useLang } from '../../lib/i18n';
@@ -69,23 +70,15 @@ function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: str
 
 // --- Firestore helpers (js/auth.js parity) ---
 
-interface DocRefLike {
-  get: () => Promise<{ exists: boolean }>;
-}
-
-function fieldValue(fb: FirebaseCompat) {
-  return (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue;
-}
-
 // Atomic batch: users/{uid} profile doc + usernames/{lower} registry.
 // Mirrors js/auth.js ensureUserDoc() — rules-compliant create with every
 // required field (termsAcceptedAt = one-time acceptance, legal evidence).
-async function ensureUserDoc(fb: FirebaseCompat, uid: string, name: string, username: string): Promise<void> {
-  const db = fb.firestore();
-  const snap = await withTimeout((db.doc('users/' + uid) as unknown as DocRefLike).get());
-  if (snap.exists) return;
-  const batch = db.batch();
-  batch.set(db.doc('users/' + uid), {
+async function ensureUserDoc(fc: FirebaseClient, uid: string, name: string, username: string): Promise<void> {
+  const { db, fsMod } = fc;
+  const snap = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users/' + uid)));
+  if (snap.exists()) return;
+  const batch = fsMod.writeBatch(db);
+  batch.set(fsMod.doc(db, 'users/' + uid), {
     name: name || '',
     username: username || '',
     verified: false,
@@ -96,10 +89,10 @@ async function ensureUserDoc(fb: FirebaseCompat, uid: string, name: string, user
     confirmedDeals: 0,
     boostCredits: 0,
     phone: '',
-    termsAcceptedAt: fieldValue(fb).serverTimestamp(),
-    createdAt: fieldValue(fb).serverTimestamp(),
+    termsAcceptedAt: fsMod.serverTimestamp(),
+    createdAt: fsMod.serverTimestamp(),
   });
-  batch.set(db.doc('usernames/' + username.toLowerCase()), { userId: uid });
+  batch.set(fsMod.doc(db, 'usernames/' + username.toLowerCase()), { userId: uid });
   await withTimeout(batch.commit());
 }
 
@@ -107,12 +100,12 @@ async function ensureUserDoc(fb: FirebaseCompat, uid: string, name: string, user
 // Prefers the signup-chosen handle (recovered from sessionStorage); falls
 // back to a deterministic derivation with a uid-suffix collision escape.
 async function claimUsername(
-  fb: FirebaseCompat,
+  fc: FirebaseClient,
   uid: string,
   preferred: string | null,
   fallbackName: string
 ): Promise<string> {
-  const db = fb.firestore();
+  const { db, fsMod } = fc;
   const candidates: string[] = [];
   if (preferred && /^[a-z0-9._]{3,20}$/.test(preferred)) candidates.push(preferred);
   let base = (fallbackName || 'user').toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 16);
@@ -122,8 +115,8 @@ async function claimUsername(
   for (const c of candidates) {
     if (!/^[a-z0-9._]{3,20}$/.test(c)) continue;
     try {
-      const snap = await withTimeout((db.doc('usernames/' + c) as unknown as DocRefLike).get());
-      if (!snap.exists) return c;
+      const snap = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'usernames/' + c)));
+      if (!snap.exists()) return c;
     } catch {
       // treat as taken, try the next candidate
     }
@@ -182,12 +175,13 @@ export default function AuthPage() {
     // Already signed in: verified users proceed to their return target,
     // unverified users land on the verification gate.
     let cancelled = false;
-    // Lazy-load the compat SDK — keeps it off the initial page chunk.
-    import('../../lib/firebase-compat')
-      .then(({ getFirebase }) => getFirebase())
-      .then((fb) => {
+    // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off the
+    // initial page chunk.
+    import('@/lib/firebase')
+      .then(({ getFirebaseBundled }) => getFirebaseBundled())
+      .then(({ auth, authMod }) => {
         if (cancelled) return;
-        unsubRef.current = fb.auth().onAuthStateChanged((u) => {
+        unsubRef.current = authMod.onAuthStateChanged(auth, (u) => {
           if (!mounted.current || !u) return;
           if (u.emailVerified) {
             // 11 Oct 2026: clear password from memory after successful auth.
@@ -236,17 +230,18 @@ export default function AuthPage() {
     }
     setLoading(true);
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
-      const fb = await getFirebase();
-      const auth = fb.auth();
-      const cred = await withAuthRetry(() => auth.signInWithEmailAndPassword(em, password));
+      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // the initial page chunk.
+      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
+      const fc = await getFirebaseBundled();
+      const { auth, authMod, db, fsMod } = fc;
+      const cred = await withAuthRetry(() => authMod.signInWithEmailAndPassword(auth, em, password));
       // M3: sign-in success is determined by the sign-in result itself.
       // A post-login reload() failure must NOT flip a success into a
       // failure — log it and continue with the cached verification flag.
       let verified = !!cred.user.emailVerified;
       try {
-        await withTimeout(cred.user.reload());
+        await withTimeout(authMod.reload(cred.user));
         verified = !!cred.user.emailVerified;
       } catch (e) {
         console.error('post-login reload failed (non-fatal):', e);
@@ -255,9 +250,9 @@ export default function AuthPage() {
       // (post-signup failure), create it now so the account is complete.
       try {
         const snap = await withTimeout(
-          (fb.firestore().doc('users/' + cred.user.uid) as unknown as DocRefLike).get()
+          fsMod.getDoc(fsMod.doc(db, 'users/' + cred.user.uid))
         );
-        if (!snap.exists) {
+        if (!snap.exists()) {
           let nm = cred.user.displayName || '';
           let un: string | null = null;
           try {
@@ -270,12 +265,12 @@ export default function AuthPage() {
             // no stashed profile — derive below
           }
           const claimed = await claimUsername(
-            fb,
+            fc,
             cred.user.uid,
             un,
             nm || (cred.user.email || '').split('@')[0]
           );
-          await ensureUserDoc(fb, cred.user.uid, nm, claimed);
+          await ensureUserDoc(fc, cred.user.uid, nm, claimed);
           try {
             sessionStorage.removeItem(PENDING_KEY);
           } catch {
@@ -329,12 +324,13 @@ export default function AuthPage() {
       return;
     }
     setLoading(true);
-    let fb: FirebaseCompat | null = null;
+    let fc: FirebaseClient | null = null;
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
-      fb = await getFirebase();
-      const auth: CompatAuth = fb.auth();
+      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off the
+      // initial page chunk.
+      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
+      fc = await getFirebaseBundled();
+      const { auth, authMod, db, fsMod } = fc;
       // SECURITY (15 Sep 2026): block disposable/temporary email domains.
       // js/auth.js parity — checked after the SDK loads, before the username
       // registry pre-check.
@@ -361,21 +357,21 @@ export default function AuthPage() {
       // leaving an Auth account with no user doc (a stuck account). The batch
       // commit still guards the TOCTOU race atomically.
       const regSnap = await withTimeout(
-        (fb.firestore().doc('usernames/' + handle) as unknown as DocRefLike).get()
+        fsMod.getDoc(fsMod.doc(db, 'usernames/' + handle))
       );
-      if (regSnap.exists) {
+      if (regSnap.exists()) {
         if (mounted.current) {
           setError(t('usernameTaken'));
           setLoading(false);
         }
         return;
       }
-      const cred = await withAuthRetry(() => auth.createUserWithEmailAndPassword(em, password));
+      const cred = await withAuthRetry(() => authMod.createUserWithEmailAndPassword(auth, em, password));
       // The Auth account now exists. Post-creation steps must NEVER orphan
       // it — on failure we still advance (the user doc is created idempotently
       // by ensureUserDoc on the next sign-in too) and report what happened.
       try {
-        await withTimeout(cred.user.updateProfile({ displayName }));
+        await withTimeout(authMod.updateProfile(cred.user, { displayName }));
       } catch (e) {
         console.error('updateProfile failed (non-fatal):', e);
       }
@@ -391,7 +387,7 @@ export default function AuthPage() {
       // (verify), never in the hidden signup form.
       let docRetryNote = false;
       try {
-        await ensureUserDoc(fb, cred.user.uid, displayName, handle);
+        await ensureUserDoc(fc, cred.user.uid, displayName, handle);
         try {
           sessionStorage.removeItem(PENDING_KEY);
         } catch {
@@ -402,7 +398,7 @@ export default function AuthPage() {
         docRetryNote = true;
       }
       try {
-        await withTimeout(cred.user.sendEmailVerification());
+        await withTimeout(authMod.sendEmailVerification(cred.user));
       } catch (e) {
         console.error('sendEmailVerification failed (non-fatal):', e);
       }
@@ -418,24 +414,24 @@ export default function AuthPage() {
       const code = (e as { code?: string } | null)?.code || '';
       if (code === 'auth/email-already-in-use') {
         try {
-          // Lazy-load the compat SDK — keeps it off the initial page chunk.
-          const { getFirebase } = await import('../../lib/firebase-compat');
-          const fbL9 = fb ?? (await getFirebase());
+          // Lazy-load the Firebase SDK (bundled async chunk).
+          const { getFirebaseBundled } = await import('@/lib/firebase');
+          const fcL9 = fc ?? (await getFirebaseBundled());
           const signInCred = await withTimeout(
-            fbL9.auth().signInWithEmailAndPassword(em, password)
+            fcL9.authMod.signInWithEmailAndPassword(fcL9.auth, em, password)
           );
           try {
-            await withTimeout(signInCred.user.updateProfile({ displayName }));
+            await withTimeout(fcL9.authMod.updateProfile(signInCred.user, { displayName }));
           } catch {
             // non-fatal
           }
           try {
-            await ensureUserDoc(fbL9, signInCred.user.uid, displayName, handle);
+            await ensureUserDoc(fcL9, signInCred.user.uid, displayName, handle);
           } catch {
             // P2 heal covers this on the next sign-in
           }
           try {
-            await withTimeout(signInCred.user.sendEmailVerification());
+            await withTimeout(fcL9.authMod.sendEmailVerification(signInCred.user));
           } catch {
             // non-fatal
           }
@@ -472,10 +468,11 @@ export default function AuthPage() {
     }
     setLoading(true);
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
-      const fb = await getFirebase();
-      await withAuthRetry(() => fb.auth().sendPasswordResetEmail(em));
+      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // the initial page chunk.
+      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseBundled();
+      await withAuthRetry(() => authMod.sendPasswordResetEmail(auth, em));
       if (mounted.current) {
         setOkMsg(t('resetLinkSent'));
         setLoading(false);
@@ -495,10 +492,11 @@ export default function AuthPage() {
     setOkMsg(null);
     setLoading(true);
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase } = await import('../../lib/firebase-compat');
-      const fb = await getFirebase();
-      const u = fb.auth().currentUser;
+      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // the initial page chunk.
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseBundled();
+      const u = auth.currentUser;
       if (!u) {
         if (mounted.current) {
           setLoading(false);
@@ -507,7 +505,7 @@ export default function AuthPage() {
         return;
       }
       try {
-        await withTimeout(u.reload());
+        await withTimeout(authMod.reload(u));
       } catch (e) {
         console.error('verify-continue reload failed:', e);
         if (mounted.current) {
@@ -541,10 +539,11 @@ export default function AuthPage() {
     setOkMsg(null);
     setLoading(true);
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
-      const fb = await getFirebase();
-      const u = fb.auth().currentUser;
+      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // the initial page chunk.
+      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseBundled();
+      const u = auth.currentUser;
       if (!u) {
         if (mounted.current) {
           setLoading(false);
@@ -552,7 +551,7 @@ export default function AuthPage() {
         }
         return;
       }
-      await withAuthRetry(() => u.sendEmailVerification());
+      await withAuthRetry(() => authMod.sendEmailVerification(u));
       if (mounted.current) {
         // Success and failure states are exclusive.
         setOkMsg(t('emailSent'));
@@ -568,10 +567,11 @@ export default function AuthPage() {
 
   async function handleVerifyLogout() {
     try {
-      // Lazy-load the compat SDK — keeps it off the initial page chunk.
-      const { getFirebase } = await import('../../lib/firebase-compat');
-      const fb = await getFirebase();
-      await fb.auth().signOut();
+      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off the
+      // initial page chunk.
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseBundled();
+      await authMod.signOut(auth);
     } catch (e) {
       // A failed sign-out must surface in the VISIBLE mode (verify), never
       // in the hidden login mode.

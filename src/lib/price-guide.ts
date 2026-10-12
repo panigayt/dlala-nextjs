@@ -20,7 +20,7 @@ import {
   mdToHtml,
   ctaTop,
   guideUrl,
-  indexUrl,
+  indexPath,
   parseFrontmatter,
   type Breadcrumb,
   type GuideLang,
@@ -214,7 +214,7 @@ export function priceSectionTable(
     .map(({ m, r }) => {
       const name = lang === 'ar' ? m.ar : m.fr;
       const label = m.modelSlug
-        ? `<a href="${SITE}/voitures/modeles/${m.modelSlug}">${escHtml(name)}</a>`
+        ? `<a href="/voitures/modeles/${m.modelSlug}">${escHtml(name)}</a>`
         : escHtml(name);
       return (
         `<tr><td>${label}</td>` +
@@ -435,10 +435,10 @@ export function renderPriceGuideData({
     articleHtml +
     '\n' +
     faqHtml +
-    `\n<p><a href="${SITE}/" class="cta">${pgCta}</a></p>`;
+    `\n<p><a href="/" class="cta">${pgCta}</a></p>`;
   const breadcrumbs: Breadcrumb[] = [
-    { label: pgHome, href: SITE + '/' },
-    { label: pgGuides, href: indexUrl(lang) },
+    { label: pgHome, href: '/' },
+    { label: pgGuides, href: indexPath(lang) },
     { label: title },
   ];
   return {

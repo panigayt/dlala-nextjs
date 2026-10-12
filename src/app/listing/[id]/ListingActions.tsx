@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState, getFirebaseBundled } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
@@ -175,11 +175,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         return;
       }
       try {
+        const { db, fsMod } = client;
         const d = await withTimeout(
-          client.db.doc(`favorites/${user.uid}/items/${listingId}`).get(),
+          fsMod.getDoc(fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`)),
           15000
         );
-        if (!cancelled && mounted.current) setFav(d.exists);
+        if (!cancelled && mounted.current) setFav(d.exists());
       } catch {
         // Check failed (e.g. offline): settle on the safe default, not a
         // permanent loading shimmer (js/listing.js parity).
@@ -244,7 +245,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     // the contact button: the cached user object stays stale after the user
     // clicks the link in another tab).
     try {
-      await user.reload();
+      await client.authMod.reload(user);
     } catch {
       /* offline — use cached */
     }
@@ -258,6 +259,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
 
   const onSendReport = useCallback(async () => {
     if (!user || !client || repSending) return;
+    const { db, fsMod, authMod } = client;
     setRepSending(true);
     setRepError(null);
     // Hoisted so the catch block can clean up an uploaded evidence photo
@@ -271,7 +273,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         if (!f.type.startsWith('image/') || f.size > 8 * 1024 * 1024) {
           throw new Error('photo');
         }
-        idToken = await user.getIdToken();
+        idToken = await authMod.getIdToken(user);
         const key = `listings/${user.uid}/report-${listingId}/ev_${Date.now()}.jpg`;
         const up = await withTimeout(uploadToR2(f, key, idToken), 60000);
         photoUrl = up.publicUrl;
@@ -283,7 +285,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       // reporter can never flood the admin inbox with repeats.
       reportId = `${user.uid}_listing_${listingId}`;
       await withTimeout(
-        client.db.doc(`reports/${reportId}`).set({
+        fsMod.setDoc(fsMod.doc(db, `reports/${reportId}`), {
           reporterId: user.uid,
           reporterName,
           targetType: 'listing',
@@ -294,7 +296,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           details: repDetails.trim(),
           photoUrl,
           status: 'new',
-          createdAt: client.FieldValue.serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         }),
         20000
       );
@@ -312,13 +314,13 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       if (photoUrl && (e as { code?: string })?.code === 'permission-denied') {
         try {
           const existing = await withTimeout(
-            client.db.doc(`reports/${reportId}`).get(),
+            fsMod.getDoc(fsMod.doc(db, `reports/${reportId}`)),
             8000
           );
           const data = existing.data() as { photoUrl?: string } | undefined;
-          const committed = existing.exists && data && data.photoUrl === photoUrl;
+          const committed = existing.exists() && data && data.photoUrl === photoUrl;
           if (!committed) {
-            const tok = idToken || (await user.getIdToken());
+            const tok = idToken || (await authMod.getIdToken(user));
             await deleteR2Objects([photoUrl], tok).catch(() => {});
           }
         } catch {
@@ -348,12 +350,13 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     // with the server after.
     const wasOn = !!fav;
     setFav(!wasOn);
+    const { db, fsMod } = client;
     try {
-      const favRef = client.db.doc(`favorites/${user.uid}/items/${listingId}`);
-      const trackRef = client.db.doc(`listingFavoriters/${listingId}/users/${user.uid}`);
-      const snap = await withTimeout(favRef.get(), 15000);
-      const batch = client.db.batch();
-      if (snap.exists) {
+      const favRef = fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`);
+      const trackRef = fsMod.doc(db, `listingFavoriters/${listingId}/users/${user.uid}`);
+      const snap = await withTimeout(fsMod.getDoc(favRef), 15000);
+      const batch = fsMod.writeBatch(db);
+      if (snap.exists()) {
         batch.delete(favRef);
         // 4 Oct 2026 (v113, legacy parity): also remove from listingFavoriters
         batch.delete(trackRef);
@@ -368,14 +371,14 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           // 4 Oct 2026 (v112, legacy parity): sellerId denormalized so the
           // seller can query their favoriters via collectionGroup.
           sellerId: sellerId || '',
-          createdAt: client.FieldValue.serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         });
         // 4 Oct 2026 (v113, legacy parity): seller discovery without
         // collectionGroup.
-        batch.set(trackRef, { createdAt: client.FieldValue.serverTimestamp() });
+        batch.set(trackRef, { createdAt: fsMod.serverTimestamp() });
       }
       await withTimeout(batch.commit(), 15000);
-      const added = !snap.exists;
+      const added = !snap.exists();
       if (mounted.current) setFav(added);
       // 11 Oct 2026: only on ADD — recording on remove pollutes taste.
       if (added) {
@@ -392,10 +395,10 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       // self-corrects instead of lying.
       try {
         const truth = await withTimeout(
-          client.db.doc(`favorites/${user.uid}/items/${listingId}`).get(),
+          fsMod.getDoc(fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`)),
           8000
         );
-        if (mounted.current) setFav(truth.exists);
+        if (mounted.current) setFav(truth.exists());
       } catch {
         if (mounted.current) setFav(wasOn);
       }
@@ -420,11 +423,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     if (contactInFlight.current) return; // P2 (16 Sep 2026): double-tap guard
     contactInFlight.current = true;
     setContacting(true);
+    const { db, fsMod, authMod } = client;
     try {
       // requireVerified (legacy): reload for a fresh emailVerified — the
       // cached user object stays stale after clicking the link in another tab.
       try {
-        await user.reload();
+        await authMod.reload(user);
       } catch {
         /* offline — use cached */
       }
@@ -449,7 +453,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       // Find an existing thread: participants query only (rules deny
       // buyerId/listingId queries — T24), then filter client-side.
       const snap = await withTimeout(
-        client.db.collection('conversations').where('participants', 'array-contains', user.uid).get(),
+        fsMod.getDocs(
+          fsMod.query(
+            fsMod.collection(db, 'conversations'),
+            fsMod.where('participants', 'array-contains', user.uid)
+          )
+        ),
         20000
       );
       let found: string | null = null;
@@ -462,16 +471,16 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         return;
       }
       // Create with the exact conversationCreateOk payload (legacy parity).
-      const ldoc = await withTimeout(client.db.doc(`listings/${listingId}`).get(), 15000);
-      const ldata = ldoc.exists ? ldoc.data() : null;
-      if (!ldoc.exists || !ldata || ldata.sellerId !== sellerId) {
+      const ldoc = await withTimeout(fsMod.getDoc(fsMod.doc(db, `listings/${listingId}`)), 15000);
+      const ldata = ldoc.exists() ? ldoc.data() : null;
+      if (!ldoc.exists() || !ldata || (ldata as Record<string, unknown>).sellerId !== sellerId) {
         showToast(setToast, t('errorGeneric'), toastTimer);
         return;
       }
-      const sts = client.FieldValue.serverTimestamp();
-      const ref = client.db.collection('conversations').doc();
+      const sts = fsMod.serverTimestamp();
+      const ref = fsMod.doc(fsMod.collection(db, 'conversations'));
       await withTimeout(
-        ref.set({
+        fsMod.setDoc(ref, {
           buyerId: user.uid,
           sellerId,
           participants: [user.uid, sellerId],
@@ -517,7 +526,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     if (user.uid === sellerId || sold) return;
     // requireVerified (legacy parity — same reload pattern as contact).
     try {
-      await user.reload();
+      await client.authMod.reload(user);
     } catch {
       /* offline — use cached */
     }
@@ -556,10 +565,11 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     if (!user || !client || user.uid !== sellerId) return;
     if (!window.confirm(t('deleteConfirm'))) return;
     setDeleting(true);
+    const { db, fsMod, authMod } = client;
     try {
-      const listingRef = client.db.doc(`listings/${listingId}`);
-      const d = await withTimeout(listingRef.get(), 15000);
-      if (!d.exists) {
+      const listingRef = fsMod.doc(db, `listings/${listingId}`);
+      const d = await withTimeout(fsMod.getDoc(listingRef), 15000);
+      if (!d.exists()) {
         router.push('/');
         return;
       }
@@ -568,23 +578,23 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         showToast(setToast, t('errorGeneric'), toastTimer);
         return;
       }
-      const batch = client.db.batch();
+      const batch = fsMod.writeBatch(db);
       const lt = l.title as { ar?: string } | string | undefined;
-      batch.set(client.db.collection('deletedAds').doc(), {
+      batch.set(fsMod.doc(fsMod.collection(db, 'deletedAds')), {
         sellerId: user.uid,
         listingId,
         title:
           typeof lt === 'object' ? lt?.ar || '' : typeof lt === 'string' ? lt : '',
         sellerName: user.displayName || '',
-        deletedAt: client.FieldValue.serverTimestamp(),
+        deletedAt: fsMod.serverTimestamp(),
         reason: 'owner',
         adminId: '',
       });
       batch.delete(listingRef);
       // 0.0.0.36 C-R52-1 (legacy parity): a deleted listing must not linger
       // as a stale Vitrine pick.
-      batch.update(client.db.doc(`users/${user.uid}`), {
-        vitrineIds: client.FieldValue.arrayRemove(listingId),
+      batch.update(fsMod.doc(db, `users/${user.uid}`), {
+        vitrineIds: fsMod.arrayRemove(listingId),
       });
       await withTimeout(batch.commit(), 20000);
       // Photo cleanup (best-effort, my-listings parity): legacy Firebase
@@ -596,15 +606,15 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         ...(Array.isArray(l.photo_thumbs) ? l.photo_thumbs : []),
       ].filter((u): u is string => typeof u === 'string' && !!u);
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        const storage = fb.storage() as unknown as {
-          ref: (p: string) => { delete: () => Promise<void> };
-        };
+        // R3: modular storageMod.ref(storage, url) accepts BOTH gs:// and
+        // https:// URLs — the old refFromURL/ref-path branch guard collapses
+        // into one call with identical semantics (delete per URL, ignore
+        // missing objects, whole step non-fatal).
+        const { storage, storageMod } = await getFirebaseBundled();
         await Promise.all(
           urls.map(async (u) => {
             try {
-              await storage.ref(u).delete();
+              await storageMod.deleteObject(storageMod.ref(storage, u));
             } catch {
               // ignore missing objects
             }
@@ -614,7 +624,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         // non-fatal
       }
       try {
-        const idToken = await user.getIdToken();
+        const idToken = await authMod.getIdToken(user);
         await deleteR2Objects(urls, idToken);
       } catch {
         // non-fatal

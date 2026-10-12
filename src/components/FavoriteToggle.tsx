@@ -31,7 +31,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 // (11 Oct 2026: withTimeout moved to @/lib/timeout — no firebase-compat needed.)
 import { withTimeout } from '@/lib/timeout';
 import { tasteNoteFav } from '@/lib/taste';
@@ -40,20 +40,6 @@ import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { savePendingAction } from '@/lib/pending-action';
 
 import { useLang } from '@/lib/i18n';
-
-interface DocRefLike {
-  get: () => Promise<{ exists: boolean }>;
-}
-
-interface BatchLike {
-  set: (ref: unknown, data: Record<string, unknown>) => void;
-  delete: (ref: unknown) => void;
-  commit: () => Promise<void>;
-}
-
-interface FieldValueLike {
-  serverTimestamp: () => unknown;
-}
 
 interface Props {
   listingId: string;
@@ -112,11 +98,12 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         return;
       }
       try {
+        const { db, fsMod } = client;
         const d = await withTimeout(
-          (client.db.doc(`favorites/${user.uid}/items/${listingId}`) as unknown as DocRefLike).get(),
+          fsMod.getDoc(fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`)),
           15000
         );
-        if (!cancelled && mounted.current) setFav(d.exists);
+        if (!cancelled && mounted.current) setFav(d.exists());
       } catch {
         // Check failed (e.g. offline): settle on the safe default, not a
         // permanent loading shimmer (js/listing.js parity).
@@ -170,6 +157,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       if (user.uid === sellerId) return; // own — not rendered anyway
       if (inFlight.current) return; // double-tap race guard (M6 class)
       inFlight.current = true;
+      const { db, fsMod } = client;
       // Zak 21 Sep tap-feedback fix: flip the heart AND the count on THIS
       // frame; reconcile with the real toggle result afterwards.
       const wasOn = !!fav;
@@ -177,11 +165,11 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       setFav(optimisticOn);
       setDelta((d) => d + (optimisticOn ? 1 : -1));
       try {
-        const favRef = client.db.doc(`favorites/${user.uid}/items/${listingId}`);
-        const trackRef = client.db.doc(`listingFavoriters/${listingId}/users/${user.uid}`);
-        const snap = await withTimeout((favRef as unknown as DocRefLike).get(), 15000);
-        const batch = client.db.batch() as unknown as BatchLike;
-        if (snap.exists) {
+        const favRef = fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`);
+        const trackRef = fsMod.doc(db, `listingFavoriters/${listingId}/users/${user.uid}`);
+        const snap = await withTimeout(fsMod.getDoc(favRef), 15000);
+        const batch = fsMod.writeBatch(db);
+        if (snap.exists()) {
           batch.delete(favRef);
           // 4 Oct 2026 (v113, legacy parity): also remove from
           // listingFavoriters.
@@ -197,16 +185,16 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
             // 4 Oct 2026 (v112, legacy parity): sellerId denormalized so the
             // seller can query their favoriters via collectionGroup.
             sellerId: sellerId || '',
-            createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
+            createdAt: fsMod.serverTimestamp(),
           });
           // 4 Oct 2026 (v113, legacy parity): seller discovery without
           // collectionGroup.
           batch.set(trackRef, {
-            createdAt: (client.FieldValue as unknown as FieldValueLike).serverTimestamp(),
+            createdAt: fsMod.serverTimestamp(),
           });
         }
         await withTimeout(batch.commit(), 15000);
-        const added = !snap.exists;
+        const added = !snap.exists();
         if (mounted.current) {
           if (added !== optimisticOn) {
             // Server disagrees with the guess — correct the count too.
@@ -232,11 +220,11 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         // lying; the count falls back to the server-rendered base.
         try {
           const truth = await withTimeout(
-            (client.db.doc(`favorites/${user.uid}/items/${listingId}`) as unknown as DocRefLike).get(),
+            fsMod.getDoc(fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`)),
             8000
           );
           if (mounted.current) {
-            setFav(truth.exists);
+            setFav(truth.exists());
             setDelta(0);
           }
         } catch {

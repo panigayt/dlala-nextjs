@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
-import { type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
@@ -81,20 +81,10 @@ function SettingsContent({ user }: { user: CompatUser }) {
   // ---- Blocked users -------------------------------------------------------
   const loadBlocked = useCallback(async () => {
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as {
-        collection: (p: string) => {
-          where: (f: string, op: string, v: string) => {
-            get: () => Promise<{ docs: { data: () => { blockedUid?: string } }[] }>;
-          };
-        };
-        doc: (p: string) => {
-          get: () => Promise<{ exists: boolean; data: () => { name?: string; username?: string } }>;
-        };
-      };
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
       const snap = await withTimeout(
-        db.collection('blocks').where('blockerUid', '==', user.uid).get(),
+        fsMod.getDocs(fsMod.query(fsMod.collection(db, 'blocks'), fsMod.where('blockerUid', '==', user.uid))),
         20000
       );
       const uids: string[] = [];
@@ -107,11 +97,11 @@ function SettingsContent({ user }: { user: CompatUser }) {
         let name = '';
         let username = '';
         try {
-          const u = await withTimeout(db.doc('users_public/' + uid).get(), 15000);
-          if (u.exists) {
-            const data = u.data();
-            name = data.name || '';
-            username = data.username || '';
+          const u = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users_public/' + uid)), 15000);
+          if (u.exists()) {
+            const data = u.data() as { name?: string; username?: string } | undefined;
+            name = data?.name || '';
+            username = data?.username || '';
           }
         } catch {
           // name stays blank
@@ -133,15 +123,10 @@ function SettingsContent({ user }: { user: CompatUser }) {
     async (targetUid: string) => {
       setUnblocking(targetUid);
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        const au = fb.auth().currentUser;
-        const idToken = au
-          ? await withTimeout(
-              (au as unknown as { getIdToken: () => Promise<string> }).getIdToken(),
-              15000
-            )
-          : '';
+        const { getFirebaseBundled } = await import('@/lib/firebase');
+        const { auth, authMod } = await getFirebaseBundled();
+        const au = auth.currentUser;
+        const idToken = au ? await withTimeout(authMod.getIdToken(au), 15000) : '';
         if (!idToken) throw new Error('signed-out');
         const res = await withTimeout(
           fetch(BLOCK_FN_URL, {
@@ -209,25 +194,18 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setReportErr(null);
     setReportBusy(true);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as {
-        collection: (p: string) => {
-          doc: (id: string) => {
-            collection: (p: string) => { doc: () => { set: (d: Record<string, unknown>) => Promise<void> } };
-          };
-        };
-      };
-      const ref = db.collection('users').doc(user.uid).collection('tickets').doc();
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
+      const ref = fsMod.doc(fsMod.collection(db, 'users', user.uid, 'tickets'));
       await withTimeout(
-        ref.set({
+        fsMod.setDoc(ref, {
           userId: user.uid,
           type: 'problem',
           subject: reportSubject.trim(),
           body,
           lang,
           status: 'open',
-          createdAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         }),
         20000
       );
@@ -260,13 +238,13 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setDeleteErr(null);
     setDeleteBusy(true);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { auth, authMod, db, fsMod } = await getFirebaseBundled();
       // Fresh re-authentication is mandatory.
-      const cred = fb.auth.EmailAuthProvider.credential(user.email || '', deletePw);
+      const cred = authMod.EmailAuthProvider.credential(user.email || '', deletePw);
       try {
         await withTimeout(
-          (user as unknown as { reauthenticateWithCredential: (c: unknown) => Promise<void> }).reauthenticateWithCredential(cred),
+          authMod.reauthenticateWithCredential(user, cred),
           20000
         );
       } catch (re) {
@@ -279,40 +257,26 @@ function SettingsContent({ user }: { user: CompatUser }) {
         setDeleteBusy(false);
         return;
       }
-      const db = fb.firestore() as unknown as {
-        collection: (p: string) => {
-          where: (f: string, op: string, v: string) => {
-            limit: (n: number) => {
-              get: () => Promise<{
-                docs: { id: string; data: () => Record<string, unknown> }[];
-              }>;
-            };
-          };
-        };
-        doc: (p: string) => {
-          delete: () => Promise<void>;
-          set: (d: Record<string, unknown>) => Promise<void>;
-        };
-        batch: () => {
-          set: (ref: unknown, d: Record<string, unknown>) => void;
-          delete: (ref: unknown) => void;
-          commit: () => Promise<void>;
-        };
-      };
       // 11 Oct 2026: file deletion request FIRST — before any destructive work.
       // If this fails, nothing is wiped yet (clean retry). The Cloud Function
       // is the authoritative finisher even if the client dies after this.
       await withTimeout(
-        db.doc('deletionRequests/' + user.uid).set({
+        fsMod.setDoc(fsMod.doc(db, 'deletionRequests/' + user.uid), {
           userId: user.uid,
-          requestedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+          requestedAt: fsMod.serverTimestamp(),
           status: 'pending',
         }),
         20000
       );
       // Best-effort pre-wipe of own listings (batches of 5).
       const snap = await withTimeout(
-        db.collection('listings').where('sellerId', '==', user.uid).limit(100).get(),
+        fsMod.getDocs(
+          fsMod.query(
+            fsMod.collection(db, 'listings'),
+            fsMod.where('sellerId', '==', user.uid),
+            fsMod.limit(100)
+          )
+        ),
         20000
       );
       // Collect R2 photo URLs before the docs are gone.
@@ -337,7 +301,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         await Promise.all(
           ids.slice(i, i + 5).map(async (id) => {
             try {
-              await withTimeout(db.doc('listings/' + id).delete(), 15000);
+              await withTimeout(fsMod.deleteDoc(fsMod.doc(db, 'listings/' + id)), 15000);
             } catch {
               // best-effort
             }
@@ -348,7 +312,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
       // enforces uid ownership; unstored variants are derived server-side.
       if (r2Urls.length) {
         try {
-          const idToken = await withTimeout(user.getIdToken(), 15000);
+          const idToken = await withTimeout(authMod.getIdToken(user), 15000);
           // 11 Oct 2026: timeout added — hanging R2 cleanup stalled deletion.
           await withTimeout(deleteR2Objects(r2Urls, idToken), 20000);
         } catch {
@@ -358,10 +322,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
       // Deletion request was filed before the pre-wipe (see above).
       // Delete the Auth user for real.
       try {
-        await withTimeout(
-          (user as unknown as { delete: () => Promise<void> }).delete(),
-          20000
-        );
+        await withTimeout(authMod.deleteUser(user), 20000);
       } catch (de) {
         const dc = (de as { code?: string })?.code || '';
         if (dc === 'auth/requires-recent-login') {
@@ -376,7 +337,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         throw de;
       }
       try {
-        await fb.auth().signOut();
+        await authMod.signOut(auth);
       } catch {
         // already signed out
       }

@@ -8,15 +8,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+// 12 Oct 2026 (Round 12): migrated to the modular Firebase SDK (@/lib/firebase).
 import {
   useRequireAuth,
   LoadingSpinner,
-  FirebaseClient,
-  CompatUser,
+  type FirebaseClient,
+  type CompatUser,
   inputCls,
   btnCls,
   btnSecondaryCls,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { formatPrice, timeAgo } from '@/lib/firestore';
 import { WILAYAS } from '@/lib/wilayas';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
@@ -321,15 +322,16 @@ export default function AlertsPage() {
 
   const loadAll = useCallback(
     async (client: FirebaseClient, user: CompatUser) => {
+      const { db, fsMod } = client;
       // NOTE: loading/error are NOT set synchronously here — the initial
       // useState(true) covers first paint, and retry buttons set them in
       // their (allowed) event handlers. All setState below happens in
       // async continuations (after await).
       try {
         // Saved searches
-        const sSnap = await client.db
-          .collection(`users/${user.uid}/savedSearches`)
-          .get();
+        const sSnap = await fsMod.getDocs(
+          fsMod.collection(db, `users/${user.uid}/savedSearches`)
+        );
         const docs: SavedSearch[] = sSnap.docs.map((d) => ({
           id: d.id,
           ...((d.data() || {}) as object),
@@ -341,15 +343,20 @@ export default function AlertsPage() {
         const matchGroups: { search: SavedSearch; hits: FreshListing[] }[] = [];
         let freshForSnap: FreshListing[] = [];
         if (active.length) {
-          const lSnap = await client.db
-            .collection('listings')
-            .where('status', 'in', ['available', 'negotiating'])
-            .orderBy('createdAt', 'desc')
-            .limit(60)
-            .get()
+          const lSnap = await fsMod
+            .getDocs(
+              fsMod.query(
+                fsMod.collection(db, 'listings'),
+                fsMod.where('status', 'in', ['available', 'negotiating']),
+                fsMod.orderBy('createdAt', 'desc'),
+                fsMod.limit(60)
+              )
+            )
             .catch(() =>
               // No composite index: unordered fallback, client-sorted
-              client.db.collection('listings').limit(60).get()
+              fsMod.getDocs(
+                fsMod.query(fsMod.collection(db, 'listings'), fsMod.limit(60))
+              )
             );
           const fresh: FreshListing[] = lSnap.docs.map(
             (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as FreshListing
@@ -383,13 +390,21 @@ export default function AlertsPage() {
         setMatches(matchGroups);
 
         // Notifications
-        const nSnap = await client.db
-          .collection(`users/${user.uid}/notifications`)
-          .orderBy('createdAt', 'desc')
-          .limit(30)
-          .get()
+        const nSnap = await fsMod
+          .getDocs(
+            fsMod.query(
+              fsMod.collection(db, `users/${user.uid}/notifications`),
+              fsMod.orderBy('createdAt', 'desc'),
+              fsMod.limit(30)
+            )
+          )
           .catch(() =>
-            client.db.collection(`users/${user.uid}/notifications`).limit(30).get()
+            fsMod.getDocs(
+              fsMod.query(
+                fsMod.collection(db, `users/${user.uid}/notifications`),
+                fsMod.limit(30)
+              )
+            )
           );
         const nDocs: Notif[] = nSnap.docs
           .map(
@@ -539,23 +554,24 @@ export default function AlertsPage() {
         minPrice: minP,
         maxPrice: maxP,
       };
-      const col = client.db.collection(`users/${user.uid}/savedSearches`);
+      const { db, fsMod } = client;
+      const col = fsMod.collection(db, `users/${user.uid}/savedSearches`);
       if (editingId) {
-        await col.doc(editingId).update(payload);
+        await fsMod.updateDoc(fsMod.doc(col, editingId), payload);
         showToast(t('searchUpdated'));
         resetForm();
       } else {
-        const existing = await col.get();
+        const existing = await fsMod.getDocs(col);
         if (existing.size >= 10) {
           showToast(t('maxSearchesReached'));
           setSaving(false);
           return;
         }
-        await col.add({
+        await fsMod.addDoc(col, {
           userId: user.uid,
           ...payload,
           enabled: true,
-          createdAt: client.FieldValue.serverTimestamp(),
+          createdAt: fsMod.serverTimestamp(),
         });
         resetForm();
       }
@@ -572,10 +588,11 @@ export default function AlertsPage() {
     const user = userRef.current;
     if (!client || !user) return;
     try {
-      await client.db
-        .collection(`users/${user.uid}/savedSearches`)
-        .doc(s.id)
-        .update({ enabled: !s.enabled });
+      const { db, fsMod } = client;
+      await fsMod.updateDoc(
+        fsMod.doc(db, `users/${user.uid}/savedSearches`, s.id),
+        { enabled: !s.enabled }
+      );
       await loadAll(client, user);
     } catch {
       showToast(t('errorGeneric'));
@@ -600,10 +617,10 @@ export default function AlertsPage() {
     }
     if (s.id === editingId) resetForm();
     try {
-      await client.db
-        .collection(`users/${user.uid}/savedSearches`)
-        .doc(s.id)
-        .delete();
+      const { db, fsMod } = client;
+      await fsMod.deleteDoc(
+        fsMod.doc(db, `users/${user.uid}/savedSearches`, s.id)
+      );
       await loadAll(client, user);
     } catch {
       showToast(t('errorGeneric'));
@@ -619,9 +636,10 @@ export default function AlertsPage() {
     const unread = notifs.filter((n) => !n.read);
     if (!unread.length) return;
     try {
-      const batch = client.db.batch();
-      const col = client.db.collection(`users/${user.uid}/notifications`);
-      unread.forEach((n) => batch.update(col.doc(n.id), { read: true }));
+      const { db, fsMod } = client;
+      const batch = fsMod.writeBatch(db);
+      const col = fsMod.collection(db, `users/${user.uid}/notifications`);
+      unread.forEach((n) => batch.update(fsMod.doc(col, n.id), { read: true }));
       await batch.commit();
       await loadAll(client, user);
       // 12 Oct 2026: notify SiteChrome to refresh badge (was stale until reload).
@@ -640,10 +658,11 @@ export default function AlertsPage() {
     if (!/^(\/chat\/|\/listing\/|\/seller\/)/.test(target)) return;
     if (client && user && !n.read) {
       try {
-        await client.db
-          .collection(`users/${user.uid}/notifications`)
-          .doc(n.id)
-          .update({ read: true });
+        const { db, fsMod } = client;
+        await fsMod.updateDoc(
+          fsMod.doc(db, `users/${user.uid}/notifications`, n.id),
+          { read: true }
+        );
       } catch {
         /* best-effort — still navigate */
       }

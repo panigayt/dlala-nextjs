@@ -14,18 +14,35 @@
 // profile card, infos tab via useLang(); js/i18n.js onLangChange parity;
 // same pattern as the home page Round 107 and search Round 109).
 
-// 12 Oct 2026: missing seller → real HTTP 404 via notFound() (pre-streaming;
-// notFound() inside <Suspense> keeps status 200 — see listing page fix).
+// Round 12 (12 Oct 2026): the real HTTP 404 was INTENDED to come from
+// notFound() in the page component body — BUT under cacheComponents:true
+// the page-body await is postponed (x-nextjs-postponed: 1), so the response
+// keeps HTTP 200 even though the not-found.tsx boundary UI renders.
+// Verified via curl on a local production build 12 Oct 2026. A real 404
+// status needs the check before rendering starts (e.g. Proxy) — see
+// NEEDS-DECISION report. The notFound() in generateMetadata below is a
+// harmless fallback: the dynamic metadata also streams after the 200
+// headers are sent, so a notFound() there cannot set the status either.
 export async function generateMetadata({ params }: { params: Promise<{ uid: string }> }) {
   const { uid } = await params;
-  const seller = await getSeller(uid);
-  if (!seller) {
-    notFound();
+  let seller: SellerProfile | null = null;
+  let fetchFailed = false;
+  try {
+    seller = await getSeller(uid);
+  } catch {
+    // Transient fetch failure — noindex fallback; the page body renders the
+    // in-page error view at HTTP 200 (never a 404 for a failed fetch).
+    fetchFailed = true;
   }
-  return { title: `DLALA — ${seller.name || 'Seller'}` };
+  if (!seller && !fetchFailed) notFound();
+  if (!seller) return { title: 'DLALA', robots: { index: false, follow: false } };
+  return {
+    title: `DLALA — ${seller.name || 'Seller'}`,
+    alternates: { canonical: 'https://dzdlala.com/seller/' + encodeURIComponent(uid) },
+  };
 }
 
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import SellerPage from '@/components/SellerPage';
@@ -39,11 +56,15 @@ import {
   type SellerRating,
 } from '@/lib/firestore';
 
-async function getSeller(uid: string): Promise<SellerProfile | null> {
+async function _getSeller(uid: string): Promise<SellerProfile | null> {
   'use cache';
   cacheLife({ revalidate: 60 });
   return fetchSeller(uid);
 }
+
+// Round 12 (12 Oct 2026): React cache() dedupes the existence check across
+// generateMetadata + the page body within one request — one Firestore read.
+const getSeller = cache(_getSeller);
 
 // js/seller.js R3 parity: the grid starts at 30 ads; "Show more" adds +30.
 async function getSellerListings(uid: string): Promise<ListingCard[]> {
@@ -79,29 +100,21 @@ function SellerSkeleton() {
   );
 }
 
-async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
-  const { uid } = await params;
-
-  let seller: SellerProfile | null = null;
-  let listings: ListingCard[] = [];
+async function SellerContent({
+  uid,
+  seller,
+  listings,
+}: {
+  uid: string;
+  // Round 12: the existence check ran in the page body (ONE read shared via
+  // the React-cache-deduped getSeller). seller is null only on a transient
+  // fetch failure — SellerPage renders its in-page error view at HTTP 200
+  // (a failed fetch is never a 404).
+  seller: SellerProfile | null;
+  listings: ListingCard[];
+}) {
   let ratings: SellerRating[] | null = null;
   let ratingsFailed = false;
-  let sellerFailed = false;
-  try {
-    const [s, ls] = await Promise.all([getSeller(uid), getSellerListings(uid)]);
-    seller = s;
-    listings = ls;
-  } catch {
-    // Fetch failure: render the in-page error view (not a 404 — a transient
-    // error must not tell crawlers the profile is gone).
-    sellerFailed = true;
-  }
-
-  // Round 8: missing seller → real HTTP 404 via the root not-found boundary
-  // (trilingual 404 page). Same pattern as src/app/listing/[id]/page.tsx.
-  if (!seller && !sellerFailed) {
-    notFound();
-  }
 
   if (seller) {
     // Ratings are secondary content (js/seller.js loadRatings): a failed
@@ -125,15 +138,44 @@ async function SellerContent({ params }: { params: Promise<{ uid: string }> }) {
   );
 }
 
-export default function SellerPageRoute({
+export default async function SellerPageRoute({
   params,
 }: {
   params: Promise<{ uid: string }>;
 }) {
+  const { uid } = await params;
+
+  // Round 12 (12 Oct 2026): the existence check runs HERE — in the page
+  // component body, before any <Suspense> tree is returned. notFound() at
+  // this point renders the not-found.tsx boundary UI — BUT the response
+  // keeps HTTP 200, not 404: with cacheComponents:true the page-body await
+  // is postponed (x-nextjs-postponed: 1), so the 200 headers are sent
+  // before notFound() throws. Verified via curl on a local production
+  // build 12 Oct 2026. A real 404 status needs the check to run before
+  // rendering starts (e.g. Proxy) — see NEEDS-DECISION report.
+  let seller: SellerProfile | null = null;
+  let listings: ListingCard[] = [];
+  let sellerFailed = false;
+  try {
+    // Seller + listings fetched in parallel (js/seller.js parity); both
+    // reads share the React-cache-deduped fetch with generateMetadata.
+    const [s, ls] = await Promise.all([getSeller(uid), getSellerListings(uid)]);
+    seller = s;
+    listings = ls;
+  } catch {
+    // Fetch failure: render the in-page error view (not a 404 — a transient
+    // error must not tell crawlers the profile is gone).
+    sellerFailed = true;
+  }
+
+  // Genuinely missing seller (null) → real HTTP 404. A THROWN fetch is
+  // transient — the in-page error view at HTTP 200, never a 404.
+  if (!seller && !sellerFailed) notFound();
+
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
       <Suspense fallback={<SellerSkeleton />}>
-        <SellerContent params={params} />
+        <SellerContent uid={uid} seller={seller} listings={listings} />
       </Suspense>
     </div>
   );

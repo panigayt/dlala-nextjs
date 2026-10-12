@@ -8,7 +8,10 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useAuthState, type CompatUser, type FirebaseClient } from '@/lib/firebase-client';
+// Round 12: firebase-client user → CDN path. The new useAuthState() loads
+// the modular SDK from gstatic lazily inside its effect — the dynamic
+// boundary holds: nothing Firebase-shaped enters the initial bundle.
+import { useAuthState, type CompatUser, type FirebaseClient } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
 import PlatformBanner from './PlatformBanner';
 
@@ -141,7 +144,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Nav profile: the owner's own users/{uid} doc (legacy loadNavProfile,
-  // P1-5 REST approach replaced here by the compat SDK read).
+  // P1-5 REST approach replaced here by the SDK read — Round 12: modular).
   // Async: state is only set in async continuations (after await) —
   // no synchronous setState in the effect body (cascading-render safe).
   const loadProfileAsync = useCallback(async () => {
@@ -149,12 +152,10 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
     const uid = user.uid;
     setProfileState('loading');
     try {
-      const db = client.db as unknown as {
-        doc: (p: string) => { get: () => Promise<{ exists: boolean; data: () => ProfileData | undefined }> };
-      };
-      const snap = await db.doc('users/' + uid).get();
+      const { db, fsMod } = client;
+      const snap = await fsMod.getDoc(fsMod.doc(db, 'users/' + uid));
       if (!mounted.current) return;
-      if (snap.exists) {
+      if (snap.exists()) {
         setProfile((snap.data() || {}) as ProfileData);
         setProfileState('ready');
       } else {
@@ -190,19 +191,18 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
     if (!user || !client) return;
     const uid = user.uid;
     try {
-      const db = client.db as unknown as {
-        collection: (p: string) => {
-          where: (f: string, op: string, v: unknown) => {
-            orderBy: (f: string, d: string) => { limit: (n: number) => { get: () => Promise<{ forEach: (cb: (d: { data: () => Record<string, unknown> }) => void) => void; size: number }> } };
-            limit: (n: number) => { get: () => Promise<{ size: number }> };
-          };
-        };
-      };
+      // Round 12: modular Firestore.
+      const { db, fsMod } = client;
       // Unread messages: bounded to the 50 most recent conversations
       // (P1-6 — the (participants, updatedAt) composite index exists).
-      const cSnap = await db.collection('conversations')
-        .where('participants', 'array-contains', uid)
-        .orderBy('updatedAt', 'desc').limit(50).get();
+      const cSnap = await fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'conversations'),
+          fsMod.where('participants', 'array-contains', uid),
+          fsMod.orderBy('updatedAt', 'desc'),
+          fsMod.limit(50)
+        )
+      );
       let n = 0;
       cSnap.forEach((d) => {
         const unread = (d.data().unread || {}) as Record<string, number>;
@@ -210,8 +210,13 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       });
       if (mounted.current) setUnreadMsgs(n);
       // Alerts bell: unread notifications.
-      const nSnap = await db.collection(`users/${uid}/notifications`)
-        .where('read', '==', false).limit(20).get();
+      const nSnap = await fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'users', uid, 'notifications'),
+          fsMod.where('read', '==', false),
+          fsMod.limit(20)
+        )
+      );
       if (mounted.current) setUnreadAlerts(nSnap.size);
     } catch { /* best-effort: badges stay hidden */ }
   }, [user, client]);
@@ -303,7 +308,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
     setAcctOpen(false);
     if (!client) return;
     try {
-      await client.auth.signOut();
+      await client.authMod.signOut(client.auth);
     } catch {
       showToast(t('logoutFailed'));
       return;

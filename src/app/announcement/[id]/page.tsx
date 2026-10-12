@@ -17,7 +17,7 @@
 // (annLocalized default 'ar' = legacy annLocalized(map) fallback).
 
 import type { Metadata } from 'next';
-import { Suspense } from 'react';
+import { Suspense, cache } from 'react';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { fetchAnnouncement, annLocalized, type Announcement } from '@/lib/firestore';
@@ -28,7 +28,7 @@ import AnnouncementDetail, { type AnnouncementDetailData } from './AnnouncementD
 // Trilingual strings — verbatim from js/i18n.{ar,en,fr}.js (Round 120:
 // now owned by src/lib/i18n.ts; the skeleton keeps t('loading') via the
 // client shell — no local dict here).
-async function getAnnouncement(id: string): Promise<Announcement | null> {
+async function _getAnnouncement(id: string): Promise<Announcement | null> {
   'use cache';
   cacheLife({ revalidate: 60 });
   const a = await fetchAnnouncement(id);
@@ -36,6 +36,10 @@ async function getAnnouncement(id: string): Promise<Announcement | null> {
   if (!a || a.active !== true) return null;
   return a;
 }
+
+// Round 12 (12 Oct 2026): React cache() dedupes the existence check across
+// generateMetadata + the page body within one request — one Firestore read.
+const getAnnouncement = cache(_getAnnouncement);
 
 export async function generateMetadata({
   params,
@@ -57,15 +61,17 @@ export async function generateMetadata({
     // genuinely missing announcements, never for a failed fetch.
     fetchFailed = true;
   }
-  // Round 9 (12 Oct 2026): a missing/inactive announcement must be a real
-  // HTTP 404, not a soft-404. notFound() inside the <Suspense> boundary
-  // (AnnouncementDetail) runs after streaming has started, so the response
-  // keeps status 200 (Next.js docs: "The response starts streaming from the
-  // <Suspense> boundary before notFound() runs, so it keeps its 200
-  // status"). Calling notFound() here — generateMetadata runs before
-  // streaming starts — returns a proper 404 with the not-found.tsx
-  // boundary UI. The fetch is already on the critical path (SEO metadata
-  // needs the announcement), so no extra latency is added for valid docs.
+  // Round 12 (12 Oct 2026): the REAL HTTP 404 was INTENDED to come from
+  // notFound() in the page component body — BUT under cacheComponents:true
+  // the page-body await is postponed (x-nextjs-postponed: 1), so the
+  // response keeps HTTP 200 even though the not-found.tsx boundary UI
+  // renders. Verified via curl on a local production build 12 Oct 2026.
+  // A real 404 status needs the check before rendering starts (e.g.
+  // Proxy) — see NEEDS-DECISION report. This notFound() is a harmless
+  // fallback: the dynamic metadata also streams after the 200 headers are
+  // sent, so a notFound() here cannot set the 404 status either. The fetch
+  // is already on the critical path (SEO metadata needs the announcement),
+  // so no extra latency is added for valid docs.
   if ((!a || a.active !== true) && !fetchFailed) notFound();
   // 11 Oct 2026: noindex on inactive/missing as belt-and-braces (the
   // not-found boundary also injects noindex); reached only on fetch
@@ -84,6 +90,7 @@ export async function generateMetadata({
     return {
       title: fullTitle,
       description: desc || undefined,
+      alternates: { canonical: 'https://dzdlala.com/announcement/' + encodeURIComponent(id) },
       openGraph: {
         title: fullTitle,
         description: desc || undefined,
@@ -131,42 +138,26 @@ async function TransientErrorView({ id }: { id: string }) {
   );
 }
 
-async function AnnDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-
-  let a: Announcement | null = null;
-  let error = false;
-  try {
-    a = await getAnnouncement(id);
-  } catch {
-    error = true;
-  }
-
-  // Round 11 (12 Oct 2026): a THROWN fetch is a transient failure
-  // (network/5xx/429 — fetchAnnouncement throws), NOT a missing
-  // announcement (it returns null for 404/403, and inactive docs also
-  // return null). The old code rendered the not-found view here at HTTP
-  // 200, conflating the two. Keep HTTP 200 with a retry UI; genuinely
-  // missing announcements still go through notFound() in
-  // generateMetadata (runs before streaming starts) for a real 404.
-  if (error) {
-    return <TransientErrorView id={id} />;
-  }
-
-  const data: AnnouncementDetailData | null = a
+async function AnnDetail({ ann }: { ann: Announcement | null }) {
+  // Round 12: the existence check ran in the page body (ONE read shared via
+  // the React-cache-deduped getAnnouncement) — null here is unreachable
+  // (the page body already called notFound()); transient failures never
+  // reach this component (the page body renders TransientErrorView at
+  // HTTP 200 instead).
+  const data: AnnouncementDetailData | null = ann
     ? {
-        id: a.id,
-        title: a.title,
-        body: a.body,
+        id: ann.id,
+        title: ann.title,
+        body: ann.body,
         iso:
-          a.createdAt instanceof Date && !isNaN(a.createdAt.getTime())
-            ? a.createdAt.toISOString()
+          ann.createdAt instanceof Date && !isNaN(ann.createdAt.getTime())
+            ? ann.createdAt.toISOString()
             : '',
-        link: typeof a.link === 'string' ? a.link : '',
+        link: typeof ann.link === 'string' ? ann.link : '',
       }
     : null;
 
-  return <AnnouncementDetail ann={data} error={error} />;
+  return <AnnouncementDetail ann={data} error={false} />;
 }
 
 function DetailSkeleton() {
@@ -181,12 +172,45 @@ function DetailSkeleton() {
   );
 }
 
-export default function AnnouncementPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AnnouncementPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  // Round 12 (12 Oct 2026): the existence check runs HERE — in the page
+  // component body, before any <Suspense> tree is returned. notFound() at
+  // this point renders the not-found.tsx boundary UI — BUT the response
+  // keeps HTTP 200, not 404: with cacheComponents:true the page-body await
+  // is postponed (x-nextjs-postponed: 1), so the 200 headers are sent
+  // before notFound() throws. Verified via curl on a local production
+  // build 12 Oct 2026. A real 404 status needs the check to run before
+  // rendering starts (e.g. Proxy) — see NEEDS-DECISION report.
+  let a: Announcement | null = null;
+  let error = false;
+  try {
+    a = await getAnnouncement(id);
+  } catch {
+    error = true;
+  }
+
+  // Genuinely missing/inactive (null) → real HTTP 404. A THROWN fetch is a
+  // transient failure → HTTP 200 + retry UI (Round 11 TransientErrorView),
+  // never a 404.
+  if (!a && !error) notFound();
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-50">
+        <main className="mx-auto max-w-3xl px-4 py-6">
+          <TransientErrorView id={id} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <main className="mx-auto max-w-3xl px-4 py-6">
         <Suspense fallback={<DetailSkeleton />}>
-          <AnnDetail params={params} />
+          <AnnDetail ann={a} />
         </Suspense>
       </main>
     </div>

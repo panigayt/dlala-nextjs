@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { stripExif } from '@/lib/stripExif';
 import { useLang } from '@/lib/i18n';
@@ -58,31 +58,9 @@ function paintProfileSnapshot(): ProfileData | null {
   }
 }
 
-type DbLike = {
-  doc: (p: string) => {
-    get: () => Promise<{ exists: boolean; data: () => ProfileData }>;
-    update: (d: Record<string, unknown>) => Promise<void>;
-    set: (d: Record<string, unknown>) => Promise<void>;
-    delete: () => Promise<void>;
-  };
-  batch: () => {
-    set: (ref: unknown, d: Record<string, unknown>) => void;
-    update: (ref: unknown, d: Record<string, unknown>) => void;
-    delete: (ref: unknown) => void;
-    commit: () => Promise<void>;
-  };
-};
-
-type StorageLike = {
-  ref: (p: string) => {
-    put: (f: Blob) => Promise<{ ref: { getDownloadURL: () => Promise<string> } }>;
-    delete: () => Promise<void>;
-  };
-  // 11 Oct 2026: for full https:// URLs (orphan cleanup was dead without this).
-  refFromURL: (url: string) => {
-    delete: () => Promise<void>;
-  };
-};
+// AccountContent receives the modular Firestore/Storage instances via the
+// bundled Firebase loader at each usage site (see below); the DbLike /
+// StorageLike compat-shaped aliases are no longer needed.
 
 export default function AccountPage() {
   return (
@@ -171,12 +149,11 @@ function AccountContent({ user }: { user: CompatUser }) {
     }
     setLoadErr(null);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as DbLike;
-      const d = await withTimeout(db.doc('users/' + user.uid).get(), 20000);
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
+      const d = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users/' + user.uid)), 20000);
       if (!mounted.current) return;
-      if (!d.exists) {
+      if (!d.exists()) {
         setState('empty');
         return;
       }
@@ -230,11 +207,8 @@ function AccountContent({ user }: { user: CompatUser }) {
   const createProfile = useCallback(async () => {
     setProfBusy(true);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as DbLike & {
-        doc: (p: string) => { get: () => Promise<{ exists: boolean }> };
-      };
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
       // Derive a unique username (mirrors js/app.js claimUniqueUsername).
       const base = (user.displayName || (user.email || '').split('@')[0] || 'user')
         .toLowerCase()
@@ -242,13 +216,13 @@ function AccountContent({ user }: { user: CompatUser }) {
         .slice(0, 20) || 'user';
       let candidate = base;
       for (let i = 0; i < 10; i++) {
-        const reg = await withTimeout(db.doc('usernames/' + candidate).get(), 15000).catch(() => null);
-        if (!reg || !reg.exists) break;
+        const reg = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'usernames/' + candidate)), 15000).catch(() => null);
+        if (!reg || !reg.exists()) break;
         candidate = (base + Math.floor(Math.random() * 9000 + 1000)).slice(0, 20);
       }
       const displayName = (user.displayName || candidate).slice(0, 40);
-      const batch = db.batch();
-      const userRef = db.doc('users/' + user.uid);
+      const batch = fsMod.writeBatch(db);
+      const userRef = fsMod.doc(db, 'users/' + user.uid);
       batch.set(userRef, {
         name: displayName,
         username: candidate,
@@ -260,10 +234,10 @@ function AccountContent({ user }: { user: CompatUser }) {
         confirmedDeals: 0,
         boostCredits: 0,
         phone: '',
-        termsAcceptedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
-        createdAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+        termsAcceptedAt: fsMod.serverTimestamp(),
+        createdAt: fsMod.serverTimestamp(),
       });
-      batch.set(db.doc('usernames/' + candidate), { userId: user.uid });
+      batch.set(fsMod.doc(db, 'usernames/' + candidate), { userId: user.uid });
       await withTimeout(batch.commit(), 20000);
       loadProfile();
     } catch (e) {
@@ -298,18 +272,16 @@ function AccountContent({ user }: { user: CompatUser }) {
     setProfOk(false);
     setProfBusy(true);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as DbLike;
-      const storage = fb.storage() as unknown as StorageLike;
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod, storage, storageMod } = await getFirebaseBundled();
       const old = profData || {};
       const oldUsername = old.username || '';
       const oldPhotoPath = old.photoPath || '';
       const usernameChanged = u !== oldUsername;
 
       if (usernameChanged) {
-        const reg = await withTimeout(db.doc('usernames/' + u).get(), 20000);
-        if (reg.exists) {
+        const reg = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'usernames/' + u)), 20000);
+        if (reg.exists()) {
           setProfErr(t('usernameTaken'));
           setProfBusy(false);
           return;
@@ -335,8 +307,8 @@ function AccountContent({ user }: { user: CompatUser }) {
           return;
         }
         const path = `profiles/${user.uid}/avatar_${Date.now()}.jpg`;
-        const snap = await withTimeout(storage.ref(path).put(safePhoto), 30000);
-        photoPath = await withTimeout(snap.ref.getDownloadURL(), 15000);
+        const snap = await withTimeout(storageMod.uploadBytes(storageMod.ref(storage, path), safePhoto), 30000);
+        photoPath = await withTimeout(storageMod.getDownloadURL(snap.ref), 15000);
       }
 
       const update = {
@@ -344,14 +316,14 @@ function AccountContent({ user }: { user: CompatUser }) {
         username: u,
         bio: b,
         photoPath: photoPath || '',
-        lastSeenAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+        lastSeenAt: fsMod.serverTimestamp(),
       };
       // If the write fails AFTER the new avatar uploaded, delete the new
       // upload so no orphaned Storage object is left behind.
       const delNewAvatar = async () => {
         if (newPhotoFile && photoPath && photoPath !== oldPhotoPath && /^https:\/\//i.test(photoPath)) {
           try {
-            await storage.refFromURL(photoPath).delete();
+            await storageMod.deleteObject(storageMod.ref(storage, photoPath));
           } catch {
             // ignore
           }
@@ -359,13 +331,13 @@ function AccountContent({ user }: { user: CompatUser }) {
       };
       try {
         if (usernameChanged) {
-          const batch = db.batch();
-          batch.set(db.doc('usernames/' + u), { userId: user.uid });
-          batch.update(db.doc('users/' + user.uid), update);
-          if (oldUsername) batch.delete(db.doc('usernames/' + oldUsername));
+          const batch = fsMod.writeBatch(db);
+          batch.set(fsMod.doc(db, 'usernames/' + u), { userId: user.uid });
+          batch.update(fsMod.doc(db, 'users/' + user.uid), update);
+          if (oldUsername) batch.delete(fsMod.doc(db, 'usernames/' + oldUsername));
           await withTimeout(batch.commit(), 20000);
         } else {
-          await withTimeout(db.doc('users/' + user.uid).update(update), 20000);
+          await withTimeout(fsMod.updateDoc(fsMod.doc(db, 'users/' + user.uid), update), 20000);
         }
       } catch (e) {
         await delNewAvatar();
@@ -374,7 +346,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       // Best-effort: remove the orphaned old avatar.
       if (newPhotoFile && oldPhotoPath && oldPhotoPath !== photoPath && /^https:\/\//i.test(oldPhotoPath)) {
         try {
-          await storage.refFromURL(oldPhotoPath).delete();
+          await storageMod.deleteObject(storageMod.ref(storage, oldPhotoPath));
         } catch {
           // keep going
         }
@@ -402,12 +374,11 @@ function AccountContent({ user }: { user: CompatUser }) {
       } catch {
         throw new Error('errorPhoto');
       }
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const storage = fb.storage() as unknown as StorageLike;
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { storage, storageMod } = await getFirebaseBundled();
       const path = `profiles/${user.uid}/store-${kind}_${Date.now()}.jpg`;
-      const snap = await withTimeout(storage.ref(path).put(safe), 30000);
-      return withTimeout(snap.ref.getDownloadURL(), 15000);
+      const snap = await withTimeout(storageMod.uploadBytes(storageMod.ref(storage, path), safe), 30000);
+      return withTimeout(storageMod.getDownloadURL(snap.ref), 15000);
     },
     [user.uid]
   );
@@ -427,10 +398,8 @@ function AccountContent({ user }: { user: CompatUser }) {
     setStoreOk(false);
     setStoreBusy(true);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as DbLike;
-      const storage = fb.storage() as unknown as StorageLike;
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { db, fsMod, storage, storageMod } = await getFirebaseBundled();
       const old = profData || {};
       let coverUrl = old.storeCoverUrl || '';
       let logoUrl = old.storeLogoUrl || '';
@@ -461,7 +430,7 @@ function AccountContent({ user }: { user: CompatUser }) {
         for (const [f, oldUrl, nu] of pairs) {
           if (f && nu && nu !== oldUrl && /^https:\/\//i.test(nu)) {
             try {
-              await storage.refFromURL(nu).delete();
+              await storageMod.deleteObject(storageMod.ref(storage, nu));
             } catch {
               // ignore
             }
@@ -469,7 +438,7 @@ function AccountContent({ user }: { user: CompatUser }) {
         }
       };
       try {
-        await withTimeout(db.doc('users/' + user.uid).update(update), 20000);
+        await withTimeout(fsMod.updateDoc(fsMod.doc(db, 'users/' + user.uid), update), 20000);
       } catch (e) {
         await delNew();
         throw e;
@@ -482,7 +451,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       for (const [f, oldUrl, nu] of pairs) {
         if (f && oldUrl && oldUrl !== nu && /^https:\/\//i.test(oldUrl)) {
           try {
-            await storage.refFromURL(oldUrl).delete();
+            await storageMod.deleteObject(storageMod.ref(storage, oldUrl));
           } catch {
             // keep going
           }
@@ -528,7 +497,9 @@ function AccountContent({ user }: { user: CompatUser }) {
 
   const resendVerification = useCallback(async () => {
     try {
-      await withTimeout(user.sendEmailVerification(), 15000);
+      const { getFirebaseBundled } = await import('@/lib/firebase');
+      const { authMod } = await getFirebaseBundled();
+      await withTimeout(authMod.sendEmailVerification(user), 15000);
       // 12 Oct 2026: success uses resendOk (green), not profErr (red).
       // Separate from profOk to show correct "email sent" message.
       setProfErr(null);
@@ -539,15 +510,19 @@ function AccountContent({ user }: { user: CompatUser }) {
   }, [user, t]);
 
   const iVerified = useCallback(async () => {
+    const { getFirebaseBundled } = await import('@/lib/firebase');
+    const fb = await getFirebaseBundled().catch(() => null);
+    if (!fb) {
+      setProfErr(t('authConnectionProblem'));
+      return;
+    }
     try {
-      await withTimeout(user.reload(), 15000);
+      await withTimeout(fb.authMod.reload(user), 15000);
     } catch {
       setProfErr(t('authConnectionProblem'));
       return;
     }
-    const { getFirebase } = await import('@/lib/firebase-compat');
-    const fb = await getFirebase().catch(() => null);
-    const cu = fb?.auth().currentUser;
+    const cu = fb.auth.currentUser;
     if (cu && cu.emailVerified) window.location.reload();
     else setProfErr(t('stillNotVerified'));
   }, [user, t]);

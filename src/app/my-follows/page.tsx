@@ -12,13 +12,15 @@
 // - "جديد" (new) badge for follows with unseen listings from last 7 days
 //   (per-user seen watermark in localStorage, stamped on profile open)
 // - Empty state with browse CTA
+//
+// Round 12: Firebase compat SDK → modular (getFirebaseBundled path).
 
 'use client';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { type CompatUser } from '@/lib/firebase-compat';
+import { getFirebaseBundled, type FirebaseClient, type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
@@ -102,18 +104,6 @@ function toMs(v: unknown): number {
   return 0;
 }
 
-type DbLike = {
-  collection: (p: string) => {
-    where: (f: string, op: string, v: string) => {
-      limit: (n: number) => { get: () => Promise<{ docs: { data: () => Record<string, unknown> }[] }> };
-    };
-  };
-  doc: (p: string) => {
-    get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> }>;
-    delete: () => Promise<void>;
-  };
-};
-
 export default function MyFollowsPage() {
   return (
     <AuthGate>
@@ -133,10 +123,12 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
 
   // Best-effort: find each followed user's newest recent listing for the
   // "جديد" badge (chunked sellerId-in queries, first 120 follows max).
+  // Round 12: modular fsMod.query + fsMod.getDocs.
   const paintNewBadges = useCallback(
-    async (db: DbLike, uids: string[]) => {
+    async (client: FirebaseClient, uids: string[]) => {
       try {
         if (!uids.length) return;
+        const { db, fsMod } = client;
         const now = Date.now();
         const newest: Record<string, number> = {};
         const chunks: string[][] = [];
@@ -144,14 +136,16 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
         await Promise.all(
           chunks.map(async (chunk) => {
             try {
-              const col = (db.collection('listings') as unknown as {
-                where: (f: string, op: string, v: string[]) => {
-                  limit: (n: number) => { get: () => Promise<{ docs: { data: () => Record<string, unknown> }[] }> };
-                };
-              })
-                .where('sellerId', 'in', chunk)
-                .limit(60);
-              const snap = await withTimeout(col.get(), 15000);
+              const snap = await withTimeout(
+                fsMod.getDocs(
+                  fsMod.query(
+                    fsMod.collection(db, 'listings'),
+                    fsMod.where('sellerId', 'in', chunk),
+                    fsMod.limit(60)
+                  )
+                ),
+                15000
+              );
               for (const d of snap.docs) {
                 const data = d.data() || {};
                 const st = String(data.status || '');
@@ -183,11 +177,18 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as DbLike;
+      // Round 12: modular SDK via getFirebaseBundled (was dynamic
+      // firebase-compat import). Loader stays at the usage site.
+      const client = await getFirebaseBundled();
+      const { db, fsMod } = client;
       const snap = await withTimeout(
-        db.collection('follows').where('followerId', '==', user.uid).limit(200).get(),
+        fsMod.getDocs(
+          fsMod.query(
+            fsMod.collection(db, 'follows'),
+            fsMod.where('followerId', '==', user.uid),
+            fsMod.limit(200)
+          )
+        ),
         20000
       );
       const followRows: FollowRow[] = [];
@@ -207,8 +208,8 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
       await Promise.all(
         followRows.map(async (r) => {
           try {
-            const ds = await withTimeout(db.doc('users_public/' + r.storeId).get(), 15000);
-            if (ds.exists) users[r.storeId] = ds.data() as FollowedUser;
+            const ds = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users_public', r.storeId)), 15000);
+            if (ds.exists()) users[r.storeId] = ds.data() as FollowedUser;
           } catch {
             // ignore
           }
@@ -238,7 +239,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
       } catch {
         /* best-effort */
       }
-      paintNewBadges(db, followRows.map((r) => r.storeId));
+      paintNewBadges(client, followRows.map((r) => r.storeId));
     } catch (e) {
       if (!mounted.current) return;
       console.error(e);
@@ -277,31 +278,20 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
     async (storeId: string) => {
       setUnfollowing(storeId);
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        type UnfollowDb = {
-          collection: (p: string) => {
-            where: (f: string, op: string, v: string) => {
-              where: (f: string, op: string, v: string) => {
-                limit: (n: number) => {
-                  get: () => Promise<{ docs: { ref: { delete: () => Promise<void> } }[] }>;
-                };
-              };
-            };
-          };
-        };
-        const db = fb.firestore() as unknown as UnfollowDb;
+        const { db, fsMod } = await getFirebaseBundled();
         // Find the follow doc(s) and delete them.
         const snap = await withTimeout(
-          db
-            .collection('follows')
-            .where('followerId', '==', user.uid)
-            .where('storeId', '==', storeId)
-            .limit(5)
-            .get(),
+          fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'follows'),
+              fsMod.where('followerId', '==', user.uid),
+              fsMod.where('storeId', '==', storeId),
+              fsMod.limit(5)
+            )
+          ),
           15000
         );
-        await Promise.all(snap.docs.map((d) => withTimeout(d.ref.delete(), 15000)));
+        await Promise.all(snap.docs.map((d) => withTimeout(fsMod.deleteDoc(d.ref), 15000)));
         // Drop the seen-watermark too: a later re-follow must be able to
         // earn its "جديد" badge again.
         try {

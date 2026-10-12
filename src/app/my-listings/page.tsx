@@ -10,12 +10,14 @@
 // - Delete button (with confirm) → audit doc + delete + Storage cleanup
 // - Email-verification banner for unverified users
 // - Empty state with "publish" CTA
+//
+// Round 12: Firebase compat SDK → modular (getFirebaseBundled path).
 
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { type CompatUser } from '@/lib/firebase-compat';
+import { getFirebaseBundled, type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -96,23 +98,22 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const { getFirebase } = await import('@/lib/firebase-compat');
-      const fb = await getFirebase();
-      const db = fb.firestore() as unknown as {
-        collection: (p: string) => {
-          where: (f: string, op: string, v: string) => {
-            orderBy: (f: string, d: string) => {
-              limit: (n: number) => { get: () => Promise<{ docs: { id: string; data: () => OwnListing }[] }> };
-            };
-          };
-        };
-      };
+      // Round 12: modular SDK via getFirebaseBundled (was dynamic
+      // firebase-compat import). Loader stays at the usage site.
+      const { db, fsMod } = await getFirebaseBundled();
       const snap = await withTimeout(
-        db.collection('listings').where('sellerId', '==', user.uid).orderBy('createdAt', 'desc').limit(60).get(),
+        fsMod.getDocs(
+          fsMod.query(
+            fsMod.collection(db, 'listings'),
+            fsMod.where('sellerId', '==', user.uid),
+            fsMod.orderBy('createdAt', 'desc'),
+            fsMod.limit(60)
+          )
+        ),
         20000
       );
       if (!mounted.current) return;
-      const docs = snap.docs.map((d) => ({ ...(d.data() as OwnListing), id: d.id }));
+      const docs = snap.docs.map((d) => ({ id: d.id, ...(d.data() as object) }) as OwnListing);
       setListings(docs);
       // 0.0.0.22 (Zak): save for instant paint on next boot.
       // Projection matches exactly what the card render reads.
@@ -177,16 +178,11 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setConfirmSoldId(null);
       setActionBusy(id);
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        const db = fb.firestore() as unknown as {
-          doc: (p: string) => { update: (d: Record<string, unknown>) => Promise<void> };
-          FieldValue: { serverTimestamp: () => unknown };
-        };
+        const { db, fsMod } = await getFirebaseBundled();
         // 12 Oct 2026: include updatedAt for sitemap/feed ordering.
-        await withTimeout(db.doc('listings/' + id).update({
+        await withTimeout(fsMod.updateDoc(fsMod.doc(db, 'listings', id), {
           status: 'sold',
-          updatedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+          updatedAt: fsMod.serverTimestamp(),
         }), 15000);
         // Full reload instead of React state update (automation-compatible)
         window.location.reload();
@@ -221,48 +217,34 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setConfirmDeleteId(null);
       setActionBusy(id);
       try {
-        const { getFirebase } = await import('@/lib/firebase-compat');
-        const fb = await getFirebase();
-        const db = fb.firestore() as unknown as {
-          doc: (p: string) => {
-            get: () => Promise<{ exists: boolean; data: () => OwnListing }>;
-            delete: () => Promise<void>;
-          };
-          collection: (p: string) => { doc: () => { set: (d: Record<string, unknown>) => Promise<void> } };
-          batch: () => {
-            set: (ref: unknown, d: Record<string, unknown>) => void;
-            delete: (ref: unknown) => void;
-            update: (ref: unknown, d: Record<string, unknown>) => void;
-            commit: () => Promise<void>;
-          };
-        };
+        const { db, storage, fsMod, storageMod } = await getFirebaseBundled();
         // Verify ownership first (mirrors js/acct-common.js delAd).
-        const listingRef = db.doc('listings/' + id);
-        const snap = await withTimeout(listingRef.get(), 15000);
-        if (!snap.exists) {
+        const listingRef = fsMod.doc(db, 'listings', id);
+        const snap = await withTimeout(fsMod.getDoc(listingRef), 15000);
+        if (!snap.exists()) {
           load();
           return;
         }
-        const l = snap.data();
+        const l = snap.data() as OwnListing;
         if (l.sellerId !== user.uid) {
           // 12 Oct 2026: inline error (was window.alert).
           setError(t('errorGeneric'));
           return;
         }
         const title = listingTitle(l, lang);
-        const batch = db.batch();
-        batch.set(db.collection('deletedAds').doc(), {
+        const batch = fsMod.writeBatch(db);
+        batch.set(fsMod.doc(fsMod.collection(db, 'deletedAds')), {
           sellerId: user.uid,
           listingId: id,
           title,
           sellerName: user.displayName || '',
-          deletedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.serverTimestamp(),
+          deletedAt: fsMod.serverTimestamp(),
           reason: 'owner',
           adminId: '',
         });
         batch.delete(listingRef);
-        batch.update(db.doc('users/' + user.uid), {
-          vitrineIds: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown; arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
+        batch.update(fsMod.doc(db, 'users', user.uid), {
+          vitrineIds: fsMod.arrayRemove(id),
         });
         // 12 Oct 2026: also prune vitrineSellers registry (was left dangling).
         // Best-effort AFTER the batch — the registry doc may not exist
@@ -270,12 +252,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
         // on a missing doc would fail the entire delete.
         await withTimeout(batch.commit(), 20000);
         try {
-          await (
-            fb.firestore().doc('vitrineSellers/' + user.uid) as unknown as {
-              update: (d: Record<string, unknown>) => Promise<unknown>;
-            }
-          ).update({
-            vitrineIds: (fb.firestore as unknown as { FieldValue: { arrayRemove: (v: string) => unknown } }).FieldValue.arrayRemove(id),
+          await fsMod.updateDoc(fsMod.doc(db, 'vitrineSellers', user.uid), {
+            vitrineIds: fsMod.arrayRemove(id),
           });
         } catch {
           /* registry doc absent: nothing to prune */
@@ -288,16 +266,14 @@ function MyListingsContent({ user }: { user: CompatUser }) {
           ...(Array.isArray(l.photo_thumbs) ? l.photo_thumbs : []),
         ].filter((u): u is string => typeof u === 'string' && !!u);
         try {
-          const storage = fb.storage() as unknown as {
-            ref: (p: string) => { delete: () => Promise<void> };
-            refFromURL: (url: string) => { delete: () => Promise<void> };
-          };
           await Promise.all(
             urls.map(async (u) => {
               try {
                 // 11 Oct 2026: refFromURL (was ref — silent no-op on full URLs).
-                const r = /^https?:\/\//i.test(u) ? storage.refFromURL(u) : storage.ref(u);
-                await r.delete();
+                // Round 12: modular ref() routes URLs internally
+                // (no refFromURL in the modular API) — one call for both.
+                const r = storageMod.ref(storage, u);
+                await storageMod.deleteObject(r);
               } catch {
                 // ignore missing objects
               }
@@ -327,7 +303,10 @@ function MyListingsContent({ user }: { user: CompatUser }) {
 
   const resendVerification = useCallback(async () => {
     try {
-      await withTimeout(user.sendEmailVerification(), 15000);
+      // Round 12: sendEmailVerification is a top-level modular function
+      // (not a User method).
+      const { authMod } = await getFirebaseBundled();
+      await withTimeout(authMod.sendEmailVerification(user), 15000);
       // 12 Oct 2026: inline success (was window.alert).
       setError(null);
       setNotice(t('emailSent'));
@@ -339,7 +318,9 @@ function MyListingsContent({ user }: { user: CompatUser }) {
 
   const iVerified = useCallback(async () => {
     try {
-      await withTimeout(user.reload(), 15000);
+      // Round 12: reload is a top-level modular function (not a User method).
+      const { authMod } = await getFirebaseBundled();
+      await withTimeout(authMod.reload(user), 15000);
     } catch {
       // 12 Oct 2026: inline error (was window.alert).
       setNotice(null);
@@ -347,9 +328,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       return;
     }
     // Re-check via fresh auth state — reload the page if now verified.
-    const { getFirebase } = await import('@/lib/firebase-compat');
-    const fb = await getFirebase().catch(() => null);
-    const cu = fb?.auth().currentUser;
+    const client = await getFirebaseBundled().catch(() => null);
+    const cu = client?.auth.currentUser;
     if (cu && cu.emailVerified) window.location.reload();
     else {
       // 12 Oct 2026: inline info (was window.alert).
@@ -535,7 +515,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
               </button>
               <button
                 onClick={confirmDelete}
-                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800"
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-700"
               >
                 {t('delete')}
               </button>

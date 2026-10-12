@@ -18,6 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description: 'شروط استخدام موقع وتطبيق دلالة',
+    alternates: { canonical: 'https://dzdlala.com/terms' },
     openGraph: {
       type: 'website',
       siteName: 'DLALA',

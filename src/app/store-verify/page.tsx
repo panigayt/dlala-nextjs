@@ -20,10 +20,10 @@ import {
   btnSecondaryCls,
   type FirebaseClient,
   type CompatUser,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { WILAYAS } from '@/lib/wilayas';
 import { useLang } from '@/lib/i18n';
-// 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
+// 11 Oct 2026: withTimeout now in @/lib/timeout.
 import { withTimeout } from '@/lib/timeout';
 
 function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
@@ -43,12 +43,13 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
   const load = async () => {
     setState('loading');
     try {
+      const { db, fsMod } = client;
       // 11 Oct 2026: timeout — hung load left spinner forever.
       const d = await withTimeout(
-        client.db.collection('users').doc(user.uid).get(),
+        fsMod.getDoc(fsMod.doc(db, 'users/' + user.uid)),
         15000
       );
-      const u = d.exists ? (d.data() as Record<string, unknown>) : {};
+      const u = d.exists() ? (d.data() as Record<string, unknown>) : {};
       if ((u.storeTier as string) === 'verified') {
         window.location.replace('/my-store#settings');
         return;
@@ -87,7 +88,7 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
       if (b) data.storeBio = b.slice(0, 500);
       // 11 Oct 2026: timeout — stuck disabled button on stalled network.
       await withTimeout(
-        client.db.collection('users').doc(user.uid).update(data),
+        client.fsMod.updateDoc(client.fsMod.doc(client.db, 'users/' + user.uid), data),
         20000
       );
       setShowDialog(false);

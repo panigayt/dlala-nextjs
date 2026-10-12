@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
@@ -89,16 +89,23 @@ export default function StoreAnalytics({
     let cancelled = false;
     (async () => {
       try {
+        // Round 12: modular SDK — fsMod.query + fsMod.getDocs replace the
+        // compat chained .where().get().
+        const { db, fsMod } = client;
         const [adsSnap, convSnap] = await Promise.all([
           withTimeout(
-            client.db.collection('listings').where('sellerId', '==', uid).get(),
+            fsMod.getDocs(
+              fsMod.query(fsMod.collection(db, 'listings'), fsMod.where('sellerId', '==', uid))
+            ),
             15000
           ),
           withTimeout(
-            client.db
-              .collection('conversations')
-              .where('participants', 'array-contains', uid)
-              .get(),
+            fsMod.getDocs(
+              fsMod.query(
+                fsMod.collection(db, 'conversations'),
+                fsMod.where('participants', 'array-contains', uid)
+              )
+            ),
             15000
           ),
         ]);

@@ -11,6 +11,9 @@
 //   - After every vitrineIds save: syncVitrineRegistry.
 // Trilingual AR/FR/EN (Round 117): all strings via useLang(), verbatim
 // legacy js/i18n.{ar,fr,en}.js.
+//
+// Round 12: Firebase compat SDK → modular (getFirebaseCdn path via the new
+// useRequireAuth; client.fsMod carries the firestore namespace).
 
 'use client';
 
@@ -22,7 +25,7 @@ import {
   btnSecondaryCls,
   type FirebaseClient,
   type CompatUser,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
@@ -63,31 +66,35 @@ function dateOf(v: unknown): Date | null {
 // this registry — NOT by scanning listings — so it works at any catalog
 // size. Called after every vitrineIds save and after activation success.
 // Mirrors js/vitrine.js syncVitrineRegistry (0.0.0.43).
+// Round 12: docRef.set/delete + FieldValue → fsMod.setDoc/fsMod.deleteDoc +
+// fsMod.serverTimestamp().
 async function syncVitrineRegistry(
   client: FirebaseClient,
   uid: string,
   u: Record<string, unknown>
 ) {
   try {
+    const { db, fsMod } = client;
     const isPro = u.storeTier === 'verified';
     const picks = Array.isArray(u.vitrineIds) ? (u.vitrineIds as string[]) : [];
     const boostUntil = dateOf(u.vitrineBoostUntil);
     const boosted = !!boostUntil && boostUntil.getTime() > Date.now();
     const eligible = !!(isPro || (boosted && picks.length > 0));
-    const docRef = client.db.collection('vitrineSellers').doc(uid);
+    const docRef = fsMod.doc(db, 'vitrineSellers', uid);
     if (eligible) {
-      await docRef.set(
+      await fsMod.setDoc(
+        docRef,
         {
           sellerId: uid,
           storeTier: (u.storeTier as string) || null,
           vitrineIds: picks,
           vitrineBoostUntil: u.vitrineBoostUntil || null,
-          updatedAt: client.FieldValue.serverTimestamp(),
+          updatedAt: fsMod.serverTimestamp(),
         },
         { merge: true }
       );
     } else {
-      await docRef.delete().catch(() => {}); // already absent: fine
+      await fsMod.deleteDoc(docRef).catch(() => {}); // already absent: fine
     }
   } catch (e) {
     // Non-fatal: the seller's own vitrineIds save already succeeded.
@@ -125,6 +132,8 @@ function BoostCountdown({ until }: { until: Date }) {
 
 function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient }) {
   const { t, lang } = useLang();
+  // Round 12: modular firestore namespace.
+  const { db, fsMod } = client;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [box, setBox] = useState<BoxState>({ kind: 'loading' });
   const [ads, setAds] = useState<Listing[]>([]);
@@ -138,8 +147,8 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     setBox({ kind: 'loading' });
     setMsg(null);
     try {
-      const d = await client.db.collection('users').doc(user.uid).get();
-      const u = (d.exists ? d.data() : {}) as Record<string, unknown>;
+      const d = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
+      const u = (d.exists() ? d.data() : {}) as Record<string, unknown>;
       setUserData(u);
 
       if (u.storeTier === 'verified') {
@@ -161,13 +170,15 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
       }
 
       // Load candidates
-      const snap = await client.db
-        .collection('listings')
-        .where('sellerId', '==', user.uid)
-        .where('status', 'in', ['available', 'negotiating'])
-        .orderBy('createdAt', 'desc')
-        .limit(20)
-        .get();
+      const snap = await fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'listings'),
+          fsMod.where('sellerId', '==', user.uid),
+          fsMod.where('status', 'in', ['available', 'negotiating']),
+          fsMod.orderBy('createdAt', 'desc'),
+          fsMod.limit(20)
+        )
+      );
       const list = snap.docs.map((dd) => ({ id: dd.id, ...(dd.data() as object) }) as Listing);
       setAds(list);
       const saved = Array.isArray(u.vitrineIds) ? (u.vitrineIds as string[]) : [];
@@ -216,12 +227,12 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     setMsg(null);
     try {
       // Save picks first
-      await client.db.collection('users').doc(user.uid).update({ vitrineIds: picked });
+      await fsMod.updateDoc(fsMod.doc(db, 'users', user.uid), { vitrineIds: picked });
       // VITRINE REGISTRY (27 Sep 2026): keep the public discovery registry
       // in sync so the home feed finds this seller at any catalog size.
       try {
-        const snap = await client.db.collection('users').doc(user.uid).get();
-        const udata = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+        const snap = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
+        const udata = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
         udata.vitrineIds = picked;
         await syncVitrineRegistry(client, user.uid, udata);
       } catch (e) { console.error('[vitrine] registry sync failed', e); }
@@ -236,8 +247,8 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
       // VITRINE REGISTRY (27 Sep 2026): activation succeeded — sync the
       // public registry so the home feed discovers this seller.
       try {
-        const usnap = await client.db.collection('users').doc(user.uid).get();
-        const udata = (usnap.exists ? usnap.data() : {}) as Record<string, unknown>;
+        const usnap = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
+        const udata = (usnap.exists() ? usnap.data() : {}) as Record<string, unknown>;
         await syncVitrineRegistry(client, user.uid, udata);
       } catch (e) { console.error('[vitrine] registry sync failed', e); }
       await load();
@@ -255,8 +266,8 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     try {
       await callFn('cancel');
       // 12 Oct 2026: sync registry after cancel (was left stale, showcase kept appearing).
-      const udoc = await client.db.collection('users').doc(user.uid).get();
-      const udata = udoc.data() || {};
+      const udoc = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
+      const udata = (udoc.data() || {}) as Record<string, unknown>;
       await syncVitrineRegistry(client, user.uid, udata);
       await load();
     } catch {

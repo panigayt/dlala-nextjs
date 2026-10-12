@@ -6,7 +6,7 @@
 // DlalaMarket.matchingOffers (js/market.js) client-side with the viewer's
 // uid — same as legacy (myUid = currentUser?.uid ?? '').
 
-import { useAuthState } from '@/lib/firebase-client';
+import { useAuthState } from '@/lib/firebase';
 import { matchingOffers } from '@/lib/matching';
 import { type ListingCard } from '@/lib/firestore';
 import ListingCardView from '@/components/ListingCardView';

@@ -17,7 +17,7 @@ import {
   FirebaseClient,
   CompatUser,
   btnSecondaryCls,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 import { formatPrice } from '@/lib/firestore';
@@ -313,11 +313,13 @@ function ChatInner() {
     (client: FirebaseClient) => {
       if (listenersActiveRef.current) return;
       listenersActiveRef.current = true;
+      const { db, fsMod } = client;
       const unsubs: (() => void)[] = [];
       unsubs.push(
-        client.db.doc(`conversations/${convId}`).onSnapshot(
+        fsMod.onSnapshot(
+          fsMod.doc(db, `conversations/${convId}`),
           (s) => {
-            if (s.exists) {
+            if (s.exists()) {
               const d = {
                 id: s.id,
                 ...((s.data() || {}) as object),
@@ -330,14 +332,13 @@ function ChatInner() {
         )
       );
       unsubs.push(
-        client.db
-          .collection('conversations')
-          .doc(convId)
-          .collection('messages')
-          // 11 Oct 2026: newest 100 (was oldest 100 — new messages never arrived).
-          .orderBy('at', 'desc')
-          .limit(100)
-          .onSnapshot(
+        fsMod.onSnapshot(
+          fsMod.query(
+            fsMod.collection(db, 'conversations', convId, 'messages'),
+            // 11 Oct 2026: newest 100 (was oldest 100 — new messages never arrived).
+            fsMod.orderBy('at', 'desc'),
+            fsMod.limit(100)
+          ),
             (snap2) => {
               // desc → reverse for chronological display (legacy parity).
               const list: Msg[] = snap2.docs
@@ -397,33 +398,34 @@ function ChatInner() {
   // ---------- bootstrap ----------
 
   function markRead(client: FirebaseClient, data: ConvData, uid: string) {
+    const { db, fsMod } = client;
     try {
-      client.db
-        .doc(`conversations/${data.id}`)
-        .update({
+      fsMod
+        .updateDoc(fsMod.doc(db, `conversations/${data.id}`), {
           [`unread.${uid}`]: 0,
-          [`lastReadAt.${uid}`]: client.FieldValue.serverTimestamp(),
+          [`lastReadAt.${uid}`]: fsMod.serverTimestamp(),
         })
         .catch(() => {});
     } catch {
       /* best-effort */
     }
-    client.db
-      .collection('conversations')
-      .doc(data.id)
-      .collection('messages')
-      .orderBy('at', 'desc')
-      .limit(100)
-      .get()
+    fsMod
+      .getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'conversations', data.id, 'messages'),
+          fsMod.orderBy('at', 'desc'),
+          fsMod.limit(100)
+        )
+      )
       .then((snap) => {
         const other = (data.participants || []).find((p) => p !== uid) || '';
-        const batch = client.db.batch();
+        const batch = fsMod.writeBatch(db);
         let n = 0;
         for (const d of snap.docs) {
           const m = (d.data() || {}) as Record<string, unknown>;
           if (n < 50 && m.senderId === other && !m.isSystem && !m.readAt) {
             batch.update(d.ref, {
-              readAt: client.FieldValue.serverTimestamp(),
+              readAt: fsMod.serverTimestamp(),
             });
             n++;
           }
@@ -440,25 +442,25 @@ function ChatInner() {
       // to localStorage synchronously). Keeps the [convId, searchParams] memo intact.
       const gst = (k: string) => chatSt(getLang(), k);
       const uid = user.uid;
+      const { db, fsMod } = client;
       let snap: CompatDocSnap;
       try {
-        snap = await client.db.doc(`conversations/${convId}`).get();
+        snap = await fsMod.getDoc(fsMod.doc(db, `conversations/${convId}`));
       } catch {
         setFatal(gst('chatError'));
         return;
       }
-      if (!snap.exists) {
+      if (!snap.exists()) {
         if (convId === `supp_${uid}`) {
           // Create the deterministic support thread.
           try {
-            const cfg = await client.db.doc('config/support').get();
-            const adminId = cfg.exists
+            const cfg = await fsMod.getDoc(fsMod.doc(db, 'config/support'));
+            const adminId = cfg.exists()
               ? String((cfg.data() || {}).adminId || '')
               : '';
             if (!adminId) throw new Error('no-admin-config');
             if (adminId === uid) throw new Error('no-admin-self');
-            const FV = client.FieldValue;
-            await client.db.doc(`conversations/${convId}`).set({
+            await fsMod.setDoc(fsMod.doc(db, `conversations/${convId}`), {
               listingId: 'support',
               buyerId: uid,
               sellerId: adminId,
@@ -472,32 +474,30 @@ function ChatInner() {
               lastMessage: null,
               unread: { [uid]: 0, [adminId]: 0 },
               lastReadAt: { [uid]: null, [adminId]: null },
-              createdAt: FV.serverTimestamp(),
-              updatedAt: FV.serverTimestamp(),
+              createdAt: fsMod.serverTimestamp(),
+              updatedAt: fsMod.serverTimestamp(),
             });
             const sys = async (kind: string) => {
-              const mref = client.db
-                .collection('conversations')
-                .doc(convId)
-                .collection('messages')
-                .doc();
-              const batch = client.db.batch();
+              const mref = fsMod.doc(
+                fsMod.collection(db, 'conversations', convId, 'messages')
+              );
+              const batch = fsMod.writeBatch(db);
               batch.set(mref, {
                 senderId: uid,
                 text: '',
-                at: FV.serverTimestamp(),
+                at: fsMod.serverTimestamp(),
                 isSystem: true,
                 systemKind: kind,
               });
-              batch.update(client.db.doc(`conversations/${convId}`), {
-                updatedAt: FV.serverTimestamp(),
+              batch.update(fsMod.doc(db, `conversations/${convId}`), {
+                updatedAt: fsMod.serverTimestamp(),
               });
               // 11 Oct 2026: timeout — hanging commit caused permanent send lock.
       await withTimeout(batch.commit(), 15000);
             };
             await sys('support_greeting');
             await sys('support_autoreply');
-            snap = await client.db.doc(`conversations/${convId}`).get();
+            snap = await fsMod.getDoc(fsMod.doc(db, `conversations/${convId}`));
           } catch (e) {
             setFatal(
               (e as Error)?.message === 'no-admin-self'
@@ -534,8 +534,8 @@ function ChatInner() {
         else if (data.listingId === 'announcements') name = gst('announcementsTitle');
         else if (other) {
           try {
-            const d = await client.db.doc(`users_public/${other}`).get();
-            if (d.exists) {
+            const d = await fsMod.getDoc(fsMod.doc(db, `users_public/${other}`));
+            if (d.exists()) {
               const m = d.data() || {};
               name =
                 (m.name as string) ||
@@ -552,8 +552,8 @@ function ChatInner() {
         const lid = data.listingId;
         if (!lid || lid === 'support' || lid === 'announcements') return;
         try {
-          const d = await client.db.doc(`listings/${lid}`).get();
-          if (d.exists) {
+          const d = await fsMod.getDoc(fsMod.doc(db, `listings/${lid}`));
+          if (d.exists()) {
             const m = d.data() || {};
             const thumbs =
               (m.photo_thumbs as (string | null)[]) ||
@@ -583,9 +583,9 @@ function ChatInner() {
       // Block states
       (async () => {
         try {
-          const d = await client.db.doc(`blocks/${uid}`).get();
+          const d = await fsMod.getDoc(fsMod.doc(db, `blocks/${uid}`));
           let expMs: number | null = null;
-          if (d.exists) {
+          if (d.exists()) {
             const raw = (d.data() || {}).expiresAt;
             expMs =
               raw && typeof (raw as { toDate?: () => Date }).toDate === 'function'
@@ -594,7 +594,7 @@ function ChatInner() {
                   ? raw
                   : null;
           }
-          const blocked = d.exists && (expMs == null || expMs > Date.now());
+          const blocked = d.exists() && (expMs == null || expMs > Date.now());
           setAmBlocked(blocked);
           setBlockUntilMs(blocked ? expMs : null);
         } catch {
@@ -608,17 +608,17 @@ function ChatInner() {
         }
         try {
           const [mine, theirs] = await Promise.all([
-            client.db.doc(`blocks/${uid}_${other}`).get().catch(() => null),
-            client.db.doc(`blocks/${other}_${uid}`).get().catch(() => null),
+            fsMod.getDoc(fsMod.doc(db, `blocks/${uid}_${other}`)).catch(() => null),
+            fsMod.getDoc(fsMod.doc(db, `blocks/${other}_${uid}`)).catch(() => null),
           ]);
           const iB = !!(
             mine &&
-            mine.exists &&
+            mine.exists() &&
             (mine.data() || {}).blockerUid
           );
           const theyB = !!(
             theirs &&
-            theirs.exists &&
+            theirs.exists() &&
             (theirs.data() || {}).blockerUid
           );
           setIBlockedThem(iB);
@@ -630,8 +630,8 @@ function ChatInner() {
       // Reveal state (phone already shared survives message loss)
       (async () => {
         try {
-          const r = await client.db.doc(`reveals/${convId}`).get();
-          if (r.exists && (r.data() || {}).ownerId) {
+          const r = await fsMod.getDoc(fsMod.doc(db, `reveals/${convId}`));
+          if (r.exists() && (r.data() || {}).ownerId) {
             setRevealSharedBy({
               [String((r.data() || {}).ownerId)]: true,
             });
@@ -748,6 +748,7 @@ function ChatInner() {
     const user = userRef.current;
     const c = convRef.current;
     if (!client || !user || !c) return null;
+    const { db, fsMod } = client;
     if (blockedSendGuard()) return null;
     if (sendInFlightRef.current) {
       showToast(st('tooFast'));
@@ -762,11 +763,10 @@ function ChatInner() {
     if (!t && !opts.imageUrl && opts.proposal == null) return null;
     const msgId = opts.mid || mintMessageId(user.uid);
     const oUid = (c.participants || []).find((p) => p !== user.uid) || '';
-    const FV = client.FieldValue;
     const msg: Record<string, unknown> = {
       senderId: user.uid,
       text: t || (opts.imageUrl ? '📷' : ''),
-      at: FV.serverTimestamp(),
+      at: fsMod.serverTimestamp(),
       isSystem: false,
     };
     if (opts.imageUrl) msg.imageUrl = opts.imageUrl;
@@ -798,26 +798,22 @@ function ChatInner() {
       /* non-fatal — server snapshot will render it */
     }
     try {
-      const batch = client.db.batch();
+      const batch = fsMod.writeBatch(db);
       batch.set(
-        client.db
-          .collection('conversations')
-          .doc(convId)
-          .collection('messages')
-          .doc(msgId),
+        fsMod.doc(db, 'conversations', convId, 'messages', msgId),
         msg
       );
-      batch.update(client.db.doc(`conversations/${convId}`), {
-        updatedAt: FV.serverTimestamp(),
-        lastUserMessageAt: FV.serverTimestamp(),
+      batch.update(fsMod.doc(db, `conversations/${convId}`), {
+        updatedAt: fsMod.serverTimestamp(),
+        lastUserMessageAt: fsMod.serverTimestamp(),
         lastMessage: {
           text: t ? t.slice(0, 500) : opts.imageUrl ? '📷' : '',
           proposalAmount: opts.proposal != null ? Number(opts.proposal) : null,
           senderId: user.uid,
-          at: FV.serverTimestamp(),
+          at: fsMod.serverTimestamp(),
         },
-        [`unread.${oUid}`]: FV.increment(1),
-        hiddenFor: FV.arrayRemove(oUid),
+        [`unread.${oUid}`]: fsMod.increment(1),
+        hiddenFor: fsMod.arrayRemove(oUid),
       });
       // 11 Oct 2026: timeout — hanging commit caused permanent send lock.
       await withTimeout(batch.commit(), 15000);
@@ -833,13 +829,10 @@ function ChatInner() {
       const code = (e as { code?: string })?.code;
       if (code === 'permission-denied' || code === 'deadline-exceeded') {
         try {
-          const check = await client.db
-            .collection('conversations')
-            .doc(convId)
-            .collection('messages')
-            .doc(msgId)
-            .get();
-          if (check.exists) {
+          const check = await fsMod.getDoc(
+            fsMod.doc(db, 'conversations', convId, 'messages', msgId)
+          );
+          if (check.exists()) {
             lastSendAtRef.current = Date.now();
             setFailedSend(null);
             setStatusBar(null);
@@ -900,6 +893,7 @@ function ChatInner() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user || !file) return;
+    const { authMod } = client;
     // 12 Oct 2026: reset URL ref per send — prevents retry sending previous photo.
     publicUrlRef.current = null;
     // 11 Oct 2026: throttle FIRST — was uploading to R2 before the 3s check,
@@ -950,7 +944,7 @@ function ChatInner() {
         };
         img.src = url;
       });
-      const idToken = await user.getIdToken();
+      const idToken = await authMod.getIdToken(user);
       const safeName = `p${Date.now()}.jpg`;
       const key = `chat/${convId}/${user.uid}/${safeName}`;
       const res = await fetch('/api/r2/chat-upload-url', {
@@ -994,17 +988,16 @@ function ChatInner() {
   async function respondProposal(msgId: string, status: 'accepted' | 'refused') {
     const client = clientRef.current;
     if (!client || blockedSendGuard()) return;
+    const { db, fsMod } = client;
     if (sold) {
       showToast(st('soldNegotiationClosed'));
       return;
     }
     try {
-      await client.db
-        .collection('conversations')
-        .doc(convId)
-        .collection('messages')
-        .doc(msgId)
-        .update({ 'proposal.status': status });
+      await fsMod.updateDoc(
+        fsMod.doc(db, 'conversations', convId, 'messages', msgId),
+        { 'proposal.status': status }
+      );
     } catch {
       showToast(st('errorGeneric'));
     }
@@ -1045,21 +1038,21 @@ function ChatInner() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user) return;
-    const FV = client.FieldValue;
-    const batch = client.db.batch();
+    const { db, fsMod } = client;
+    const batch = fsMod.writeBatch(db);
     batch.set(
-      client.db.collection('conversations').doc(convId).collection('messages').doc(),
+      fsMod.doc(fsMod.collection(db, 'conversations', convId, 'messages')),
       {
         senderId: user.uid,
         text: '',
-        at: FV.serverTimestamp(),
+        at: fsMod.serverTimestamp(),
         isSystem: true,
         systemKind: kind,
         ...(Object.keys(args).length ? { systemArgs: args } : {}),
       }
     );
-    batch.update(client.db.doc(`conversations/${convId}`), {
-      updatedAt: FV.serverTimestamp(),
+    batch.update(fsMod.doc(db, `conversations/${convId}`), {
+      updatedAt: fsMod.serverTimestamp(),
     });
     // 11 Oct 2026: timeout — prevents hang.
     await withTimeout(batch.commit(), 15000);
@@ -1070,17 +1063,18 @@ function ChatInner() {
     const user = userRef.current;
     const c = convRef.current;
     if (!client || !user || !c || blockedSendGuard()) return;
+    const { db, fsMod } = client;
     const prevBy = c.phoneRequestBy;
     const prevStatus = c.phoneRequestStatus;
     const next = { ...c, phoneRequestBy: user.uid, phoneRequestStatus: 'requested' };
     convRef.current = next;
     setConv(next);
     try {
-      await client.db.doc(`conversations/${convId}`).update({
+      await fsMod.updateDoc(fsMod.doc(db, `conversations/${convId}`), {
         phoneRequestBy: user.uid,
         phoneRequestStatus: 'requested',
-        phoneRequestCount: client.FieldValue.increment(1),
-        updatedAt: client.FieldValue.serverTimestamp(),
+        phoneRequestCount: fsMod.increment(1),
+        updatedAt: fsMod.serverTimestamp(),
       });
       await appendSystem('phone_requested', {
         name: (user.displayName || '').trim().split(' ')[0] || st('you'),
@@ -1098,6 +1092,7 @@ function ChatInner() {
     const c = convRef.current;
     // 11 Oct 2026: in-flight guard — double-tap double-counted declines.
     if (!client || !c || blockedSendGuard() || phoneBusy.current) return;
+    const { db, fsMod } = client;
     phoneBusy.current = true;
     const prevStatus = c.phoneRequestStatus;
     const next = { ...c, phoneRequestStatus: status };
@@ -1106,13 +1101,13 @@ function ChatInner() {
     try {
       const payload: Record<string, unknown> = {
         phoneRequestStatus: status,
-        updatedAt: client.FieldValue.serverTimestamp(),
+        updatedAt: fsMod.serverTimestamp(),
       };
       if (status === 'declined' && c.phoneRequestBy) {
         payload[`declinesByRequester.${c.phoneRequestBy}`] =
-          client.FieldValue.increment(1);
+          fsMod.increment(1);
       }
-      await client.db.doc(`conversations/${convId}`).update(payload);
+      await fsMod.updateDoc(fsMod.doc(db, `conversations/${convId}`), payload);
       await appendSystem(
         status === 'accepted' ? 'phone_accepted' : 'phone_declined',
         {}
@@ -1132,20 +1127,20 @@ function ChatInner() {
     const user = userRef.current;
     const c = convRef.current;
     if (!client || !user || !c || blockedSendGuard()) return;
+    const { db, fsMod } = client;
     const normalized = normalizePhone(phoneInput);
     if (!normalized) {
       showToast(st('phoneInvalid'));
       return;
     }
     try {
-      const FV = client.FieldValue;
-      await client.db.doc(`reveals/${convId}`).set({
+      await fsMod.setDoc(fsMod.doc(db, `reveals/${convId}`), {
         conversationId: convId,
         requesterId: c.phoneRequestBy || '',
         ownerId: user.uid,
         status: 'accepted',
         sharedPhone: normalized,
-        updatedAt: FV.serverTimestamp(),
+        updatedAt: fsMod.serverTimestamp(),
       });
       await appendSystem('phone_shared', {});
       const id = await sendChatMessage({ text: normalized });
@@ -1181,13 +1176,15 @@ function ChatInner() {
   }
 
   async function dealConfirmYes() {
+    const client = clientRef.current;
     const user = userRef.current;
-    if (!user || blockedSendGuard()) return;
+    if (!client || !user || blockedSendGuard()) return;
+    const { authMod } = client;
     // 11 Oct 2026: in-flight guard — double-tap sent duplicate requests.
     if (dealConfirmInFlightRef.current) return;
     dealConfirmInFlightRef.current = true;
     try {
-      const token = await user.getIdToken();
+      const token = await authMod.getIdToken(user);
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), 15000);
       let resp: Response;
@@ -1221,13 +1218,14 @@ function ChatInner() {
     const client = clientRef.current;
     const c = convRef.current;
     if (!client || !c || blockedSendGuard()) return;
+    const { db, fsMod } = client;
     try {
-      await client.db.doc(`conversations/${convId}`).update({
+      await fsMod.updateDoc(fsMod.doc(db, `conversations/${convId}`), {
         dealConfirmPending: false,
-        updatedAt: client.FieldValue.serverTimestamp(),
+        updatedAt: fsMod.serverTimestamp(),
       });
       try {
-        await client.db.doc(`listings/${c.listingId}`).update({
+        await fsMod.updateDoc(fsMod.doc(db, `listings/${c.listingId}`), {
           soldConfirmed: false,
         });
       } catch {
@@ -1242,10 +1240,11 @@ function ChatInner() {
   async function dealRequest() {
     const client = clientRef.current;
     if (!client || blockedSendGuard()) return;
+    const { db, fsMod } = client;
     try {
-      await client.db.doc(`conversations/${convId}`).update({
+      await fsMod.updateDoc(fsMod.doc(db, `conversations/${convId}`), {
         dealConfirmPending: true,
-        updatedAt: client.FieldValue.serverTimestamp(),
+        updatedAt: fsMod.serverTimestamp(),
       });
     } catch {
       showToast(st('errorGeneric'));
@@ -1258,8 +1257,9 @@ function ChatInner() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user || !otherUid) return;
+    const { db, fsMod, authMod } = client;
     try {
-      const idToken = await user.getIdToken();
+      const idToken = await authMod.getIdToken(user);
       const res = await fetch(TOGGLE_BLOCK_URL, {
         method: 'POST',
         mode: 'cors',
@@ -1277,13 +1277,12 @@ function ChatInner() {
       else {
         // Re-check the pair state after unblock.
         try {
-          const theirs = await client.db
-            .doc(`blocks/${otherUid}_${user.uid}`)
-            .get()
+          const theirs = await fsMod
+            .getDoc(fsMod.doc(db, `blocks/${otherUid}_${user.uid}`))
             .catch(() => null);
           const theyB = !!(
             theirs &&
-            theirs.exists &&
+            theirs.exists() &&
             (theirs.data() || {}).blockerUid
           );
           setUserBlockSevered(theyB);

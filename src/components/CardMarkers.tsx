@@ -16,7 +16,11 @@
 // per tick, no Firestore SDK download).
 
 import { useEffect, useState } from 'react';
-import { useAuthState } from '@/lib/firebase-client';
+// Round 12: this file is a firebase-compat user → bundled path. Type-only
+// imports are erased at compile time (zero bundle cost); the loader module
+// itself is fetched lazily inside the hook below, so the SDK stays off the
+// initial home chunk (weak-network critical path).
+import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 import {
   ensureProVerdicts,

@@ -14,23 +14,16 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  getFirebaseClient,
+  getFirebaseCdn,
   LoadingSpinner,
-  CompatAuth,
   inputCls,
   btnCls,
-} from '@/lib/firebase-client';
+} from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
 
 // User-facing strings — t('...') keys verbatim from js/i18n.{ar,fr,en}.js
 // (js/auth-action.js). Round 118: hardcoded Arabic STR replaced with useLang()
 // from the shared app-wide language store (js/i18n.js setLang parity).
-
-interface ActionAuth extends CompatAuth {
-  applyActionCode: (code: string) => Promise<void>;
-  verifyPasswordResetCode: (code: string) => Promise<string>;
-  confirmPasswordReset: (code: string, newPassword: string) => Promise<void>;
-}
 
 type Stage = 'working' | 'invalid' | 'error' | 'verifyDone' | 'resetForm' | 'resetDone';
 
@@ -90,15 +83,14 @@ function AuthActionInner() {
 
     (async () => {
       try {
-        const client = await getFirebaseClient();
-        const auth = client.auth as unknown as ActionAuth;
+        const { auth, authMod } = await getFirebaseCdn();
         if (mode === 'verifyEmail') {
-          await auth.applyActionCode(oobCode);
+          await authMod.applyActionCode(auth, oobCode);
           setStage('verifyDone');
         } else if (mode === 'resetPassword') {
           // Verifies the code is valid AND reveals which account it is for —
           // an expired/tampered code throws here, before any form is shown.
-          const em = await auth.verifyPasswordResetCode(oobCode);
+          const em = await authMod.verifyPasswordResetCode(auth, oobCode);
           setEmail(em || '');
           setStage('resetForm');
         } else {
@@ -129,13 +121,12 @@ function AuthActionInner() {
     }
     setSaving(true);
     try {
-      const client = await getFirebaseClient();
-      const auth = client.auth as unknown as ActionAuth;
-      await auth.confirmPasswordReset(oobRef.current, pw1);
+      const { auth, authMod } = await getFirebaseCdn();
+      await authMod.confirmPasswordReset(auth, oobRef.current, pw1);
       // A password change revokes EVERY session, including this browser's —
       // sign out locally now and say so explicitly.
       try {
-        await client.auth.signOut();
+        await authMod.signOut(auth);
       } catch {
         /* best-effort */
       }
