@@ -18,7 +18,7 @@ import { interleaveWanted, resultsCountText, cardImage, type ListingCard, type V
 import { tasteRankDefault } from '@/lib/taste';
 import { useAuthState } from '@/lib/firebase-client';
 import { useLang } from '@/lib/i18n';
-import { } from '@/lib/firebase-compat';
+// 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 import {
   applyFollowBoost,

@@ -18,7 +18,7 @@ import {
   CompatUser,
   btnSecondaryCls,
 } from '@/lib/firebase-client';
-import { } from '@/lib/firebase-compat';
+// 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 import { formatPrice } from '@/lib/firestore';
 import { useLang, getLang, type Lang } from '@/lib/i18n';

@@ -21,7 +21,7 @@
 
 import { useEffect } from 'react';
 import { getFirebaseClient } from '@/lib/firebase-client';
-import { } from '@/lib/firebase-compat';
+// 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 
 function viewDateStr(): string {

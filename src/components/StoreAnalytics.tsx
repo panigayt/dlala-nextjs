@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useAuthState } from '@/lib/firebase-client';
 import { useLang, type Lang } from '@/lib/i18n';
-import { } from '@/lib/firebase-compat';
+// 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 import { localizedTitle } from '@/lib/ratings';
 import {
