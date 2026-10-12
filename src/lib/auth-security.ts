@@ -27,8 +27,9 @@ export const DISPOSABLE_EMAIL_DOMAINS: readonly string[] = [
  * (subdomains like sub.mailinator.com do NOT match — legacy parity).
  */
 export function isDisposableEmail(email: string): boolean {
-  const domain = email.split('@')[1]?.toLowerCase() || '';
-  return DISPOSABLE_EMAIL_DOMAINS.includes(domain);
+  // 11 Oct 2026: strip trailing dot + match subdomains (was exact-only bypass).
+  const domain = (email.split('@')[1]?.toLowerCase() || '').replace(/\.$/, '');
+  return DISPOSABLE_EMAIL_DOMAINS.some((d) => domain === d || domain.endsWith('.' + d));
 }
 
 /**
