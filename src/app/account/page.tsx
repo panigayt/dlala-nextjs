@@ -103,6 +103,8 @@ function AccountContent({ user }: { user: CompatUser }) {
   const [bio, setBio] = useState('');
   const [profErr, setProfErr] = useState<string | null>(null);
   const [profOk, setProfOk] = useState(false);
+  // 12 Oct 2026: separate state for resend-verification success (was showing "Profile saved").
+  const [resendOk, setResendOk] = useState(false);
   const [profBusy, setProfBusy] = useState(false);
   const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -522,9 +524,10 @@ function AccountContent({ user }: { user: CompatUser }) {
   const resendVerification = useCallback(async () => {
     try {
       await withTimeout(user.sendEmailVerification(), 15000);
-      // 12 Oct 2026: success uses profOk (green), not profErr (red).
+      // 12 Oct 2026: success uses resendOk (green), not profErr (red).
+      // Separate from profOk to show correct "email sent" message.
       setProfErr(null);
-      setProfOk(true);
+      setResendOk(true);
     } catch {
       setProfErr(t('authConnectionProblem'));
     }
@@ -616,6 +619,11 @@ function AccountContent({ user }: { user: CompatUser }) {
               {profOk && (
                 <p className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800 mb-3">
                   {t('profileSaved')}
+                </p>
+              )}
+              {resendOk && (
+                <p className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-800 mb-3">
+                  {t('emailSent')}
                 </p>
               )}
 
