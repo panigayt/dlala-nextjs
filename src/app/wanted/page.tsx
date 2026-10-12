@@ -23,6 +23,7 @@ import {
 } from '@/lib/firestore';
 import WantedShell from './WantedShell';
 import type { WantedFilters } from './WantedFilterBar';
+import { getServerLang } from '@/lib/server-lang';
 
 const WANTED_LIMIT = 60;
 
@@ -42,7 +43,8 @@ function wantedVisible(l: ListingCard): boolean {
 }
 
 // js/wanted.js wantedMatches — verbatim logic.
-function wantedMatches(l: ListingCard, f: WantedFilters): boolean {
+// 11 Oct 2026: text search uses viewer's language (was Arabic-only).
+function wantedMatches(l: ListingCard, f: WantedFilters, lang: string): boolean {
   if (!l) return false;
   const cat = l.categoryId || '';
   if (f.cat && cat !== f.cat) return false;
@@ -55,13 +57,20 @@ function wantedMatches(l: ListingCard, f: WantedFilters): boolean {
   }
   const q = normSearchText(f.q);
   if (q) {
-    const title =
-      l.title && typeof l.title === 'object' ? l.title.ar || '' : '';
-    const desc =
-      l.description && typeof l.description === 'object'
-        ? l.description.ar || ''
-        : '';
-    const hay = normSearchText(title + ' ' + desc);
+    // 11 Oct 2026: viewer's language + string-title fallback (was ar-only, '' for strings).
+    const titleText =
+      typeof l.title === 'string'
+        ? l.title
+        : l.title && typeof l.title === 'object'
+          ? (l.title as Record<string, string>)[lang] || l.title.ar || ''
+          : '';
+    const descText =
+      typeof l.description === 'string'
+        ? l.description
+        : l.description && typeof l.description === 'object'
+          ? (l.description as Record<string, string>)[lang] || l.description.ar || ''
+          : '';
+    const hay = normSearchText(titleText + ' ' + descText);
     if (!hay.includes(q)) return false;
   }
   return true;
@@ -73,6 +82,7 @@ async function WantedLoader({
   searchParams: Promise<{ cat?: string; wilaya?: string; q?: string }>;
 }) {
   const sp = await searchParams;
+  const lang = await getServerLang();
   const f: WantedFilters = {
     cat: sp.cat || '',
     wilaya: sp.wilaya || '',
@@ -88,16 +98,16 @@ async function WantedLoader({
   }
 
   const list = docs
-    .filter((l) => wantedVisible(l) && wantedMatches(l, f))
+    .filter((l) => wantedVisible(l) && wantedMatches(l, f, lang))
     .slice(0, WANTED_LIMIT);
 
   return <WantedShell f={f} docs={list} error={error} />;
 }
 
 // Visual skeleton — no text, so no language dependency (search-page parity).
-function WantedSkeleton() {
+function WantedSkeleton({ dir }: { dir: 'rtl' | 'ltr' }) {
   return (
-    <div className="min-h-screen bg-zinc-50" dir="rtl">
+    <div className="min-h-screen bg-zinc-50" dir={dir}>
       <main className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -118,13 +128,15 @@ function WantedSkeleton() {
   );
 }
 
-export default function WantedPage({
+export default async function WantedPage({
   searchParams,
 }: {
   searchParams: Promise<{ cat?: string; wilaya?: string; q?: string }>;
 }) {
+  // 11 Oct 2026: skeleton dir matches language (was hardcoded rtl).
+  const lang = await getServerLang();
   return (
-    <Suspense fallback={<WantedSkeleton />}>
+    <Suspense fallback={<WantedSkeleton dir={lang === 'ar' ? 'rtl' : 'ltr'} />}>
       <WantedLoader searchParams={searchParams} />
     </Suspense>
   );
