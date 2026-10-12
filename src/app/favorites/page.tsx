@@ -379,8 +379,9 @@ function FavoritesContent({ user }: { user: CompatUser }) {
         }
       } catch (e) {
         console.error(e);
-        // 11 Oct 2026: inline error — window.alert hangs headless browsers.
-        if (mounted.current) setError(t('errorGeneric'));
+        // 11 Oct 2026: don't nuke the grid on single-card remove failure.
+        // The card stays; user can retry by tapping ✕ again.
+        // (was setError → full-page error wiped all cards.)
       } finally {
         if (mounted.current) setRemoving(null);
       }
