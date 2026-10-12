@@ -60,7 +60,8 @@ export function snapshotRead<T>(page: string, ttlMs?: number): Snapshot<T> | nul
     if (!raw) return null;
     const s = JSON.parse(raw) as { v?: number; ts?: number; data?: T } | null;
     const ttl = ttlMs || SNAP_TTL;
-    if (!s || s.v !== 1 || !s.data || Date.now() - s.ts! > ttl) return null;
+    // 11 Oct 2026: reject missing/NaN ts — was treated as fresh forever.
+    if (!s || s.v !== 1 || !s.data || !Number.isFinite(s.ts) || Date.now() - (s.ts as number) > ttl) return null;
     return { uid, data: s.data };
   } catch {
     return null;
