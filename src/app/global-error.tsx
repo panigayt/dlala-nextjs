@@ -25,6 +25,19 @@ export default function GlobalError({
 
   return (
     <html lang="ar" dir="rtl">
+      <head>
+        {/* 12 Oct 2026 (Round 11 Team 5): pre-paint lang/dir from the
+            dlala_lang cookie — mirrors src/app/layout.tsx. global-error
+            replaces the root layout entirely, so without this script the
+            error page flashes ar/rtl before the useEffect below runs.
+            (CSP script-src allows 'unsafe-inline', same as the root
+            layout's script.) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var m=document.cookie.match(/(?:^|;\\s*)dlala_lang=(fr|en|ar)/);var l=m?m[1]:'ar';document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';}catch(e){}`,
+          }}
+        />
+      </head>
       <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif' }}>
         <div style={{ minHeight: '100vh', backgroundColor: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
           <div style={{ maxWidth: '28rem', width: '100%', borderRadius: '0.75rem', backgroundColor: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', padding: '2rem', textAlign: 'center' }}>

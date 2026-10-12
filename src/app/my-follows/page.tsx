@@ -18,7 +18,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
@@ -183,6 +183,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
   const load = useCallback(async () => {
     setError(null);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike;
       const snap = await withTimeout(
@@ -276,6 +277,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
     async (storeId: string) => {
       setUnfollowing(storeId);
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         type UnfollowDb = {
           collection: (p: string) => {

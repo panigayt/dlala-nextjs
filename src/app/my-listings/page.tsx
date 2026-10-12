@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -96,6 +96,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const load = useCallback(async () => {
     setError(null);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as {
         collection: (p: string) => {
@@ -176,6 +177,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setConfirmSoldId(null);
       setActionBusy(id);
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as {
           doc: (p: string) => { update: (d: Record<string, unknown>) => Promise<void> };
@@ -219,6 +221,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setConfirmDeleteId(null);
       setActionBusy(id);
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as {
           doc: (p: string) => {
@@ -344,6 +347,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       return;
     }
     // Re-check via fresh auth state — reload the page if now verified.
+    const { getFirebase } = await import('@/lib/firebase-compat');
     const fb = await getFirebase().catch(() => null);
     const cu = fb?.auth().currentUser;
     if (cu && cu.emailVerified) window.location.reload();

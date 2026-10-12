@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
@@ -81,6 +81,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
   // ---- Blocked users -------------------------------------------------------
   const loadBlocked = useCallback(async () => {
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as {
         collection: (p: string) => {
@@ -132,6 +133,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
     async (targetUid: string) => {
       setUnblocking(targetUid);
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         const au = fb.auth().currentUser;
         const idToken = au
@@ -207,6 +209,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setReportErr(null);
     setReportBusy(true);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as {
         collection: (p: string) => {
@@ -257,6 +260,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setDeleteErr(null);
     setDeleteBusy(true);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       // Fresh re-authentication is mandatory.
       const cred = fb.auth.EmailAuthProvider.credential(user.email || '', deletePw);
@@ -408,7 +412,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
           <a href="/account" className={rowCls}>
             <span className={icoCls} aria-hidden="true">👤</span>
             <span className="flex-1 font-medium text-zinc-900">{t('account')}</span>
-            <span className={goCls} aria-hidden="true">‹</span>
+            <span className={goCls} aria-hidden="true">{dir === 'rtl' ? '‹' : '›'}</span>
           </a>
         </section>
 
@@ -452,7 +456,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
               <span className="block font-medium text-zinc-900">{t('reportProblem')}</span>
               <span className="block text-xs text-zinc-500">{t('reportProblemDesc')}</span>
             </span>
-            <span className={goCls} aria-hidden="true">‹</span>
+            <span className={goCls} aria-hidden="true">{dir === 'rtl' ? '‹' : '›'}</span>
           </button>
           <a href={`/chat/${encodeURIComponent('supp_' + user.uid)}`} className={rowCls}>
             <span className={icoCls} aria-hidden="true">💬</span>
@@ -460,7 +464,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
               <span className="block font-medium text-zinc-900">{t('contactSupport')}</span>
               <span className="block text-xs text-zinc-500">{t('contactSupportDesc')}</span>
             </span>
-            <span className={goCls} aria-hidden="true">‹</span>
+            <span className={goCls} aria-hidden="true">{dir === 'rtl' ? '‹' : '›'}</span>
           </a>
         </section>
 
@@ -496,12 +500,12 @@ function SettingsContent({ user }: { user: CompatUser }) {
           <a href="/terms" className={rowCls}>
             <span className={icoCls} aria-hidden="true">📄</span>
             <span className="flex-1 font-medium text-zinc-900">{t('termsLink')}</span>
-            <span className={goCls} aria-hidden="true">‹</span>
+            <span className={goCls} aria-hidden="true">{dir === 'rtl' ? '‹' : '›'}</span>
           </a>
           <a href="/privacy" className={rowCls}>
             <span className={icoCls} aria-hidden="true">🔒</span>
             <span className="flex-1 font-medium text-zinc-900">{t('privacyLink')}</span>
-            <span className={goCls} aria-hidden="true">‹</span>
+            <span className={goCls} aria-hidden="true">{dir === 'rtl' ? '‹' : '›'}</span>
           </a>
           <p className="px-4 pb-4 pt-2 text-xs text-zinc-500">
             {t('appVersion')}: {APP_VERSION}

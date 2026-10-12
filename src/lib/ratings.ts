@@ -15,7 +15,7 @@
 // Kept DOM-free and React-free so the logic is unit-testable (node harness).
 
 import type { CompatUser, FirebaseClient } from './firebase-client';
-import { withTimeout } from './firebase-compat';
+import { withTimeout } from './timeout';
 
 export interface RateableDeal {
   conversationId: string;

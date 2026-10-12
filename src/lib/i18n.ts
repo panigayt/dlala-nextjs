@@ -101,7 +101,7 @@ export function titleKeyForPath(pathname: string): string | null {
     case 'announcements': return 'title_announcements';
     case 'store-verify': return 'title_storeVerify';
     case 'my-store': return 'title_myStore';
-    case 'search': return 'title_home';
+    case 'search': return 'title_search'; // Round 11 (12 Oct 2026): was title_home — client updateDocTitle overwrote the tab with the home title on hydration
     default: return null;
   }
 }

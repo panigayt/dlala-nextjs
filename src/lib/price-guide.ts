@@ -62,12 +62,6 @@ export const PRICE_MODELS: PriceModel[] = [
   { key: 'kia-sportage',    ar: 'كيا سبورتاج',    fr: 'Kia Sportage',    brand: 'kia',     model: 'sportage', section: 'suv',   modelSlug: 'kia-sportage' },
 ];
 
-export const PRICE_SECTIONS = [
-  { key: 'city',  ar: 'سيارات المدينة الصغيرة',            fr: 'Citadines' },
-  { key: 'sedan', ar: 'السيارات العائلية (سيدان)',         fr: 'Berlines familiales' },
-  { key: 'suv',   ar: 'سيارات الدفع الرباعي والكروس أوفر', fr: 'SUV et crossovers' },
-];
-
 export const MIN_ADS_PER_MODEL = 5; // dynamic-spec rule: ≥5 ads for a model to show
 
 // The guide year rolls over automatically: in 2027 the canonical slug

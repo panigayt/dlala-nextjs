@@ -22,7 +22,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -226,6 +226,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
     setError(null);
     cursorRef.current = null;
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike & {
         collection: (p: string) => {
@@ -276,6 +277,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
     if (!cursorRef.current || loadingMore) return;
     setLoadingMore(true);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       type MoreDb = {
         collection: (p: string) => {
@@ -332,6 +334,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
     async (listingId: string) => {
       setRetrying(listingId);
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as DbLike;
         const l = await withTimeout(db.doc('listings/' + listingId).get(), 15000);
@@ -366,6 +369,7 @@ function FavoritesContent({ user }: { user: CompatUser }) {
       setRemoving(listingId);
       setRemoveErr(null); // clear previous error on retry
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         const db = fb.firestore() as unknown as DbLike;
         // 11 Oct 2026: atomic batch — prevents orphan listingFavoriters docs

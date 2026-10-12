@@ -976,17 +976,14 @@ function PublishForm({
         const priceDropped = effPrice < oldPrice && cat === String(cur.categoryId || '');
         // Upload any newly picked photos (with variants + hashes)
         const up = await uploadNewPhotos(photos, user.uid, editId, idToken);
-        // 12 Oct 2026: stale-photoVariants guard. The doc keeps
-        // photoVariants=true — the field is NOT in the v122/v123 owner-edit
-        // allowlist, so this client cannot clear it. If new photos were added
-        // but their variant files are still missing after retries, the
-        // derived variant URLs (BlurUpImage) would 404. Refuse to save the
-        // photo change instead of persisting a known-stale flag (the
-        // just-uploaded mains become orphans; retrying the edit re-uploads).
-        if (photos.length && cur.photoVariants === true && up.variantsOk.some((ok) => !ok)) {
-          fail(t('variantUploadFailed'));
-          return;
-        }
+        // 12 Oct 2026 (v124 live): 'photoVariants' is now in the owner-edit
+        // allowlist, so a stale flag CAN be cleared. If new photos were added
+        // to a doc with photoVariants===true but their variant files are still
+        // missing after retries, clear the flag in the same edit update below
+        // instead of refusing the save — the listing then renders via the
+        // non-variant image path instead of 404ing derived variant URLs.
+        const clearStaleVariants =
+          photos.length > 0 && cur.photoVariants === true && up.variantsOk.some((ok) => !ok);
         // Merge: existing kept photos first, then new uploads (legacy mergeEditPhotos)
         const mergedUrls = existingPhotos.map((p) => p.url).concat(up.urls);
         const mergedHashes = existingPhotos.map((p) => p.hash || '').concat(up.hashes);
@@ -1039,10 +1036,21 @@ function PublishForm({
           updateDoc.photoUrls = mergedUrls;
           updateDoc.photoHashes = mergedHashes.slice(0, mergedUrls.length);
           updateDoc.photo_thumbs = mergedThumbs.slice(0, mergedUrls.length);
-          // 11 Oct 2026: REMOVED photoVariants — not in v122 edit allowlist,
-          // photo-changing edits were denied. Field is informational only.
+          // 12 Oct 2026 (v124 live): clear a stale photoVariants flag when
+          // variant uploads failed after retries — now allowed by the rules.
+          // The listing falls back to the non-variant image path.
+          if (clearStaleVariants) {
+            updateDoc.photoVariants = false;
+          }
         }
-        await client.db.collection('listings').doc(editId).update(updateDoc);
+        try {
+          await client.db.collection('listings').doc(editId).update(updateDoc);
+        } catch {
+          // The update itself failed (rules/network) — refuse rather than
+          // leave a half-applied edit.
+          fail(t('editError'));
+          return;
+        }
         // Delete R2 objects for photos removed in edit mode (best-effort).
         // The server skips non-R2 values and enforces uid ownership.
         if (removedExisting.length) {

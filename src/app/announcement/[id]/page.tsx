@@ -100,6 +100,37 @@ export async function generateMetadata({
   }
 }
 
+// Round 11 (12 Oct 2026): transient-error UI — port of the Round 9
+// listing TransientErrorView (src/app/listing/[id]/page.tsx). Trilingual
+// static messaging (AR/FR/EN all rendered, same wording pattern) plus a
+// native <a> retry link: a full document reload re-runs the server
+// component and retries the Firestore fetch. Genuinely missing
+// announcements (null) never reach this — they get notFound() above.
+async function TransientErrorView({ id }: { id: string }) {
+  const lang = await getServerLang();
+  return (
+    <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="rounded-xl bg-white p-8 text-center">
+        <div className="text-4xl">📢</div>
+        <h1 className="mt-3 text-lg font-semibold text-zinc-800" lang="ar" dir="rtl">تعذّر تحميل الإعلان</h1>
+        <p className="mt-2 text-zinc-600" lang="ar" dir="rtl">
+          حدث خطأ مؤقت أثناء تحميل هذا الإعلان. قد يكون الإعلان موجوداً — حاول مرة أخرى.
+        </p>
+        <p className="mt-1 text-zinc-600" lang="fr">Impossible de charger cette annonce pour le moment. Veuillez réessayer.</p>
+        <p className="mt-1 text-zinc-600" lang="en">This announcement could not be loaded right now. Please try again.</p>
+        <div className="mt-6">
+          <a
+            href={`/announcement/${encodeURIComponent(id)}`}
+            className="inline-block rounded-lg bg-emerald-700 px-6 py-3 font-medium text-white"
+          >
+            {t('retry', lang)}
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 async function AnnDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -109,6 +140,17 @@ async function AnnDetail({ params }: { params: Promise<{ id: string }> }) {
     a = await getAnnouncement(id);
   } catch {
     error = true;
+  }
+
+  // Round 11 (12 Oct 2026): a THROWN fetch is a transient failure
+  // (network/5xx/429 — fetchAnnouncement throws), NOT a missing
+  // announcement (it returns null for 404/403, and inactive docs also
+  // return null). The old code rendered the not-found view here at HTTP
+  // 200, conflating the two. Keep HTTP 200 with a retry UI; genuinely
+  // missing announcements still go through notFound() in
+  // generateMetadata (runs before streaming starts) for a real 404.
+  if (error) {
+    return <TransientErrorView id={id} />;
   }
 
   const data: AnnouncementDetailData | null = a

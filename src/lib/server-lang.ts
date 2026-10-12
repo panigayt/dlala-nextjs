@@ -9,7 +9,7 @@
 // component. String lookup comes from ./i18n-strings (no 'use client'
 // directive), so generateMetadata can call t() directly.
 import { cookies } from 'next/headers';
-import { t, type Lang } from './i18n-strings';
+import { type Lang } from './i18n-strings';
 
 /** UI language for server rendering — from the dlala_lang cookie, else 'ar'. */
 export async function getServerLang(): Promise<Lang> {
@@ -21,9 +21,4 @@ export async function getServerLang(): Promise<Lang> {
     // a language must never break rendering
   }
   return 'ar';
-}
-
-/** Localized <title> for a page-title key (js/app.js PAGE_TITLES parity). */
-export async function serverTitle(key: string): Promise<string> {
-  return t(key, await getServerLang());
 }

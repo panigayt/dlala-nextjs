@@ -23,16 +23,23 @@ import {
 } from '@/lib/firestore';
 import { parseSearchFilters, filtersToQuery } from './filters';
 import { t } from '@/lib/i18n-strings';
-import { getServerLang } from '@/lib/server-lang';
 import SearchPage from '@/components/SearchPage';
 
 // Round 133: <title> follows the reader's language (dlala_lang cookie;
 // localStorage is client-only). 12 Oct 2026 (Round 8): dedicated
 // title_search — the page must not read "Dlala — Home".
-export async function generateMetadata(): Promise<Metadata> {
+// 12 Oct 2026 (Round 11 Team 2): statically analyzable — no request-time
+// cookies() read. Mirrors the /{ar,fr,en}/guides pattern (static LANG,
+// title key per route): the canonical /search route is the Arabic route,
+// so the title uses the static 'ar' string; the client-side updateDocTitle
+// (lib/i18n) re-localizes the tab on hydration and on every language
+// switch without a reload. Awaiting cookies() here deferred the page's
+// metadata segment and, per Round 10 T1, kept the streamed <head> from
+// settling on the page title.
+export function generateMetadata(): Metadata {
   // 11 Oct 2026: noindex — query-param search URLs are thin content.
   return {
-    title: t('title_search', await getServerLang()),
+    title: t('title_search', 'ar'),
     robots: { index: false, follow: false },
   };
 }

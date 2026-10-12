@@ -20,14 +20,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  getFirebase,
-  withAuthRetry,
-  withTimeout,
-  type CompatAuth,
-  type CompatUser,
-  type FirebaseCompat,
+// Lazy: the compat SDK is heavy (~1MB) — it is only loaded inside auth
+// handlers/effects. The type imports below are erased at compile time.
+import type {
+  CompatAuth,
+  CompatUser,
+  FirebaseCompat,
 } from '../../lib/firebase-compat';
+import { withTimeout } from '@/lib/timeout';
 import { authReturnTarget } from '../../lib/auth-return';
 import { useLang } from '../../lib/i18n';
 import {
@@ -182,7 +182,9 @@ export default function AuthPage() {
     // Already signed in: verified users proceed to their return target,
     // unverified users land on the verification gate.
     let cancelled = false;
-    getFirebase()
+    // Lazy-load the compat SDK — keeps it off the initial page chunk.
+    import('../../lib/firebase-compat')
+      .then(({ getFirebase }) => getFirebase())
       .then((fb) => {
         if (cancelled) return;
         unsubRef.current = fb.auth().onAuthStateChanged((u) => {
@@ -234,6 +236,8 @@ export default function AuthPage() {
     }
     setLoading(true);
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
       const fb = await getFirebase();
       const auth = fb.auth();
       const cred = await withAuthRetry(() => auth.signInWithEmailAndPassword(em, password));
@@ -327,6 +331,8 @@ export default function AuthPage() {
     setLoading(true);
     let fb: FirebaseCompat | null = null;
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
       fb = await getFirebase();
       const auth: CompatAuth = fb.auth();
       // SECURITY (15 Sep 2026): block disposable/temporary email domains.
@@ -412,6 +418,8 @@ export default function AuthPage() {
       const code = (e as { code?: string } | null)?.code || '';
       if (code === 'auth/email-already-in-use') {
         try {
+          // Lazy-load the compat SDK — keeps it off the initial page chunk.
+          const { getFirebase } = await import('../../lib/firebase-compat');
           const fbL9 = fb ?? (await getFirebase());
           const signInCred = await withTimeout(
             fbL9.auth().signInWithEmailAndPassword(em, password)
@@ -464,6 +472,8 @@ export default function AuthPage() {
     }
     setLoading(true);
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
       const fb = await getFirebase();
       await withAuthRetry(() => fb.auth().sendPasswordResetEmail(em));
       if (mounted.current) {
@@ -485,6 +495,8 @@ export default function AuthPage() {
     setOkMsg(null);
     setLoading(true);
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase } = await import('../../lib/firebase-compat');
       const fb = await getFirebase();
       const u = fb.auth().currentUser;
       if (!u) {
@@ -529,6 +541,8 @@ export default function AuthPage() {
     setOkMsg(null);
     setLoading(true);
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase, withAuthRetry } = await import('../../lib/firebase-compat');
       const fb = await getFirebase();
       const u = fb.auth().currentUser;
       if (!u) {
@@ -554,6 +568,8 @@ export default function AuthPage() {
 
   async function handleVerifyLogout() {
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase } = await import('../../lib/firebase-compat');
       const fb = await getFirebase();
       await fb.auth().signOut();
     } catch (e) {

@@ -32,14 +32,6 @@ export function snapUid(): string {
   }
 }
 
-export function snapRememberUid(uid: string): void {
-  try {
-    if (uid) storage()?.setItem('dlala_uid', uid);
-  } catch {
-    /* ignore */
-  }
-}
-
 export function snapKey(page: string, uid: string): string {
   return 'dlala_snap_' + page + '_' + uid;
 }
@@ -100,20 +92,6 @@ export function snapshotClearUser(uid: string): void {
         }
       }
     }
-  } catch {
-    /* ignore */
-  }
-}
-
-// Sign-out: drop the uid mirror and this device's snapshots for that user,
-// so the next account never flashes the previous user's private lists.
-// (Redundant with tasteMirrorUid's sign-out path; kept as the canonical
-// js/snapshot.js API for pages that need it.)
-export function snapshotForget(): void {
-  try {
-    const uid = snapUid();
-    if (uid) snapshotClearUser(uid);
-    storage()?.removeItem('dlala_uid');
   } catch {
     /* ignore */
   }

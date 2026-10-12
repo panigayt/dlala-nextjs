@@ -39,7 +39,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase-client';
-import { getFirebase} from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
@@ -597,6 +596,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         ...(Array.isArray(l.photo_thumbs) ? l.photo_thumbs : []),
       ].filter((u): u is string => typeof u === 'string' && !!u);
       try {
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await getFirebase();
         const storage = fb.storage() as unknown as {
           ref: (p: string) => { delete: () => Promise<void> };

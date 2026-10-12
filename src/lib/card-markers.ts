@@ -20,7 +20,7 @@
 //     preserving the 0.0.0.1w R1 win (no 101KB SDK on every home visit).
 // Never throws: failures fail closed (no badges), exactly like legacy.
 
-import { FIREBASE_API_KEY, FIRESTORE_REST_BASE } from './firestore';
+import { FIREBASE_API_KEY, FIRESTORE_RESOURCE_BASE, FIRESTORE_REST_BASE } from './firestore';
 
 // js/app.js — proSellerCache parity: uid -> isVerifiedPro. Session-scoped.
 export const proVerdictCache = new Map<string, boolean>();
@@ -128,7 +128,8 @@ async function flushProVerdicts(): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documents: chunk.map(
-            (id) => `${FIRESTORE_REST_BASE}/users_public/${encodeURIComponent(id)}`,
+            (id) =>
+              `${FIRESTORE_RESOURCE_BASE}/users_public/${encodeURIComponent(id)}`,
           ),
           mask: { fieldPaths: ['storeTier'] },
         }),

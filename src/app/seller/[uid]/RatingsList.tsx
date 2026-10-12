@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import type { SellerRating } from '@/lib/firestore';
 import { useLang } from '@/lib/i18n';
-import { getFirebase } from '@/lib/firebase-compat';
 
 export default function RatingsList({
   ratings,
@@ -33,7 +32,10 @@ export default function RatingsList({
 
   useEffect(() => {
     let mounted = true;
-    getFirebase().then((fb) => {
+    // Lazy-load the compat SDK — keeps it off the initial page chunk.
+    import('@/lib/firebase-compat')
+      .then(({ getFirebase }) => getFirebase())
+      .then((fb) => {
       const user = fb.auth().currentUser;
       if (mounted) setCurrentUid(user ? user.uid : null);
     }).catch(() => {});
@@ -49,6 +51,8 @@ export default function RatingsList({
     // The button label is clear enough; the action is reversible via admin.
     setReporting(rating.id);
     try {
+      // Lazy-load the compat SDK — keeps it off the initial page chunk.
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as {
         collection: (p: string) => {

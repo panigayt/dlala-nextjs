@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { authLoginHref } from '@/lib/auth-return';
@@ -33,6 +33,8 @@ export default function AuthGate({ children }: AuthGateProps) {
     let cancelled = false;
     (async () => {
       try {
+        // Lazy-load the compat SDK — keeps it off the initial chunk.
+        const { getFirebase } = await import('@/lib/firebase-compat');
         const fb = await withTimeout(getFirebase(), 12000);
         if (cancelled || !mounted.current) return;
         unsubRef.current = fb.auth().onAuthStateChanged((u) => {

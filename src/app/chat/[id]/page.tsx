@@ -225,6 +225,7 @@ function ChatInner() {
   // Language: mirrors js/chat.js — .chat-lang switcher + onLangChange re-render
   // (React re-renders from state on switch; st() always reads the current lang).
   const { lang, setLang } = useLang();
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const st = (k: string) => chatSt(lang, k);
 
   const [conv, setConv] = useState<ConvData | null>(null);
@@ -1652,7 +1653,7 @@ function ChatInner() {
               else router.push('/conversations');
             }}
           >
-            ‹
+            {dir === 'rtl' ? '›' : '‹'}
           </button>
           <div className="flex-1 min-w-0">
             <div className="font-bold truncate">{otherName || '…'}</div>

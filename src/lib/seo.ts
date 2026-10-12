@@ -25,8 +25,6 @@ export const SITE = 'https://dzdlala.com';
 
 import { t, type Lang } from './i18n-strings';
 
-export const SITE_TAGLINE = 'دلالة — سوق الجزائر الحر للإعلانات المبوبة';
-
 // Brand keys (cb*/pb*) -> Latin proper-noun label. Copied verbatim from
 // js/i18n.{ar,fr,en}.js (identical in all three): brand only when honestly
 // known (0.0.0.30 Zak). Keys ending in "Other" resolve to Arabic "أخرى" in
@@ -103,11 +101,6 @@ export function isConditionExempt(
   )
     return true;
   return false;
-}
-
-// Verbatim port of js/app.js condLabel() (Arabic UI).
-export function condLabelAr(c: string | undefined): string {
-  return c === 'new' ? 'جديد' : c === 'good' ? 'جيد' : 'مستعمل';
 }
 
 // Round 133: lang-aware condition label for localized SEO titles.

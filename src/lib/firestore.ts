@@ -13,6 +13,17 @@ export const FIREBASE_API_KEY = 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
 export const FIRESTORE_REST_BASE =
   'https://firestore.googleapis.com/v1/projects/dlala-85cea/databases/(default)/documents';
 
+// Round 11 Team 8 (12 Oct 2026): Firestore :batchGet `documents` entries must
+// be RESOURCE NAMES ("projects/{p}/databases/{db}/documents/{coll}/{id}"),
+// NOT full REST URLs. The API rejects full URLs with 400 INVALID_ARGUMENT
+// ("Document name ... lacks 'projects' at index 0") — this 400 fired on
+// every home-page load via card-markers' pro-verdict batchGet (and silently
+// broke the two server-side batchGets the same way).
+export const FIRESTORE_RESOURCE_BASE = FIRESTORE_REST_BASE.replace(
+  /^https:\/\/firestore\.googleapis\.com\/v1\//,
+  ''
+);
+
 // js/app.js — CARD_REST_FIELDS (verbatim, same order)
 const CARD_REST_FIELDS = [
   'title', 'description', 'price', 'previousPrice',
@@ -1195,7 +1206,8 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         documents: chunk.map(
-          (id) => `${FIRESTORE_REST_BASE}/users_public/${encodeURIComponent(id)}`
+          (id) =>
+            `${FIRESTORE_RESOURCE_BASE}/users_public/${encodeURIComponent(id)}`
         ),
         mask: { fieldPaths: ['storeTier', 'vitrineBoostUntil'] },
       }),
@@ -1489,7 +1501,7 @@ async function batchGetListings(ids: string[]): Promise<ListingCard[]> {
   const url =
     FIRESTORE_REST_BASE + ':batchGet?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const docs = ids.slice(0, 100).map(
-    (id) => `${FIRESTORE_REST_BASE}/listings/${encodeURIComponent(id)}`
+    (id) => `${FIRESTORE_RESOURCE_BASE}/listings/${encodeURIComponent(id)}`
   );
   const res = await fetch(url, {
     method: 'POST',

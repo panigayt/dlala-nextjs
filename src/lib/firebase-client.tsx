@@ -247,19 +247,6 @@ export function useAuthState(): AuthState {
 
 // ---- Shared UI bits ----
 
-export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <header className="bg-emerald-700 text-white shadow">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold">
-          {title || 'دلالة'}
-        </Link>
-        <span className="text-sm">{subtitle || 'سوق الجزائر للإعلانات المبوبة'}</span>
-      </div>
-    </header>
-  );
-}
-
 export function LoadingSpinner({ label }: { label?: string }) {
   const { lang, t } = useLang();
   return (

@@ -39,13 +39,66 @@ import {
 } from '@/lib/seo';
 import { t, type Lang } from '@/lib/i18n-strings';
 import { getServerLang } from '@/lib/server-lang';
+import dynamic from 'next/dynamic';
+import type { MatchOfferDoc } from './MatchingOffers';
 import BackLink from '@/components/BackLink';
-import ListingActions from './ListingActions';
 import OwnerSellerCard from './OwnerSellerCard';
 import WantedBadge from './WantedBadge';
 import PriceReducedBadge from './PriceReducedBadge';
 import RateCta from '@/components/RateCta';
 import NotFoundCta from './NotFoundCta';
+
+// Round 11 Slim-2 (12 Oct 2026): code-split heavy client components at the
+// usage site. ssr:true keeps the server-rendered HTML (SEO intact, no
+// layout shift); the component's client JS ships as a SEPARATE chunk that
+// hydrates after the initial page bundle instead of being part of it.
+function ActionsSkeleton() {
+  return (
+    <div
+      className="mt-[14px] rounded-xl bg-white border border-[#e5e7eb] p-[10px]"
+      aria-hidden="true"
+    >
+      <div className="grid grid-cols-2 gap-[6px]">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-[34px] rounded-lg bg-zinc-100 animate-pulse" />
+        ))}
+        <div className="h-[34px] rounded-lg bg-zinc-100 animate-pulse col-span-2" />
+      </div>
+    </div>
+  );
+}
+
+function MatchesSkeleton() {
+  return (
+    <div className="mt-4 rounded-xl bg-white shadow-sm p-5" aria-hidden="true">
+      <div className="h-6 w-40 bg-zinc-100 rounded animate-pulse mb-4" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl bg-zinc-100 aspect-[4/3] animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Below-fold section on wanted ads (drags ListingCardView + FavoriteToggle
+// + matching lib out of the initial bundle — nothing else on the listing
+// page uses them).
+const MatchingOffers = dynamic(() => import('./MatchingOffers'), {
+  loading: () => <MatchesSkeleton />,
+});
+
+// Interactive buttons (favorite / contact / propose / share / report) — the
+// buttons' chunk is by far the heaviest on the page (~32KB source). SSR HTML
+// still renders the buttons on first paint; only the client JS is deferred.
+const ListingActions = dynamic(() => import('./ListingActions'), {
+  loading: () => <ActionsSkeleton />,
+});
+
+// Fire-and-forget recorders with no UI — client-only, never block hydration.
+// `ssr: false` is illegal in Server Components, so they live behind the tiny
+// client wrapper RecordersClient (12 Oct 2026 gate fix).
+import RecordersClient from './RecordersClient';
 import {
   ListingDir,
   SoldBanner,
@@ -58,9 +111,6 @@ import {
 } from './ListingShell';
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
-import MatchingOffers, { type MatchOfferDoc } from './MatchingOffers';
-import TasteViewRecorder from './TasteViewRecorder';
-import ViewRecorder from './ViewRecorder';
 
 async function getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -375,7 +425,7 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
       {/* js/taste.js tasteRecordView (via js/listing.js): every non-owner
           view is an on-device taste signal. Owner views are excluded
           inside tasteRecordView via the dlala_uid mirror. */}
-      <TasteViewRecorder
+      <RecordersClient
         listing={{
           id,
           categoryId: l.categoryId,
@@ -383,11 +433,8 @@ async function ListingContent({ params }: { params: Promise<{ id: string }> }) {
           wilayaCode: l.wilayaCode,
           sellerId: l.sellerId,
         }}
+        sellerId={l.sellerId}
       />
-      {/* Server-visible view counting (js/listing.js recordSignedInView /
-          recordAnonymousView): one listingViews doc per viewer per day.
-          Best-effort — never affects rendering. */}
-      {l.sellerId && <ViewRecorder listingId={id} sellerId={l.sellerId} />}
       {jsonLdScript && (
         <script
           type="application/ld+json"

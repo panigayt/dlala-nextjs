@@ -39,14 +39,3 @@ export function isDisposableEmail(email: string): boolean {
 export function hasPlusAddress(email: string): boolean {
   return email.includes('+');
 }
-
-/**
- * Which signup-block applies, if any. Legacy checks the disposable domain
- * FIRST and the plus-address second (a disposable+plus address shows the
- * disposable message).
- */
-export function signupEmailBlock(email: string): 'disposable' | 'plus' | null {
-  if (isDisposableEmail(email)) return 'disposable';
-  if (hasPlusAddress(email)) return 'plus';
-  return null;
-}

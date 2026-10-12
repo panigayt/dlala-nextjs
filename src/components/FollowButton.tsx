@@ -25,16 +25,6 @@ import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang } from '@/lib/i18n';
 
-// Verbatim strings from js/i18n.ar.js — kept for backward compatibility
-// (other modules import STR). New code should use useLang() t() instead;
-// the hook below already does (Round 107 trilingual).
-export const STR = {
-  follow: 'متابعة',
-  following: 'أتابع',
-  loginToFollow: 'سجّل الدخول للمتابعة',
-  errorGeneric: 'حدث خطأ — حاول مجدداً',
-};
-
 interface DocRefLike {
   get: () => Promise<{ exists: boolean }>;
   set: (data: Record<string, unknown>) => Promise<void>;

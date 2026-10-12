@@ -7,26 +7,50 @@ import "./guides.css";
 import SiteChrome from "@/components/SiteChrome";
 import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
-import { cookies } from "next/headers";
 
-// 11 Oct 2026: language-aware metadata — was hardcoded Arabic in EN/FR mode.
-export async function generateMetadata(): Promise<Metadata> {
-  const lang = (await cookies()).get("dlala_lang")?.value || "ar";
-  const titles: Record<string, string> = {
-    ar: "دلالة — سوق الجزائر للإعلانات المبوبة",
-    fr: "Dlala — Petites annonces en Algérie",
-    en: "Dlala — Classifieds in Algeria",
-  };
-  const descs: Record<string, string> = {
-    ar: "موقع دلالة: إعلانات مبوبة مجانية في الجزائر — سيارات، عقارات، هواتف، والمزيد.",
-    fr: "Dlala : petites annonces gratuites en Algérie — voitures, immobilier, téléphones et plus.",
-    en: "Dlala: free classifieds in Algeria — cars, real estate, phones and more.",
-  };
-  return {
-    title: titles[lang] || titles.ar,
-    description: descs[lang] || descs.ar,
-  };
-}
+// 12 Oct 2026 (Round 11 Team 1): FULLY STATIC root metadata.
+// Root cause fix for Round 10 T1: the previous root generateMetadata did
+// `await cookies()` to pick a language, which deferred the ENTIRE merged
+// metadata chain to request time — canonical / og:url / robots were ABSENT
+// from the server <head> on prerendered pages (real SEO impact).
+// Static here is the correct trade-off: crawlers get the ar fallback
+// (consistent with the hardcoded <html lang="ar" dir="rtl"> below), and
+// real users get the pre-paint dlala_lang cookie script (also below) which
+// flips lang/dir before first paint. Child routes still own their own
+// language-aware generateMetadata; the root default/template applies only
+// where children don't set one.
+export const metadata: Metadata = {
+  metadataBase: new URL("https://dzdlala.com"),
+  title: {
+    default: "دلالة — سوق الجزائر للإعلانات المبوبة",
+    // Round 11 (12 Oct 2026): template is "%s" (no suffix) — every child
+    // route already returns a fully branded title ("البحث — دلالة",
+    // "Buying guides | DLALA", "… — DLALA"); the old "%s | دلالة" suffix
+    // produced double/triple branding ("البحث — دلالة | دلالة").
+    template: "%s",
+  },
+  description:
+    "موقع دلالة: إعلانات مبوبة مجانية في الجزائر — سيارات، عقارات، هواتف، والمزيد.",
+  // Round 11 (12 Oct 2026): NO root canonical — a site-wide canonical of "/"
+  // would wrongly claim https://dzdlala.com/ as canonical for every page
+  // lacking its own (seller, privacy, terms, announcements…). Those pages
+  // should set their own canonicals (follow-up); home/listing/guides/search
+  // already do. No canonical is neutral; a wrong one is harmful.
+
+  openGraph: {
+    type: "website",
+    siteName: "دلالة",
+    locale: "ar",
+    url: "/",
+    title: "دلالة — سوق الجزائر للإعلانات المبوبة",
+    description:
+      "موقع دلالة: إعلانات مبوبة مجانية في الجزائر — سيارات، عقارات، هواتف، والمزيد.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
 
 // Round 7 Team 9 (12 Oct 2026): the viewport meta was NEVER present in the
 // App Router tree (only the legacy server-rendered model pages had it) —

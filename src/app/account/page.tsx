@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebase, type CompatUser } from '@/lib/firebase-compat';
+import { type CompatUser } from '@/lib/firebase-compat';
 import { withTimeout } from '@/lib/timeout';
 import { stripExif } from '@/lib/stripExif';
 import { useLang } from '@/lib/i18n';
@@ -171,6 +171,7 @@ function AccountContent({ user }: { user: CompatUser }) {
     }
     setLoadErr(null);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike;
       const d = await withTimeout(db.doc('users/' + user.uid).get(), 20000);
@@ -229,6 +230,7 @@ function AccountContent({ user }: { user: CompatUser }) {
   const createProfile = useCallback(async () => {
     setProfBusy(true);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike & {
         doc: (p: string) => { get: () => Promise<{ exists: boolean }> };
@@ -296,6 +298,7 @@ function AccountContent({ user }: { user: CompatUser }) {
     setProfOk(false);
     setProfBusy(true);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike;
       const storage = fb.storage() as unknown as StorageLike;
@@ -399,6 +402,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       } catch {
         throw new Error('errorPhoto');
       }
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const storage = fb.storage() as unknown as StorageLike;
       const path = `profiles/${user.uid}/store-${kind}_${Date.now()}.jpg`;
@@ -423,6 +427,7 @@ function AccountContent({ user }: { user: CompatUser }) {
     setStoreOk(false);
     setStoreBusy(true);
     try {
+      const { getFirebase } = await import('@/lib/firebase-compat');
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as DbLike;
       const storage = fb.storage() as unknown as StorageLike;
@@ -540,6 +545,7 @@ function AccountContent({ user }: { user: CompatUser }) {
       setProfErr(t('authConnectionProblem'));
       return;
     }
+    const { getFirebase } = await import('@/lib/firebase-compat');
     const fb = await getFirebase().catch(() => null);
     const cu = fb?.auth().currentUser;
     if (cu && cu.emailVerified) window.location.reload();

@@ -17,7 +17,6 @@ export const VITRINE_MIN_LISTINGS = 3;
 export const VITRINE_NO_REPEAT_MS = 2 * 24 * 3600 * 1000;
 export const VITRINE_MAX_CHANCES = 2;
 export const VITRINE_NR_KEY = 'dlala_vitrine_no_repeat';
-export const VITRINE_ROT_KEY = 'dlala_vitrine_rot';
 
 export interface VitrineSeller {
   id: string;

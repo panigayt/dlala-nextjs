@@ -194,6 +194,17 @@ export function guideUrl(slug: string, lang: GuideLang): string {
       : `${SITE}/guides/${slug}`;
 }
 
+// Round 11 Team 7: in-content guide links must be RELATIVE — absolute
+// dzdlala.com/<lang>/guides/* 404s on deployments without that locale path.
+// guideUrl() stays absolute (canonical/OG/hreflang/JSON-LD only).
+function guidePath(slug: string, lang: GuideLang): string {
+  return lang === 'en'
+    ? `/en/guides/${slug}`
+    : lang === 'fr'
+      ? `/fr/guides/${slug}`
+      : `/guides/${slug}`;
+}
+
 export function indexUrl(lang: GuideLang): string {
   return lang === 'en' ? `${SITE}/en/guides` : lang === 'fr' ? `${SITE}/fr/guides` : `${SITE}/guides`;
 }
@@ -258,7 +269,7 @@ export function renderArticleData(slug: string, lang: GuideLang): GuidePageData 
     .slice(0, 3);
   const relatedHtml = related.length
     ? `<h2>${lang === 'fr' ? 'Guides liés' : lang === 'en' ? 'Related guides' : 'أدلة ذات صلة'}</h2>\n<ul>` +
-      related.map((r) => `<li><a href="${guideUrl(r.slug, lang)}">${escHtml(r.meta.title)}</a></li>`).join('\n') +
+      related.map((r) => `<li><a href="${guidePath(r.slug, lang)}">${escHtml(r.meta.title)}</a></li>`).join('\n') +
       `</ul>`
     : '';
   const jsonLd = JSON.stringify({
