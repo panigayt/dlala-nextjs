@@ -154,7 +154,9 @@ function SettingsContent({ user }: { user: CompatUser }) {
         if (!res.ok || !json || !json.result || typeof json.result.blocked !== 'boolean') {
           throw new Error('block-failed');
         }
-        showToast(t('userUnblocked'));
+        // 11 Oct 2026: branch on actual result — toggle endpoint can re-block
+        // if the doc was already gone (was showing "unblocked" unconditionally).
+        showToast(t(json.result.blocked ? 'userBlocked' : 'userUnblocked'));
         loadBlocked();
       } catch {
         showToast(t('blockFailed'));
