@@ -27,7 +27,25 @@ import HomePage, { type HomeFeedData } from '@/components/HomePage';
 // localStorage is client-only). The meta description is inherited from the
 // root layout's static metadata (title-only scope).
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: t('title_home', await getServerLang()) };
+  const lang = await getServerLang();
+  const title = t('title_home', lang);
+  const desc = t('meta_home_desc', lang);
+  return {
+    title,
+    description: desc,
+    openGraph: {
+      title,
+      description: desc,
+      type: 'website',
+      url: 'https://dlala-nextjs.vercel.app/',
+      images: [{ url: 'https://dlala-nextjs.vercel.app/icon.png' }],
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description: desc,
+    },
+  };
 }
 
 // Cached feed fetcher — ISR equivalent: revalidate every 60 seconds.
