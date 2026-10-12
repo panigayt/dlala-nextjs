@@ -224,7 +224,8 @@ export default function RateCta({
 
   return (
     <>
-      <div className="mt-4 flex flex-wrap" dir="rtl">
+      {/* 11 Oct 2026: dir follows language (was hardcoded rtl). */}
+      <div className="mt-4 flex flex-wrap" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         {deals.map((d) => (
           <button
             key={d.conversationId}
@@ -242,7 +243,7 @@ export default function RateCta({
       {active && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          dir="rtl"
+          dir={lang === 'ar' ? 'rtl' : 'ltr'}
           onClick={() => !sending && setActive(null)}
         >
           <div
