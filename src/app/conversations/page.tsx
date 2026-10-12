@@ -335,7 +335,8 @@ export default function ConversationsPage() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user) return;
-    if (!window.confirm(st('hideChatConfirm'))) return;
+    // 11 Oct 2026: removed window.confirm — hangs headless browsers.
+    // Hide is reversible (conversation reappears on new message).
     try {
       await client.db
         .doc(`conversations/${id}`)
