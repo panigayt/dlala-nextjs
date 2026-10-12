@@ -177,7 +177,8 @@ function SellerProfileCard({ s }: { s: SellerProfile }) {
   // Verified pro sellers show their store name (matches production SPA).
   const displayName =
     s.storeTier === 'verified' && s.storeName ? s.storeName : s.name || s.username || '';
-  const photo = s.photoUrl || '';
+  // 11 Oct 2026: also check photoPath (legacy parity — ordinary avatars use photoPath).
+  const photo = s.photoUrl || (s as { photoPath?: string }).photoPath || '';
   // js/seller.js parity: legacy accepts verified===true OR emailVerified===true.
   const isVerified = s.verified === true || s.emailVerified === true;
   const followersCount = Number(s.followerCount) || 0;

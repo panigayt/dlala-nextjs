@@ -155,7 +155,8 @@ export default function StoreListingsGrid({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((l) => (
-            <ListingCardView key={l.id} l={l} gold />
+            // 11 Oct 2026: gold is pro-only (legacy parity — ordinary sellers use plain cards).
+            <ListingCardView key={l.id} l={l} gold={isPro} />
           ))}
         </div>
       )}
