@@ -302,6 +302,8 @@ export default function AlertsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   // 11 Oct 2026: custom delete confirmation modal (window.confirm hangs automation)
   const [deleteConfirm, setDeleteConfirm] = useState<SavedSearch | null>(null);
+  // 12 Oct 2026: in-flight guard for delete (prevents double-click).
+  const [deleting, setDeleting] = useState(false);
   // form fields
   const [fQ, setFQ] = useState('');
   const [fCat, setFCat] = useState('');
@@ -587,11 +589,15 @@ export default function AlertsPage() {
 
   async function confirmDeleteSearch() {
     const s = deleteConfirm;
-    if (!s) return;
+    if (!s || deleting) return;
     setDeleteConfirm(null);
+    setDeleting(true);
     const client = clientRef.current;
     const user = userRef.current;
-    if (!client || !user) return;
+    if (!client || !user) {
+      setDeleting(false);
+      return;
+    }
     if (s.id === editingId) resetForm();
     try {
       await client.db
@@ -601,6 +607,8 @@ export default function AlertsPage() {
       await loadAll(client, user);
     } catch {
       showToast(t('errorGeneric'));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -616,6 +624,8 @@ export default function AlertsPage() {
       unread.forEach((n) => batch.update(col.doc(n.id), { read: true }));
       await batch.commit();
       await loadAll(client, user);
+      // 12 Oct 2026: notify SiteChrome to refresh badge (was stale until reload).
+      window.dispatchEvent(new CustomEvent('dlala:alerts-read'));
     } catch {
       showToast(t('errorGeneric'));
     }

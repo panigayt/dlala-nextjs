@@ -184,37 +184,45 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   }, [loadProfileAsync]);
 
   // Badges: one-shot unread counts (legacy refreshNavMsgBadge + refreshBell).
-  useEffect(() => {
+  // 12 Oct 2026: refactored to refreshable function + event listener for
+  // alerts-read (was stale until full reload).
+  const refreshBadges = useCallback(async () => {
     if (!user || !client) return;
     const uid = user.uid;
-    (async () => {
-      try {
-        const db = client.db as unknown as {
-          collection: (p: string) => {
-            where: (f: string, op: string, v: unknown) => {
-              orderBy: (f: string, d: string) => { limit: (n: number) => { get: () => Promise<{ forEach: (cb: (d: { data: () => Record<string, unknown> }) => void) => void; size: number }> } };
-              limit: (n: number) => { get: () => Promise<{ size: number }> };
-            };
+    try {
+      const db = client.db as unknown as {
+        collection: (p: string) => {
+          where: (f: string, op: string, v: unknown) => {
+            orderBy: (f: string, d: string) => { limit: (n: number) => { get: () => Promise<{ forEach: (cb: (d: { data: () => Record<string, unknown> }) => void) => void; size: number }> } };
+            limit: (n: number) => { get: () => Promise<{ size: number }> };
           };
         };
-        // Unread messages: bounded to the 50 most recent conversations
-        // (P1-6 — the (participants, updatedAt) composite index exists).
-        const cSnap = await db.collection('conversations')
-          .where('participants', 'array-contains', uid)
-          .orderBy('updatedAt', 'desc').limit(50).get();
-        let n = 0;
-        cSnap.forEach((d) => {
-          const unread = (d.data().unread || {}) as Record<string, number>;
-          n += unread[uid] || 0;
-        });
-        if (mounted.current) setUnreadMsgs(n);
-        // Alerts bell: unread notifications.
-        const nSnap = await db.collection(`users/${uid}/notifications`)
-          .where('read', '==', false).limit(20).get();
-        if (mounted.current) setUnreadAlerts(nSnap.size);
-      } catch { /* best-effort: badges stay hidden */ }
-    })();
+      };
+      // Unread messages: bounded to the 50 most recent conversations
+      // (P1-6 — the (participants, updatedAt) composite index exists).
+      const cSnap = await db.collection('conversations')
+        .where('participants', 'array-contains', uid)
+        .orderBy('updatedAt', 'desc').limit(50).get();
+      let n = 0;
+      cSnap.forEach((d) => {
+        const unread = (d.data().unread || {}) as Record<string, number>;
+        n += unread[uid] || 0;
+      });
+      if (mounted.current) setUnreadMsgs(n);
+      // Alerts bell: unread notifications.
+      const nSnap = await db.collection(`users/${uid}/notifications`)
+        .where('read', '==', false).limit(20).get();
+      if (mounted.current) setUnreadAlerts(nSnap.size);
+    } catch { /* best-effort: badges stay hidden */ }
   }, [user, client]);
+
+  useEffect(() => {
+    refreshBadges();
+    // Listen for alerts-read event from /alerts page.
+    const onAlertsRead = () => refreshBadges();
+    window.addEventListener('dlala:alerts-read', onAlertsRead);
+    return () => window.removeEventListener('dlala:alerts-read', onAlertsRead);
+  }, [refreshBadges]);
 
   // Drawer: Escape closes, focus trap while open, inert when closed,
   // body class locks scroll, focus returns to the opener on close.
