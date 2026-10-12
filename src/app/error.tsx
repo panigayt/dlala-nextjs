@@ -1,6 +1,7 @@
 'use client';
 // 11 Oct 2026: App Router error boundary — localized fallback instead of blank 500.
 import { useEffect } from 'react';
+import { useLang } from '@/lib/i18n';
 
 export default function Error({
   error,
@@ -13,8 +14,10 @@ export default function Error({
     console.error('Route error:', error);
   }, [error]);
 
+  // 11 Oct 2026: dir follows language (was hardcoded rtl).
+  const { lang } = useLang();
   return (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4" dir="rtl">
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <div className="max-w-md w-full rounded-xl bg-white shadow-sm p-8 text-center">
         <div className="text-4xl mb-4">⚠️</div>
         <h1 className="text-xl font-bold text-zinc-900 mb-2" lang="ar">
