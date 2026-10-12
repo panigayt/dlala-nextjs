@@ -13,6 +13,7 @@
 // every Arabic string replaced by t(key).
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useLang, type Lang } from '@/lib/i18n';
 import FollowButton from '@/components/FollowButton';
 import RateCta from '@/components/RateCta';
@@ -95,6 +96,8 @@ function StoreHero({ s, uid }: { s: SellerProfile; uid: string }) {
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const displayName = s.storeName || s.name || s.username || '';
   const logo = storeLogoSrc(s);
+  // 12 Oct 2026: broken-logo fallback (was broken-image icon).
+  const [logoBroken, setLogoBroken] = useState(false);
   const cover = cssSafeUrl(s.storeCoverUrl);
   const bio = String(s.storeBio || '');
   const ratingNum = Number(s.rating);
@@ -118,12 +121,13 @@ function StoreHero({ s, uid }: { s: SellerProfile; uid: string }) {
         />
       )}
       <div className={`bh-idrow${cover ? ' bh-overlap' : ''}`}>
-        {logo ? (
+        {logo && !logoBroken ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logo}
             alt={displayName}
             className="store-logo"
+            onError={() => setLogoBroken(true)}
           />
         ) : (
           <div className="store-logo store-logo-letter" aria-hidden="true">

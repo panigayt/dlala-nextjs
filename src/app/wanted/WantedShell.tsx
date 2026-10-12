@@ -44,7 +44,7 @@ export default function WantedShell({
           </div>
         ) : docs.length === 0 ? (
           <div className="rounded-xl bg-white p-10 text-center text-zinc-500">
-            {t('noWanted')}
+            {(f.cat || f.wilaya || f.q) ? t('noResults') : t('noWanted')}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">

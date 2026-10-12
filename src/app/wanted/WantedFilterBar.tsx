@@ -9,6 +9,7 @@
 // WilayaSelect island from Round 87).
 
 import Link from 'next/link';
+import { useRef } from 'react';
 import { useLang, type Lang } from '@/lib/i18n';
 import { CATEGORIES } from '@/lib/categories';
 import WilayaSelect from './WilayaSelect';
@@ -28,6 +29,9 @@ function catName(
 
 export default function WantedFilterBar({ f }: { f: WantedFilters }) {
   const { t, lang } = useLang();
+  // 12 Oct 2026: ref to preserve typed-but-unsubmitted search text when
+  // changing category/wilaya filters (was silently discarded).
+  const qRef = useRef<HTMLInputElement>(null);
 
   const chipCls = (active: boolean) =>
     `rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
@@ -39,9 +43,11 @@ export default function WantedFilterBar({ f }: { f: WantedFilters }) {
   const params = (over: Partial<WantedFilters>) => {
     const p = new URLSearchParams();
     const nf = { ...f, ...over };
+    // 12 Oct 2026: use live input value, not stale URL param (preserves typed text).
+    const liveQ = qRef.current?.value ?? nf.q;
     if (nf.cat) p.set('cat', nf.cat);
     if (nf.wilaya) p.set('wilaya', nf.wilaya);
-    if (nf.q) p.set('q', nf.q);
+    if (liveQ) p.set('q', liveQ);
     const s = p.toString();
     return s ? `/wanted?${s}` : '/wanted';
   };
@@ -55,6 +61,7 @@ export default function WantedFilterBar({ f }: { f: WantedFilters }) {
         ) : null}
         <input
           name="q"
+          ref={qRef}
           key={f.q}
           defaultValue={f.q}
           placeholder={t('search')}
