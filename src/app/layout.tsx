@@ -28,9 +28,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // 12 Oct 2026: lang/dir from cookie (was hardcoded ar/rtl, causing FR/EN flash).
+  const cookieStore = await cookies();
+  const lang = cookieStore.get('dlala_lang')?.value || 'ar';
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
   return (
-    <html lang="ar" dir="rtl">
+    <html lang={lang} dir={dir}>
       <head>
         {/* Round 160 — 0.0.0.39 index.html parity: preconnect to the image
             and data hosts so the first card image / Firestore fetch skips
