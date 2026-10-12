@@ -111,7 +111,11 @@ function matchesSavedSearch(l: FreshListing, s: SavedSearch): boolean {
   if (s.maxPrice != null && (l.price || 0) > s.maxPrice) return false;
   const q = normAr(s.query || '');
   if (q) {
-    const hay = normAr(localizedTitle(l.title));
+    // 11 Oct 2026: search ALL language variants (was Arabic-only — FR/EN broken).
+    const titles = typeof l.title === 'object' && l.title
+      ? Object.values(l.title as Record<string, string>)
+      : [localizedTitle(l.title)];
+    const hay = titles.map((t) => normAr(t)).join(' ');
     const tokens = q.split(/\s+/).filter(Boolean);
     if (!tokens.every((tk) => hay.includes(tk))) return false;
   }
