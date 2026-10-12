@@ -12,13 +12,20 @@ const MAX_LIMIT = 120;
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const filters = parseSearchFilters(Object.fromEntries(sp.entries()));
-  const raw = Number(sp.get('limit'));
+  // 11 Oct 2026: absent/empty limit → SEARCH_PAGE_SIZE (was 1).
+  const rawStr = sp.get('limit');
+  const raw = rawStr === null || rawStr === '' ? NaN : Number(rawStr);
   const limit = Number.isFinite(raw)
     ? Math.min(MAX_LIMIT, Math.max(1, Math.floor(raw)))
     : SEARCH_PAGE_SIZE;
-  const { listings, total, hasMore } = await searchListingsWithCount(filters, limit);
-  return Response.json(
-    { listings, total, hasMore },
-    { headers: { 'Cache-Control': 'public, max-age=60' } }
-  );
+  // 11 Oct 2026: try/catch — upstream failures returned bare 500 HTML.
+  try {
+    const { listings, total, hasMore } = await searchListingsWithCount(filters, limit);
+    return Response.json(
+      { listings, total, hasMore },
+      { headers: { 'Cache-Control': 'public, max-age=60' } }
+    );
+  } catch {
+    return Response.json({ error: 'search-failed' }, { status: 502 });
+  }
 }
