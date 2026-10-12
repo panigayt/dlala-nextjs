@@ -51,20 +51,25 @@ export default function RatingsList({
     try {
       const fb = await getFirebase();
       const db = fb.firestore() as unknown as {
-        collection: (p: string) => { add: (d: Record<string, unknown>) => Promise<void> };
+        collection: (p: string) => {
+          add: (d: Record<string, unknown>) => Promise<void>;
+          doc: (id: string) => { set: (d: Record<string, unknown>) => Promise<void> };
+        };
       };
       const FieldValue = (fb.firestore as unknown as {
         FieldValue: { serverTimestamp: () => unknown };
       }).FieldValue;
       // Use the existing /reports collection (targetType='review').
       // Rules: only the reviewed user may report; shape validated server-side.
+      // 11 Oct 2026: deterministic ID — prevents duplicate reports on retry/reload.
+      const reportId = `${currentUid}_review_${rating.id}`;
       const user = fb.auth().currentUser;
       // 11 Oct 2026: 15s timeout — prevents browser hang if Firestore stalls.
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Write timeout')), 15000)
       );
       await Promise.race([
-        db.collection('reports').add({
+        db.collection('reports').doc(reportId).set({
           reporterId: currentUid,
           reporterName: user?.displayName || '',
           targetType: 'review',
@@ -85,8 +90,9 @@ export default function RatingsList({
       setReported((prev) => new Set(prev).add(rating.id));
     } catch (e) {
       console.error(e);
-      // 11 Oct 2026: use dedicated reportFailed key, mark as error (red).
-      setMessage(t('reportFailed'));
+      // 11 Oct 2026: permission-denied = duplicate (deterministic ID exists).
+      const code = (e as { code?: string })?.code || '';
+      setMessage(code === 'permission-denied' ? t('reportExists') : t('reportFailed'));
       setMessageIsError(true);
     } finally {
       setReporting(null);
