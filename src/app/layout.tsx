@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import "./chrome.css";
@@ -27,6 +27,15 @@ export async function generateMetadata(): Promise<Metadata> {
     description: descs[lang] || descs.ar,
   };
 }
+
+// Round 7 Team 9 (12 Oct 2026): the viewport meta was NEVER present in the
+// App Router tree (only the legacy server-rendered model pages had it) —
+// mobile browsers fell back to the ~980px default layout viewport and the
+// whole site rendered zoomed-out on phones.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // 12 Oct 2026: lang/dir from cookie (was hardcoded ar/rtl, causing FR/EN flash).
