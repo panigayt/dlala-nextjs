@@ -28,7 +28,7 @@ export async function uploadToR2(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${idToken}`,
       },
-      body: JSON.stringify({ key, contentType: file.type || 'image/jpeg' }),
+      body: JSON.stringify({ key, contentType: file.type || 'image/jpeg', size: file.size }),
       signal: ctrl.signal,
     });
   } catch (e) {

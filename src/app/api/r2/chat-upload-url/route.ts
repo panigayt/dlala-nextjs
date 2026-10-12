@@ -22,16 +22,22 @@ function isValidChatKey(key: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { key?: string; contentType?: string };
+  let body: { key?: string; contentType?: string; size?: number };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'bad-request' }, { status: 400 });
   }
 
-  const { key, contentType } = body;
+  const { key, contentType, size } = body;
   if (!key || !contentType || !isValidChatKey(key)) {
     return NextResponse.json({ error: 'invalid-key' }, { status: 400 });
+  }
+
+  // 11 Oct 2026: size must be declared and capped (15MB = client limit).
+  const MAX_SIZE = 15 * 1024 * 1024;
+  if (!size || typeof size !== 'number' || size <= 0 || size > MAX_SIZE) {
+    return NextResponse.json({ error: 'invalid-size' }, { status: 400 });
   }
 
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
@@ -75,7 +81,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const url = await presignedUploadUrl(key, contentType);
+    const url = await presignedUploadUrl(key, contentType, 300, size);
     return NextResponse.json({ url, publicUrl: publicUrlFor(key) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'r2-error';

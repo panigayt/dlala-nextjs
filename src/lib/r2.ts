@@ -38,13 +38,16 @@ export function r2PublicUrl(): string {
 export async function presignedUploadUrl(
   key: string,
   contentType: string,
-  expiresIn = 300
+  expiresIn = 300,
+  // 11 Oct 2026: signed ContentLength caps upload size (cost-abuse fix).
+  contentLength?: number
 ): Promise<string> {
   const client = r2Client();
   const command = new PutObjectCommand({
     Bucket: r2Bucket(),
     Key: key,
     ContentType: contentType,
+    ...(contentLength ? { ContentLength: contentLength } : {}),
   });
   return getSignedUrl(client, command, { expiresIn });
 }

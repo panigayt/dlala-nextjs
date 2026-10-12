@@ -932,7 +932,8 @@ function ChatInner() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ key, contentType: 'image/jpeg' }),
+        // 11 Oct 2026: declare size — server signs ContentLength into the URL.
+        body: JSON.stringify({ key, contentType: 'image/jpeg', size: blob.size }),
       });
       if (!res.ok) throw new Error('upload-url');
       const { url, publicUrl } = await res.json();
