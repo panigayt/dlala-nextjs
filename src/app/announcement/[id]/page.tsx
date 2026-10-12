@@ -49,7 +49,23 @@ export async function generateMetadata({
   try {
     const a = await getAnnouncement(id);
     const title = a ? annLocalized(a.title, lang) : '';
-    return { title: title ? `${title} — ${suffix}` : t('title_announcement', lang) };
+    const fullTitle = title ? `${title} — ${suffix}` : t('title_announcement', lang);
+    // 11 Oct 2026: description + OG tags (share button needs previews).
+    const desc = a ? annLocalized(a.body, lang).slice(0, 160) : '';
+    return {
+      title: fullTitle,
+      description: desc || undefined,
+      openGraph: {
+        title: fullTitle,
+        description: desc || undefined,
+        type: 'article',
+      },
+      twitter: {
+        card: 'summary',
+        title: fullTitle,
+        description: desc || undefined,
+      },
+    };
   } catch {
     return { title: t('title_announcement', lang) };
   }
