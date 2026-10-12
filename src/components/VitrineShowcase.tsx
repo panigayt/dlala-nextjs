@@ -74,7 +74,7 @@ function MiniProduct({ p }: { p: ListingCard }) {
   );
 }
 
-export default function VitrineShowcase({ showcase }: { showcase: Showcase }) {
+export default function VitrineShowcase({ showcase, uid }: { showcase: Showcase; uid?: string }) {
   const { t, lang } = useLang();
   const { seller, products, isPro } = showcase;
   const sid = seller.id;
@@ -93,7 +93,8 @@ export default function VitrineShowcase({ showcase }: { showcase: Showcase }) {
 
   const handleClick = () => {
     // R17: any tap inside a vitrine card counts as interaction.
-    markVitrineInteracted(sid);
+    // 12 Oct 2026: pass uid for per-user isolation (was global key).
+    markVitrineInteracted(sid, uid);
   };
 
   return (

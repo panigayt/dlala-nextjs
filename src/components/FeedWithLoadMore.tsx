@@ -470,7 +470,7 @@ export default function FeedWithLoadMore({
               />
             ) : (
               <div key={`vitrine-${item.showcase.seller.id}-${idx}`} className="col-span-full">
-                <VitrineShowcase showcase={item.showcase} />
+                <VitrineShowcase showcase={item.showcase} uid={refreshedUid.current ?? undefined} />
               </div>
             )
           );
