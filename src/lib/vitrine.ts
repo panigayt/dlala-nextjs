@@ -76,19 +76,22 @@ function dateToMs(t: unknown): number {
 }
 
 // Client-only: localStorage. Guards for SSR (returns {} on server).
-export function vitrineNoRepeatLoad(): NoRepeatState {
+// 11 Oct 2026: per-uid keys — was cross-user leakage on shared devices.
+export function vitrineNoRepeatLoad(uid?: string): NoRepeatState {
   if (typeof window === 'undefined' || typeof localStorage === 'undefined') return {};
   try {
-    return JSON.parse(localStorage.getItem(VITRINE_NR_KEY) || '{}') || {};
+    const key = uid ? `${VITRINE_NR_KEY}_${uid}` : VITRINE_NR_KEY;
+    return JSON.parse(localStorage.getItem(key) || '{}') || {};
   } catch {
     return {};
   }
 }
 
-export function vitrineNoRepeatSave(st: NoRepeatState): void {
+export function vitrineNoRepeatSave(st: NoRepeatState, uid?: string): void {
   if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(VITRINE_NR_KEY, JSON.stringify(st));
+    const key = uid ? `${VITRINE_NR_KEY}_${uid}` : VITRINE_NR_KEY;
+    localStorage.setItem(key, JSON.stringify(st));
   } catch {
     /* storage full or unavailable: non-fatal */
   }

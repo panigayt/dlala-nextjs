@@ -257,9 +257,8 @@ function FavoritesContent({ user }: { user: CompatUser }) {
         const snapPairs = page
           .filter((c) => c.status === 'ok' && c.live)
           .map((c) => favCardSnapshot(c.live!, c.fav));
-        if (snapPairs.length) {
-          snapshotWrite('favorites', user.uid, { cards: snapPairs });
-        }
+        // 11 Oct 2026: always write (even empty) — stale snapshot repainted deleted favorites.
+        snapshotWrite('favorites', user.uid, { cards: snapPairs });
       } catch {
         /* best-effort — the live path still works */
       }
