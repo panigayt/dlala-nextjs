@@ -48,6 +48,13 @@ export async function generateMetadata({
   const suffix = lang === 'ar' ? 'دلالة' : 'Dlala';
   try {
     const a = await getAnnouncement(id);
+    // 11 Oct 2026: noindex on inactive/missing (soft-404).
+    if (!a || a.active !== true) {
+      return {
+        title: t('title_announcement', lang),
+        robots: { index: false, follow: false },
+      };
+    }
     const title = a ? annLocalized(a.title, lang) : '';
     const fullTitle = title ? `${title} — ${suffix}` : t('title_announcement', lang);
     // 11 Oct 2026: description + OG tags (share button needs previews).
