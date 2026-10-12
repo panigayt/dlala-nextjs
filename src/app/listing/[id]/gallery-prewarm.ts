@@ -155,15 +155,19 @@ export function warmImage(
 // rejects on error so the caller can fall back to the next candidate.
 export function probeImage(
   url: string,
-  make: ImageFactory = domImageFactory
+  make: ImageFactory = domImageFactory,
+  // 11 Oct 2026: timeout — stalled probe left hero blurred forever.
+  timeoutMs = 15000
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('img-probe-timeout')), timeoutMs);
     try {
       const im = make();
-      im.onload = () => resolve();
-      im.onerror = () => reject(new Error('img-probe-failed'));
+      im.onload = () => { clearTimeout(t); resolve(); };
+      im.onerror = () => { clearTimeout(t); reject(new Error('img-probe-failed')); };
       im.src = url;
     } catch (e) {
+      clearTimeout(t);
       reject(e);
     }
   });
