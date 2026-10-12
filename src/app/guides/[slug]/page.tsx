@@ -119,9 +119,11 @@ export async function generateMetadata({
   };
 }
 
-export function GuideBreadcrumbs({ items }: { items: Breadcrumb[] }) {
+export function GuideBreadcrumbs({ items, lang }: { items: Breadcrumb[]; lang?: string }) {
+  // 11 Oct 2026: localized aria-label (was hardcoded English).
+  const label = lang === 'fr' ? 'Fil d\u2019Ariane' : lang === 'en' ? 'Breadcrumb' : 'مسار التنقل';
   return (
-    <nav aria-label="breadcrumb">
+    <nav aria-label={label}>
       <ol className="crumbs">
         {items.map((c, i) =>
           i < items.length - 1 ? (

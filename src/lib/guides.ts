@@ -25,6 +25,8 @@ export const GUIDE_SLUGS = [
   'acheter-voiture-occasion',
   'controler-telephone-occasion',
   'eviter-arnaques',
+  // 11 Oct 2026: price guide was missing from index (production shows 4 cards).
+  'prix-voitures-occasion-2026',
 ] as const;
 
 export type GuideSlug = (typeof GUIDE_SLUGS)[number];
