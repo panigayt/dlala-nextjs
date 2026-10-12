@@ -617,7 +617,13 @@ function AccountContent({ user }: { user: CompatUser }) {
               <div className="flex items-center gap-4 my-4">
                 {avUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avUrl} alt="" className="w-20 h-20 rounded-full object-cover bg-zinc-100" />
+                  <img
+                    src={avUrl}
+                    alt=""
+                    className="w-20 h-20 rounded-full object-cover bg-zinc-100"
+                    // 11 Oct 2026: fall back to letter avatar on broken photo.
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold">
                     {(name?.[0] || '?').toUpperCase()}
