@@ -25,6 +25,8 @@ interface OwnListing {
   id: string;
   title?: Record<string, string> | string;
   price?: number;
+  // 11 Oct 2026: answers for job salary display (was 0 DZD on job cards).
+  answers?: { jobType?: string; salary?: number };
   photoUrls?: string[];
   thumbUrls?: string[];
   photo_thumbs?: (string | null)[];
@@ -412,7 +414,14 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                       )}
                     </div>
                     <div className="p-3">
-                      <p className="font-bold text-emerald-700">{formatPrice(l.price || 0, lang)}</p>
+                      {/* 11 Oct 2026: job offers show salary/month, not 0 DZD. */}
+                      <p className="font-bold text-emerald-700">
+                        {l.answers?.jobType === 'jobOffer' && typeof l.answers?.salary === 'number' ? (
+                          <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
+                        ) : (
+                          <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+                        )}
+                      </p>
                       <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(l, lang)}</h3>
                     </div>
                   </a>
