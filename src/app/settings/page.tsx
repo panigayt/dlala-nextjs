@@ -287,6 +287,17 @@ function SettingsContent({ user }: { user: CompatUser }) {
           commit: () => Promise<void>;
         };
       };
+      // 11 Oct 2026: file deletion request FIRST — before any destructive work.
+      // If this fails, nothing is wiped yet (clean retry). The Cloud Function
+      // is the authoritative finisher even if the client dies after this.
+      await withTimeout(
+        db.doc('deletionRequests/' + user.uid).set({
+          userId: user.uid,
+          requestedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
+          status: 'pending',
+        }),
+        20000
+      );
       // Best-effort pre-wipe of own listings (batches of 5).
       const snap = await withTimeout(
         db.collection('listings').where('sellerId', '==', user.uid).limit(100).get(),
@@ -332,15 +343,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
           // best-effort
         }
       }
-      // File the deletion request — the Cloud Function finishes the wipe.
-      await withTimeout(
-        db.doc('deletionRequests/' + user.uid).set({
-          userId: user.uid,
-          requestedAt: (fb.firestore as unknown as { FieldValue: { serverTimestamp: () => unknown } }).FieldValue.serverTimestamp(),
-          status: 'pending',
-        }),
-        20000
-      );
+      // Deletion request was filed before the pre-wipe (see above).
       // Delete the Auth user for real.
       try {
         await withTimeout(
