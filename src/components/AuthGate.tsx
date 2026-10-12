@@ -10,7 +10,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { type CompatUser } from '@/lib/firebase';
-import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
@@ -31,15 +30,48 @@ export default function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     mounted.current = true;
     let cancelled = false;
+    let authResolved = false;
+    // Round 14 T6b: the 12s safety timer lives in effect scope so the
+    // cleanup can disarm it; it is disarmed on auth-resolve too (it was
+    // assigned-but-never-read before).
+    let authTimer: ReturnType<typeof setTimeout> | null = null;
     (async () => {
+      let loadTimer: ReturnType<typeof setTimeout> | null = null;
       try {
         // Lazy-load the Firebase modular SDK (bundled async chunk) —
         // keeps it off the initial page chunk.
         const { getFirebaseBundled } = await import('@/lib/firebase');
-        const { auth, authMod } = await withTimeout(getFirebaseBundled(), 12000);
+        // BUG #3 (T4/20, 12 Oct 2026): the old code raced the Firebase chunk
+        // load against a 12s deadline and ABANDONED the promise on timeout, so
+        // a slow/flaky network left the guest stuck on the error screen
+        // forever — onAuthStateChanged was never subscribed. We never abandon
+        // the load: the 12s timer below only switches to the retry UI while
+        // the chunks keep loading in the background. The auth subscription is
+        // established exactly once, no matter how long the chunks take, and
+        // when auth state resolves it clears any timeout/load-error UI.
+        const clientP = getFirebaseBundled();
+        // 12s UI deadline — shows «مشكلة في الاتصال» + retry while we keep
+        // waiting for the chunks (manual retry = reload, same as before).
+        loadTimer = setTimeout(() => {
+          if (mounted.current && !cancelled) setLoadError(true);
+        }, 12000);
+        const client = await clientP;
+        if (loadTimer) clearTimeout(loadTimer);
         if (cancelled || !mounted.current) return;
-        unsubRef.current = authMod.onAuthStateChanged(auth, (u) => {
-          if (!mounted.current) return;
+        unsubRef.current = client.authMod.onAuthStateChanged(client.auth, (u) => {
+          if (!mounted.current || cancelled) return;
+          authResolved = true;
+          // Auth resolved — the 12s safety timer only exists for the
+          // never-fires case, so disarm it.
+          if (authTimer) {
+            clearTimeout(authTimer);
+            authTimer = null;
+          }
+          // Late arrival after the 12s retry UI was already shown: clear it —
+          // the page recovers (bounce to /auth or render) instead of staying
+          // stuck on «مشكلة في الاتصال».
+          setLoadError(false);
+          setTimedOut(false);
           if (u) {
             setUser(u);
           } else {
@@ -50,19 +82,30 @@ export default function AuthGate({ children }: AuthGateProps) {
             router.push(authLoginHref(window.location.pathname, window.location.search));
           }
         });
-        // Safety: if onAuthStateChanged never fires within 12s, show retry.
-        setTimeout(() => {
-          if (mounted.current && !cancelled && !unsubRef.current) {
+        // Safety: if onAuthStateChanged never fires within 12s of subscribing,
+        // show the retry UI. The callback above clears it on late arrival.
+        authTimer = setTimeout(() => {
+          if (mounted.current && !cancelled && !authResolved) {
             setTimedOut(true);
           }
         }, 12000);
       } catch {
+        if (loadTimer) clearTimeout(loadTimer);
+        // Genuine load failure (chunks errored, not merely slow) — retry UI,
+        // same as before. getFirebaseBundled() resets its cached promise on
+        // failure, so manual retry reloads the chunks fresh.
         if (mounted.current && !cancelled) setLoadError(true);
       }
     })();
     return () => {
       cancelled = true;
       mounted.current = false;
+      // Disarm the safety timer on unmount (its callback is already guarded
+      // by `cancelled`; this just avoids a stray wake-up).
+      if (authTimer) {
+        clearTimeout(authTimer);
+        authTimer = null;
+      }
       if (unsubRef.current) {
         unsubRef.current();
         unsubRef.current = null;

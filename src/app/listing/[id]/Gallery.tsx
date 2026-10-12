@@ -23,7 +23,7 @@
 //   skipped on metered/2G.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent, Ref } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
   LB_SWIPE_MIN,
   LB_TAP_MAX_DELAY,
@@ -71,7 +71,10 @@ function SafeImg({
   alt: string;
   className?: string;
   tileClassName?: string;
-  imgRef?: Ref<HTMLImageElement>;
+  // Round 14 T6b (react-hooks/immutability): forwarding is a plain callback
+  // now — writing to a received Ref object's .current inside the ref
+  // callback is a prop mutation and is rejected by the rule.
+  imgRef?: (el: HTMLImageElement | null) => void;
   onDoubleClick?: (e: ReactMouseEvent<HTMLImageElement>) => void;
   loading?: 'eager' | 'lazy';
   fetchPriority?: 'high' | 'low' | 'auto';
@@ -80,6 +83,27 @@ function SafeImg({
   const uniq = candidates.filter((c, i) => !!c && candidates.indexOf(c) === i);
   const [failed, setFailed] = useState(0);
   const src = failed < uniq.length ? uniq[failed] : '';
+  // Round 14 T6 (Bug #2): pre-hydration error events are LOST — an <img>
+  // that 404'd before React attached onError never fires it again, so the
+  // broken-image icon stays and the 📷 tile never renders. complete &&
+  // naturalWidth === 0 is the deterministic "it already failed" signal at
+  // mount: advance the fallback chain immediately, exactly as onError does.
+  // The combined ref also forwards to the lightbox zoom ref (setLightboxImg
+  // in the parent) when present.
+  const combinedRef = useCallback(
+    (el: HTMLImageElement | null) => {
+      // Forward only — the received callback writes to the parent's own
+      // ref; nothing here mutates a prop (react-hooks/immutability).
+      imgRef?.(el);
+      if (!el) return;
+      try {
+        if (el.complete && el.naturalWidth === 0) setFailed((f) => f + 1);
+      } catch {
+        /* noop */
+      }
+    },
+    [imgRef]
+  );
   if (!src) {
     return (
       <div
@@ -97,7 +121,7 @@ function SafeImg({
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      ref={imgRef}
+      ref={combinedRef}
       src={src}
       alt={alt}
       className={className}
@@ -141,6 +165,13 @@ export default function Gallery({
   const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  // Round 14 T6b: react-hooks/immutability forbids mutating the imgRef prop
+  // object inside SafeImg's ref callback, so SafeImg takes a forwarder
+  // callback instead. This writes to our OWN useRef (allowed) at the exact
+  // same attach/detach moments as before — LBZ-1 zoom behavior unchanged.
+  const setLightboxImg = useCallback((el: HTMLImageElement | null) => {
+    imgRef.current = el;
+  }, []);
   // LBZ-1 zoom view state — mutable ref (no re-render needed; the style
   // is applied straight to the <img>, like legacy's module-level lbView).
   const zoomRef = useRef<ZoomState>({ z: 1, x: 0, y: 0 });
@@ -486,7 +517,7 @@ export default function Gallery({
             alt={`${title} — ${t('photo')} ${lbIdx + 1}/${all.length}`}
             className="max-w-full max-h-full object-contain"
             tileClassName="w-[min(90vw,640px)] aspect-[4/3]"
-            imgRef={imgRef}
+            imgRef={setLightboxImg}
             decoding="async"
             // LBZ-1: double-click (desktop) toggles zoom at the pointer.
             onDoubleClick={(e) => {

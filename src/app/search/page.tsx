@@ -24,6 +24,7 @@ import {
 import { parseSearchFilters, filtersToQuery } from './filters';
 import { t } from '@/lib/i18n-strings';
 import SearchPage from '@/components/SearchPage';
+import FeedPreloadHints from '@/components/FeedPreloadHints';
 
 // Round 133: <title> follows the reader's language (dlala_lang cookie;
 // localStorage is client-only). 12 Oct 2026 (Round 8): dedicated
@@ -99,14 +100,23 @@ async function SearchLoader({
   // Keyed by the filter query string so the client shell remounts on every
   // filter navigation — select defaultValues are always fresh, exactly like
   // the previous server-rendered version.
+  // Round 14 T11: preload hints for the first 6 result thumbnails, in the
+  // same order the grid renders. VERIFIED 12 Oct 2026 via prod-build curl:
+  // these land early in <body>, NOT in <head> (React 19 hoisting does not
+  // apply in Next.js 16's streaming pipeline; Metadata 'other' renders
+  // <meta> only). The preload scanner still discovers them during initial
+  // parse, before the card <img>s — same pattern as listing page R149/159.
   return (
-    <SearchPage
-      key={filtersToQuery(filters)}
-      filters={filters}
-      data={data}
-      error={error}
-      hasFilter={!!hasFilter}
-    />
+    <>
+      <FeedPreloadHints cards={data ? data.listings : []} />
+      <SearchPage
+        key={filtersToQuery(filters)}
+        filters={filters}
+        data={data}
+        error={error}
+        hasFilter={!!hasFilter}
+      />
+    </>
   );
 }
 

@@ -14,15 +14,16 @@
 // profile card, infos tab via useLang(); js/i18n.js onLangChange parity;
 // same pattern as the home page Round 107 and search Round 109).
 
-// Round 12 (12 Oct 2026): the real HTTP 404 was INTENDED to come from
-// notFound() in the page component body — BUT under cacheComponents:true
-// the page-body await is postponed (x-nextjs-postponed: 1), so the response
-// keeps HTTP 200 even though the not-found.tsx boundary UI renders.
-// Verified via curl on a local production build 12 Oct 2026. A real 404
-// status needs the check before rendering starts (e.g. Proxy) — see
-// NEEDS-DECISION report. The notFound() in generateMetadata below is a
-// harmless fallback: the dynamic metadata also streams after the 200
-// headers are sent, so a notFound() there cannot set the status either.
+// Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
+// proxy (src/proxy.ts + src/proxy-404.ts) — it runs the Firestore
+// existence check (documents/users_public/{uid}: 404/403 → real 404;
+// transient check failures fail open to this page) BEFORE any
+// rendering/streaming starts. The earlier Round-12 plan of notFound()
+// kept HTTP 200 under cacheComponents:true PPR (verified via curl on
+// a local production build 12 Oct 2026), so it is retained only as a
+// harmless fallback for the no-proxy case: the dynamic metadata also
+// streams after the 200 headers are sent, so a notFound() here cannot
+// set the 404 status either.
 export async function generateMetadata({ params }: { params: Promise<{ uid: string }> }) {
   const { uid } = await params;
   let seller: SellerProfile | null = null;
@@ -145,14 +146,14 @@ export default async function SellerPageRoute({
 }) {
   const { uid } = await params;
 
-  // Round 12 (12 Oct 2026): the existence check runs HERE — in the page
-  // component body, before any <Suspense> tree is returned. notFound() at
-  // this point renders the not-found.tsx boundary UI — BUT the response
-  // keeps HTTP 200, not 404: with cacheComponents:true the page-body await
-  // is postponed (x-nextjs-postponed: 1), so the 200 headers are sent
-  // before notFound() throws. Verified via curl on a local production
-  // build 12 Oct 2026. A real 404 status needs the check to run before
-  // rendering starts (e.g. Proxy) — see NEEDS-DECISION report.
+  // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
+  // proxy (src/proxy.ts + src/proxy-404.ts), which checks Firestore
+  // (documents/users_public/{uid}) BEFORE rendering/streaming starts.
+  // The earlier Round-12 approach of notFound() at this point kept
+  // HTTP 200: with cacheComponents:true the page-body await is postponed
+  // (x-nextjs-postponed: 1), so the 200 headers were sent before notFound()
+  // threw (verified via curl on a local production build 12 Oct 2026).
+  // Retained only as a harmless fallback for the no-proxy case.
   let seller: SellerProfile | null = null;
   let listings: ListingCard[] = [];
   let sellerFailed = false;

@@ -3,6 +3,12 @@
 // Faithful port of ~/workspace/dlala-040/404.html:
 //   - Pure static content: renders the message + home buttons with no JS.
 //   - Exact legacy copy (AR/FR/EN), emerald #0b6b4f theme, "D" mark.
+//
+// KEEP IN SYNC with src/proxy-404.ts TRILINGUAL_404_HTML: the Edge proxy
+// (Round 14, Zak's "نفذ 404 حقيقي") returns that static HTML with a REAL
+// HTTP 404 status for missing listing/seller/announcement docs — before
+// this boundary can even render. If the copy/layout here changes, update
+// the proxy HTML too, and vice versa.
 
 import Link from 'next/link';
 

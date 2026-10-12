@@ -228,15 +228,13 @@ export async function generateMetadata({
     // for genuinely missing listings, never for a failed fetch.
     fetchFailed = true;
   }
-  // Round 12 (12 Oct 2026): the REAL HTTP 404 was INTENDED to come from
-  // notFound() in the page component body — BUT under cacheComponents:true
-  // the page-body await is postponed (x-nextjs-postponed: 1), so the
-  // response keeps HTTP 200 even though the not-found.tsx boundary UI
-  // renders. Verified via curl on a local production build 12 Oct 2026.
-  // A real 404 status needs the check before rendering starts (e.g.
-  // Proxy) — see NEEDS-DECISION report. This notFound() in generateMetadata
-  // is a harmless fallback: the dynamic metadata also streams after the
-  // 200 headers are sent.
+  // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
+  // proxy (src/proxy.ts + src/proxy-404.ts), which checks Firestore
+  // BEFORE rendering/streaming starts. The earlier Round-12 plan of
+  // notFound() here kept HTTP 200 under cacheComponents:true PPR
+  // (verified via curl 12 Oct 2026); retained only as a harmless
+  // fallback, since the dynamic metadata also streams after the 200
+  // headers are sent.
   if (!listing && !fetchFailed) notFound();
   // 11 Oct 2026: noindex on 404 — deleted listings must not be indexed
   // (kept as belt-and-braces; the not-found boundary also injects noindex).
@@ -573,14 +571,14 @@ export default async function ListingPage({
 }) {
   const { id } = await params;
 
-  // Round 12 (12 Oct 2026): the existence check runs HERE — in the page
-  // component body, before any <Suspense> tree is returned. notFound() at
-  // this point renders the not-found.tsx boundary UI — BUT the response
-  // keeps HTTP 200, not 404: with cacheComponents:true the page-body await
-  // is postponed (x-nextjs-postponed: 1), so the 200 headers are sent
-  // before notFound() throws. Verified via curl on a local production
-  // build 12 Oct 2026. A real 404 status needs the check to run before
-  // rendering starts (e.g. Proxy) — see NEEDS-DECISION report.
+  // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
+  // proxy (src/proxy.ts + src/proxy-404.ts), which checks Firestore
+  // BEFORE rendering/streaming starts. The earlier Round-12 approach of
+  // notFound() at this point kept HTTP 200: with cacheComponents:true
+  // the page-body await is postponed (x-nextjs-postponed: 1), so the 200
+  // headers were sent before notFound() threw (verified via curl on a
+  // local production build 12 Oct 2026). Retained only as a harmless
+  // fallback for the no-proxy case.
   let listing: ListingDetail | null = null;
   let fetchFailed = false;
   try {

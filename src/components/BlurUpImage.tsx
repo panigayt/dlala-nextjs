@@ -107,6 +107,37 @@ interface BlurUpImageProps {
   className?: string;
 }
 
+// Round 14 T6: the 📷 placeholder tile (same glyph/styling as the gallery
+// SafeImg fallback and the SimilarCard no-image tile).
+function PlaceholderTile({ className, alt }: { className?: string; alt: string }) {
+  return (
+    <div
+      role="img"
+      aria-label={alt}
+      className={
+        (className || '') +
+        ' bg-zinc-200 flex items-center justify-center text-zinc-400 text-4xl select-none'
+      }
+    >
+      📷
+    </div>
+  );
+}
+
+// Round 14 T6 (Bug #2): pre-hydration image errors are LOST — an <img> that
+// 404s before React attaches onError never fires it again, so the
+// broken-image icon stays forever. A ref callback runs at mount (after
+// hydration); complete && naturalWidth === 0 is the deterministic "it
+// already failed" signal — apply the fallback immediately, exactly as the
+// onError path does.
+function mountBroke(el: HTMLImageElement | null): boolean {
+  try {
+    return !!el && el.complete && el.naturalWidth === 0;
+  } catch {
+    return false;
+  }
+}
+
 export default function BlurUpImage({ listing, img, alt, eager, priority, className }: BlurUpImageProps) {
   useEffect(() => {
     installBlurUpHandler();
@@ -115,6 +146,9 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
   // Rules of Hooks (12 Oct 2026): this must be unconditional — inside the
   // !lqip branch the hook order shifted when lqip changed between renders.
   const [broken, setBroken] = useState(false);
+  // Round 14 T6: LQIP branch — true when BOTH the LQIP and the hi fallback
+  // failed (each stage is attempted exactly once, so a dead URL can't loop).
+  const [dead, setDead] = useState(false);
 
   const lqip = lqipUrlFor(listing);
   // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
@@ -122,13 +156,17 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
     u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
   if (!lqip) {
     // No derivable LQIP (old listings, non-variant URLs): today's behavior.
-    // 12 Oct 2026: on broken image, replace with placeholder div (was display:none leaving blank).
+    // Round 14 T6: the 📷 tile (was a blank div) + the mount check catches
+    // pre-hydration 404s that never fired onError.
     if (broken) {
-      return <div className={`${className} bg-zinc-200 flex items-center justify-center`} aria-label={alt} />;
+      return <PlaceholderTile className={className} alt={alt} />;
     }
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
+        ref={(el) => {
+          if (mountBroke(el)) setBroken(true);
+        }}
         src={rewriteDefaultImg(img || '')}
         alt={alt}
         loading={eager ? 'eager' : 'lazy'}
@@ -145,21 +183,40 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
   const imgRewritten = rewriteDefaultImg(img || '');
   const hi = isDesktop && w640 ? w640 : imgRewritten;
 
-  // LQIP died (404 — publish writes variants best-effort): fall back to the
-  // card image instead of a broken icon. The src===hi guard prevents loops.
-  const onLqipError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const el = e.currentTarget;
+  // Round 14 T6: shared error logic for the LQIP branch, used both by
+  // onError (post-hydration failures) and by the mount check (pre-hydration
+  // 404s whose error event was lost). Stage 1: LQIP died (404 — publish
+  // writes variants best-effort) → fall back to the card image. Stage 2:
+  // the card image also died → the 📷 tile. The src===hi guard means each
+  // stage is attempted exactly once, so a dead URL can never loop.
+  const handleLqipError = (el: HTMLImageElement) => {
     try {
-      if (el.src !== hi) el.src = hi;
-      el.classList.add('hi'); // no blur on the fallback
+      if (el.src !== hi) {
+        el.src = hi;
+        el.classList.add('hi'); // no blur on the fallback
+      } else {
+        setDead(true);
+      }
     } catch {
-      /* noop */
+      setDead(true);
     }
   };
+  const onLqipError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    handleLqipError(e.currentTarget);
+  };
+
+  if (dead) {
+    return (
+      <PlaceholderTile className={className ? `img-blurup ${className}` : 'img-blurup'} alt={alt} />
+    );
+  }
 
   const tag = (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      ref={(el) => {
+        if (el && mountBroke(el)) handleLqipError(el);
+      }}
       src={lqip}
       alt={alt}
       onError={onLqipError}

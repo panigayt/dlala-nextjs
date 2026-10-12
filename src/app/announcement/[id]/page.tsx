@@ -61,16 +61,17 @@ export async function generateMetadata({
     // genuinely missing announcements, never for a failed fetch.
     fetchFailed = true;
   }
-  // Round 12 (12 Oct 2026): the REAL HTTP 404 was INTENDED to come from
-  // notFound() in the page component body — BUT under cacheComponents:true
-  // the page-body await is postponed (x-nextjs-postponed: 1), so the
-  // response keeps HTTP 200 even though the not-found.tsx boundary UI
-  // renders. Verified via curl on a local production build 12 Oct 2026.
-  // A real 404 status needs the check before rendering starts (e.g.
-  // Proxy) — see NEEDS-DECISION report. This notFound() is a harmless
-  // fallback: the dynamic metadata also streams after the 200 headers are
-  // sent, so a notFound() here cannot set the 404 status either. The fetch
-  // is already on the critical path (SEO metadata needs the announcement),
+  // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
+  // proxy (src/proxy.ts + src/proxy-404.ts) — it runs the Firestore
+  // existence check BEFORE any rendering/streaming starts (404/403 on
+  // documents/announcements/{id}, or active !== true → real 404 status;
+  // transient check failures fail open to this page). The earlier
+  // Round-12 plan of notFound() here kept HTTP 200 under
+  // cacheComponents:true PPR (verified via curl 12 Oct 2026), so it is
+  // retained only as a harmless fallback for the no-proxy case: the
+  // dynamic metadata also streams after the 200 headers are sent, so a
+  // notFound() here cannot set the 404 status either. The fetch is
+  // already on the critical path (SEO metadata needs the announcement),
   // so no extra latency is added for valid docs.
   if ((!a || a.active !== true) && !fetchFailed) notFound();
   // 11 Oct 2026: noindex on inactive/missing as belt-and-braces (the
@@ -175,14 +176,14 @@ function DetailSkeleton() {
 export default async function AnnouncementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // Round 12 (12 Oct 2026): the existence check runs HERE — in the page
-  // component body, before any <Suspense> tree is returned. notFound() at
-  // this point renders the not-found.tsx boundary UI — BUT the response
-  // keeps HTTP 200, not 404: with cacheComponents:true the page-body await
-  // is postponed (x-nextjs-postponed: 1), so the 200 headers are sent
-  // before notFound() throws. Verified via curl on a local production
-  // build 12 Oct 2026. A real 404 status needs the check to run before
-  // rendering starts (e.g. Proxy) — see NEEDS-DECISION report.
+  // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
+  // proxy (src/proxy.ts + src/proxy-404.ts), which checks Firestore
+  // BEFORE rendering/streaming starts. The earlier Round-12 approach of
+  // notFound() at this point kept HTTP 200: with cacheComponents:true
+  // the page-body await is postponed (x-nextjs-postponed: 1), so the 200
+  // headers were sent before notFound() threw (verified via curl on a
+  // local production build 12 Oct 2026). Retained only as a harmless
+  // fallback for the no-proxy case.
   let a: Announcement | null = null;
   let error = false;
   try {
@@ -191,8 +192,10 @@ export default async function AnnouncementPage({ params }: { params: Promise<{ i
     error = true;
   }
 
-  // Genuinely missing/inactive (null) → real HTTP 404. A THROWN fetch is a
-  // transient failure → HTTP 200 + retry UI (Round 11 TransientErrorView),
+  // Genuinely missing/inactive (null) → notFound() boundary UI as a
+  // harmless fallback; the real HTTP 404 already came from the Edge
+  // proxy for these docs (see above). A THROWN fetch is a transient
+  // failure → HTTP 200 + retry UI (Round 11 TransientErrorView),
   // never a 404.
   if (!a && !error) notFound();
 

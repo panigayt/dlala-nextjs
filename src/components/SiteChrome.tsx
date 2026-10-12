@@ -466,6 +466,11 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   );
 
   const year = new Date().getFullYear();
+  // Round 14 T14: footer guide links follow the current UI language —
+  // EN readers get /en/guides/<slug> (EN articles exist for all 4 slugs),
+  // FR readers get /fr/guides/<slug>, AR stays /guides/<slug>. Uses the
+  // same `lang` from useLang() the footer already resolves.
+  const guidePrefix = lang === 'fr' ? '/fr' : lang === 'en' ? '/en' : '';
 
   return (
     <>
@@ -612,12 +617,12 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
           <div className="footer-guides">
             <strong>📚 {t('guidesTitle')}</strong>
             <br />
-            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/acheter-voiture-occasion`}>{t('guideCar')}</Link> ·{' '}
-            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/prix-voitures-occasion-${year}`}>
+            <Link href={`${guidePrefix}/guides/acheter-voiture-occasion`}>{t('guideCar')}</Link> ·{' '}
+            <Link href={`${guidePrefix}/guides/prix-voitures-occasion-${year}`}>
               {t('guidePrices').replace(/ ?20\d\d/g, '').trim() + ' ' + year}
             </Link> ·{' '}
-            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/controler-telephone-occasion`}>{t('guidePhone')}</Link> ·{' '}
-            <Link href={`${lang === 'fr' ? '/fr' : ''}/guides/eviter-arnaques`}>{t('guideScam')}</Link>
+            <Link href={`${guidePrefix}/guides/controler-telephone-occasion`}>{t('guidePhone')}</Link> ·{' '}
+            <Link href={`${guidePrefix}/guides/eviter-arnaques`}>{t('guideScam')}</Link>
           </div>
         </div>
       </footer>

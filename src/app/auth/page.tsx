@@ -17,6 +17,10 @@
 //  4. Email-verification gate — nobody proceeds to / unverified.
 // A retry-after-commit (L9) and a post-login orphan heal (P2) keep accounts
 // structurally valid even when a network blip interrupts signup.
+// Round 14 T2: the verify gate no longer flips on onAuthStateChanged while
+// signup provisioning is in flight — the gate appears only after the atomic
+// user-doc batch settles, closing the tab-close race that orphaned Auth
+// accounts.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -159,6 +163,12 @@ export default function AuthPage() {
   const [verifyDone, setVerifyDone] = useState(false);
   const mounted = useRef(true);
   const unsubRef = useRef<(() => void) | null>(null);
+  // Round 14 T2: true while signup provisioning (atomic user-doc batch
+  // commit) is in flight. The onAuthStateChanged listener must not flip the
+  // UI to the verify gate in this window — showing a "done" screen while
+  // the commit is still in flight lets the user close the tab and abort it
+  // client-side, orphaning the Auth account with no user doc.
+  const provisioningInFlight = useRef(false);
 
   // js/auth.js authReturnTarget parity — sanitized ?return= continuation
   // after sign-in / verification-continue (L2: /auth never a return target).
@@ -187,6 +197,13 @@ export default function AuthPage() {
             // 11 Oct 2026: clear password from memory after successful auth.
             setPassword('');
             router.push(returnTarget());
+          } else if (provisioningInFlight.current) {
+            // Round 14 T2: signup is still provisioning the user doc (atomic
+            // batch commit in flight). Do NOT flip to the verify gate yet —
+            // the signup form stays up with its neutral "please wait"
+            // loading state; handleSignup shows the gate explicitly once
+            // provisioning settles.
+            return;
           } else {
             setVerifyEmail(u.email || '');
             setVerifyDone(false);
@@ -256,7 +273,12 @@ export default function AuthPage() {
           let nm = cred.user.displayName || '';
           let un: string | null = null;
           try {
-            const pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null');
+            // Round 14 T2: sessionStorage first (same-tab signup), then
+            // localStorage (tab closed mid-provisioning — the race window).
+            // The uid check keeps this safe on shared devices.
+            const pending = JSON.parse(
+              sessionStorage.getItem(PENDING_KEY) || localStorage.getItem(PENDING_KEY) || 'null'
+            );
             if (pending && pending.uid === cred.user.uid && pending.username) {
               nm = pending.name || nm;
               un = pending.username;
@@ -273,6 +295,11 @@ export default function AuthPage() {
           await ensureUserDoc(fc, cred.user.uid, nm, claimed);
           try {
             sessionStorage.removeItem(PENDING_KEY);
+          } catch {
+            // non-fatal
+          }
+          try {
+            localStorage.removeItem(PENDING_KEY);
           } catch {
             // non-fatal
           }
@@ -366,46 +393,80 @@ export default function AuthPage() {
         }
         return;
       }
-      const cred = await withAuthRetry(() => authMod.createUserWithEmailAndPassword(auth, em, password));
-      // The Auth account now exists. Post-creation steps must NEVER orphan
-      // it — on failure we still advance (the user doc is created idempotently
-      // by ensureUserDoc on the next sign-in too) and report what happened.
+      // Round 14 T2b: provisioningInFlight is set BEFORE createUserWithEmailAndPassword
+      // — the Firebase SDK fires onAuthStateChanged SYNCHRONOUSLY inside that call
+      // (before its promise resolves), so a flag set after the await would never
+      // cover the sync listener dispatch and the verify gate would flip early.
+      // The listener skips the verify-gate transition while this flag is set —
+      // flipping early would show a "done" screen while the atomic user-doc
+      // batch is still committing; closing the tab in that window aborts the
+      // commit client-side and orphans the Auth account. Cleared in the
+      // finally below, however the block exits (createUser throw → outer catch
+      // / L9 retry — never stuck).
+      provisioningInFlight.current = true;
       try {
-        await withTimeout(authMod.updateProfile(cred.user, { displayName }));
-      } catch (e) {
-        console.error('updateProfile failed (non-fatal):', e);
-      }
-      try {
-        sessionStorage.setItem(
-          PENDING_KEY,
-          JSON.stringify({ uid: cred.user.uid, name: displayName, username: handle })
-        );
-      } catch {
-        // non-fatal
-      }
-      // Round 24: the doc-failure note must surface in the VISIBLE mode
-      // (verify), never in the hidden signup form.
-      let docRetryNote = false;
-      try {
-        await ensureUserDoc(fc, cred.user.uid, displayName, handle);
+        const cred = await withAuthRetry(() => authMod.createUserWithEmailAndPassword(auth, em, password));
+        // The Auth account now exists. Post-creation steps must NEVER orphan
+        // it — on failure we still advance (the user doc is created idempotently
+        // by ensureUserDoc on the next sign-in too) and report what happened.
         try {
-          sessionStorage.removeItem(PENDING_KEY);
+          await withTimeout(authMod.updateProfile(cred.user, { displayName }));
+        } catch (e) {
+          console.error('updateProfile failed (non-fatal):', e);
+        }
+        // Stash in sessionStorage AND localStorage: sessionStorage dies with
+        // the tab (exactly the race window above), so the P2 orphan-heal on
+        // the next sign-in must also find the signup-chosen handle after a
+        // tab close — otherwise it silently substitutes a display-name
+        // derivation for the handle the user chose.
+        const pendingJson = JSON.stringify({ uid: cred.user.uid, name: displayName, username: handle });
+        try {
+          sessionStorage.setItem(PENDING_KEY, pendingJson);
         } catch {
           // non-fatal
         }
-      } catch (e) {
-        console.error('ensureUserDoc failed (will retry on sign-in):', e);
-        docRetryNote = true;
+        try {
+          localStorage.setItem(PENDING_KEY, pendingJson);
+        } catch {
+          // non-fatal
+        }
+        // Round 24: the doc-failure note must surface in the VISIBLE mode
+        // (verify), never in the hidden signup form. Round 14 T2: a failed
+        // batch commit must REACH the UI — keep the real error code/message
+        // (Round 147 convention) instead of a bare generic note.
+        let docFailure: unknown = null;
+        try {
+          await ensureUserDoc(fc, cred.user.uid, displayName, handle);
+          try {
+            sessionStorage.removeItem(PENDING_KEY);
+          } catch {
+            // non-fatal
+          }
+          try {
+            localStorage.removeItem(PENDING_KEY);
+          } catch {
+            // non-fatal
+          }
+        } catch (e) {
+          console.error('ensureUserDoc failed (will retry on sign-in):', e);
+          docFailure = e;
+        }
+        try {
+          await withTimeout(authMod.sendEmailVerification(cred.user));
+        } catch (e) {
+          console.error('sendEmailVerification failed (non-fatal):', e);
+        }
+        if (!mounted.current) return;
+        setLoading(false);
+        showVerifyGate(cred.user);
+        if (docFailure) {
+          const failDetail =
+            (docFailure as { code?: string } | null)?.code || (docFailure as Error | null)?.message;
+          setError(t('signupDocRetry') + (failDetail ? ' [' + failDetail + ']' : ''));
+        }
+      } finally {
+        provisioningInFlight.current = false;
       }
-      try {
-        await withTimeout(authMod.sendEmailVerification(cred.user));
-      } catch (e) {
-        console.error('sendEmailVerification failed (non-fatal):', e);
-      }
-      if (!mounted.current) return;
-      setLoading(false);
-      showVerifyGate(cred.user);
-      if (docRetryNote) setError(t('signupDocRetry'));
     } catch (e) {
       // L9: retry-after-commit — createUser may have committed server-side
       // while the response was lost; the retry then fails with
@@ -413,6 +474,10 @@ export default function AuthPage() {
       // it works, the account was created by our request.
       const code = (e as { code?: string } | null)?.code || '';
       if (code === 'auth/email-already-in-use') {
+        // Round 14 T2: same race as the main path — this signIn triggers
+        // onAuthStateChanged while the L9 provisioning (ensureUserDoc) is
+        // still in flight; hold the verify gate until it settles.
+        provisioningInFlight.current = true;
         try {
           // Lazy-load the Firebase SDK (bundled async chunk).
           const { getFirebaseBundled } = await import('@/lib/firebase');
@@ -442,6 +507,8 @@ export default function AuthPage() {
         } catch (se) {
           // Sign-in failed: genuine email-in-use by someone else.
           console.error('L9 sign-in fallback failed:', se);
+        } finally {
+          provisioningInFlight.current = false;
         }
       }
       if (mounted.current) {

@@ -22,6 +22,7 @@ import { fetchFeed, fetchWanted, interleaveWanted, type ListingCard } from '@/li
 import { t } from '@/lib/i18n-strings';
 import { getServerLang } from '@/lib/server-lang';
 import HomePage, { type HomeFeedData } from '@/components/HomePage';
+import FeedPreloadHints from '@/components/FeedPreloadHints';
 
 // Round 133: <title> follows the reader's language (dlala_lang cookie;
 // localStorage is client-only). The meta description is inherited from the
@@ -88,5 +89,18 @@ export default async function Home() {
     error = e instanceof Error ? e.message : 'feed-error';
   }
 
-  return <HomePage feed={feed} error={error} />;
+  // Round 14 T11: preload hints for the first 6 feed thumbnails. VERIFIED
+  // 12 Oct 2026 via prod-build curl: React 19 does NOT hoist these into
+  // <head> in Next.js 16 (same for the listing page's Round 149/159 tags)
+  // and the Metadata API cannot emit <link> tags ('other' renders <meta>
+  // only — see Next source lib/metadata/metadata-elements.js). The tags
+  // render early in <body> (~14KB into the document), where the browser's
+  // preload scanner still discovers them during initial parse, well before
+  // the card <img>s. Same card order the grid renders.
+  return (
+    <>
+      <FeedPreloadHints cards={feed ? feed.cards : []} />
+      <HomePage feed={feed} error={error} />
+    </>
+  );
 }
