@@ -886,8 +886,9 @@ async function fetchWantedZeroWilaya(f: SearchFilters): Promise<ListingCard[]> {
       .filter((x) => x.document)
       .map((x) => restDocToObj(x.document));
     // fetchWantedAllWilayasFilter (js/home.js, verbatim logic)
-    const lo = f.min !== undefined && f.min !== '' ? Number(f.min) : -Infinity;
-    const hi = f.max !== undefined && f.max !== '' ? Number(f.max) : Infinity;
+    // 11 Oct 2026: auto-order min/max (was missed by the 4d008be fix).
+    const lo = f.min !== undefined && f.min !== '' ? Math.min(Number(f.min), Number(f.max || Infinity)) : -Infinity;
+    const hi = f.max !== undefined && f.max !== '' ? Math.max(Number(f.min || -Infinity), Number(f.max)) : Infinity;
     return docs.filter((d) => {
       if (!d.isWanted) return false;
       if (f.cat && d.categoryId !== f.cat) return false;
