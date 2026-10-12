@@ -183,6 +183,8 @@ function SellerProfileCard({ s }: { s: SellerProfile }) {
     s.storeTier === 'verified' && s.storeName ? s.storeName : s.name || s.username || '';
   // 11 Oct 2026: also check photoPath (legacy parity — ordinary avatars use photoPath).
   const photo = s.photoUrl || (s as { photoPath?: string }).photoPath || '';
+  // 12 Oct 2026: broken-photo fallback (was broken-image icon).
+  const [photoBroken, setPhotoBroken] = useState(false);
   // js/seller.js parity: legacy accepts verified===true OR emailVerified===true.
   const isVerified = s.verified === true || s.emailVerified === true;
   const followersCount = Number(s.followerCount) || 0;
@@ -191,12 +193,13 @@ function SellerProfileCard({ s }: { s: SellerProfile }) {
   return (
     <div className="rounded-xl bg-white shadow-sm p-6" dir={dir}>
       <div className="flex items-center gap-4">
-        {photo ? (
+        {photo && !photoBroken ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={photo}
             alt={displayName}
             className="w-20 h-20 rounded-full object-cover shrink-0"
+            onError={() => setPhotoBroken(true)}
           />
         ) : (
           <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold shrink-0">
