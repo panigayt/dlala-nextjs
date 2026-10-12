@@ -106,6 +106,10 @@ function AccountContent({ user }: { user: CompatUser }) {
   const [profBusy, setProfBusy] = useState(false);
   const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  // 12 Oct 2026: track broken images to show fallbacks (was blank space).
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
+  const [coverBroken, setCoverBroken] = useState(false);
   const [showVerifyBanner] = useState(() => !user.emailVerified);
   // Store editor
   const [storeName, setStoreName] = useState('');
@@ -518,8 +522,9 @@ function AccountContent({ user }: { user: CompatUser }) {
   const resendVerification = useCallback(async () => {
     try {
       await withTimeout(user.sendEmailVerification(), 15000);
-      // 11 Oct 2026: inline — window.alert hangs headless browsers.
-      setProfErr(t('verifyEmailBody'));
+      // 12 Oct 2026: success uses profOk (green), not profErr (red).
+      setProfErr(null);
+      setProfOk(true);
     } catch {
       setProfErr(t('authConnectionProblem'));
     }
@@ -615,14 +620,14 @@ function AccountContent({ user }: { user: CompatUser }) {
               )}
 
               <div className="flex items-center gap-4 my-4">
-                {avUrl ? (
+                {avUrl && !avatarBroken ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={avUrl}
                     alt=""
                     className="w-20 h-20 rounded-full object-cover bg-zinc-100"
-                    // 11 Oct 2026: fall back to letter avatar on broken photo.
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    // 12 Oct 2026: show letter fallback on broken photo (was blank space).
+                    onError={() => setAvatarBroken(true)}
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold">
@@ -706,9 +711,9 @@ function AccountContent({ user }: { user: CompatUser }) {
 
             <label className="block text-sm font-medium text-zinc-700 mb-1">{t('storeCoverLabel')}</label>
             <div className="rounded-lg bg-zinc-100 h-28 mb-2 overflow-hidden flex items-center justify-center text-zinc-400 text-sm">
-              {coverUrl ? (
+              {coverUrl && !coverBroken ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                <img src={coverUrl} alt="" className="w-full h-full object-cover" onError={() => setCoverBroken(true)} />
               ) : (
                 <span>{t('storeCoverLabel')}</span>
               )}
@@ -728,9 +733,9 @@ function AccountContent({ user }: { user: CompatUser }) {
 
             <label className="block text-sm font-medium text-zinc-700 mb-1">{t('storeLogoLabel')}</label>
             <div className="flex items-center gap-4 mb-4">
-              {logoUrl ? (
+              {logoUrl && !logoBroken ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt="" className="w-20 h-20 rounded-full object-cover bg-zinc-100" />
+                <img src={logoUrl} alt="" className="w-20 h-20 rounded-full object-cover bg-zinc-100" onError={() => setLogoBroken(true)} />
               ) : (
                 <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold">
                   {((storeName || name)?.[0] || '?').toUpperCase()}
