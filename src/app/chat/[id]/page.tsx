@@ -333,13 +333,15 @@ function ChatInner() {
           .collection('conversations')
           .doc(convId)
           .collection('messages')
-          .orderBy('at', 'asc')
+          // 11 Oct 2026: newest 100 (was oldest 100 — new messages never arrived).
+          .orderBy('at', 'desc')
           .limit(100)
           .onSnapshot(
             (snap2) => {
-              const list: Msg[] = snap2.docs.map(
-                (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
-              );
+              // desc → reverse for chronological display (legacy parity).
+              const list: Msg[] = snap2.docs
+                .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg)
+                .reverse();
               const prevIds = new Set(msgsRef.current.map((m) => m.id));
               const hasNew = list.some((m) => !prevIds.has(m.id));
               msgsRef.current = list;
