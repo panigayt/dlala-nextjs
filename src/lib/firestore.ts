@@ -507,6 +507,24 @@ async function runSimilarQuery(
   return rawDocs.map(restDocToObj);
 }
 
+// Round 23: trim SimilarAds payload (85KB HTML → save ~21KB).
+// SimilarCard (ListingShell.tsx) only uses: id, title, price,
+// photo_thumbs[0]/photoUrls[0]/thumbUrls[0] (via cardImage), wilayaCode,
+// createdAt. Everything else (description, answers, extra photos) is
+// dropped. The card renders identically. Zak approved 13 Oct 2026.
+export function trimSimilarCard(l: ListingCard): ListingCard {
+  return {
+    id: l.id,
+    title: l.title,
+    price: l.price,
+    photo_thumbs: Array.isArray(l.photo_thumbs) && l.photo_thumbs[0] ? [l.photo_thumbs[0]] : [],
+    photoUrls: Array.isArray(l.photoUrls) && l.photoUrls[0] ? [l.photoUrls[0]] : [],
+    thumbUrls: Array.isArray(l.thumbUrls) && l.thumbUrls[0] ? [l.thumbUrls[0]] : [],
+    wilayaCode: l.wilayaCode,
+    createdAt: l.createdAt,
+  };
+}
+
 export async function fetchSimilarListings(
   categoryId: string,
   wilayaCode: number,
@@ -536,7 +554,8 @@ export async function fetchSimilarListings(
         (Number(b.wilayaCode) === w ? 1 : 0) - (Number(a.wilayaCode) === w ? 1 : 0) ||
         createdMs(b) - createdMs(a)
     )
-    .slice(0, 12);
+    .slice(0, 12)
+    .map(trimSimilarCard);
 }
 
 // js/listing.js loadMatches parity (wanted branch): the unfiltered 40-doc
