@@ -16,7 +16,7 @@
 // server-rendered feed (with taste ranking, follow boost, vitrine, wanted
 // interleave) is restored.
 
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import HomeHeader from '@/components/HomeHeader';
 import TipsTicker from '@/components/TipsTicker';
 import FeedWithLoadMore from '@/components/FeedWithLoadMore';
@@ -25,7 +25,11 @@ import ListingCardView from '@/components/ListingCardView';
 import { withTimeout } from '@/lib/timeout';
 // Round 166 (0.0.0.39 parity, js/home.js 0.0.0.1m): verified-store gold cards
 // atop filtered results when the text query matches a storeName/@username.
-import StoreMatchCards from '@/app/search/StoreMatchCards';
+// Round 17 T9: StoreMatchCards only renders inside the client-only filtered
+// grid (after a filter interaction) — never in SSR output. React.lazy
+// (zero added runtime: built into React) splits it out of the initial home
+// bundle; next/dynamic was measured +2.9KB net (its loadable runtime).
+const StoreMatchCards = lazy(() => import('@/app/search/StoreMatchCards'));
 import {
   resultsCountText,
   SEARCH_PAGE_SIZE,
@@ -105,7 +109,9 @@ function HomeFilteredGrid({
           verified-store gold cards prepended atop the feed when the text
           query matches a storeName/@username. Best-effort background fetch;
           renders nothing when q is empty or no stores match. */}
-      <StoreMatchCards q={f.q || ''} />
+      <Suspense fallback={null}>
+        <StoreMatchCards q={f.q || ''} />
+      </Suspense>
       {state.listings.length === 0 ? (
         priceRangeInvalid ? (
           <div className="rounded-xl bg-white p-6 text-center text-zinc-500">

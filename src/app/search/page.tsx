@@ -106,9 +106,17 @@ async function SearchLoader({
   // apply in Next.js 16's streaming pipeline; Metadata 'other' renders
   // <meta> only). The preload scanner still discovers them during initial
   // parse, before the card <img>s — same pattern as listing page R149/159.
+  // Round 17 T2-retry (A/B VERIFIED 13 Oct 2026, Slow 3G n=6/arm): the first
+  // 4 cards are above the fold at 390px (2-col grid) and render
+  // loading="eager" (see SearchResultsGrid) — React 19's Fizz renderer
+  // auto-emits <link rel="preload" as="image"> for every non-lazy <img>
+  // (verified in react-dom-server: `case "img"` skips only loading="lazy"),
+  // so manual preload hints for those 4 are redundant. Only the below-fold
+  // thumbs (cards 5-6, genuinely lazy) keep manual hints: first-card render
+  // median -464ms vs the 6-hint config, FCP -52ms, 6-thumb completion tied.
   return (
     <>
-      <FeedPreloadHints cards={data ? data.listings : []} />
+      <FeedPreloadHints cards={data ? data.listings.slice(4, 6) : []} />
       <SearchPage
         key={filtersToQuery(filters)}
         filters={filters}

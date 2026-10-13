@@ -39,62 +39,16 @@ import {
 } from '@/lib/seo';
 import { t, type Lang } from '@/lib/i18n-strings';
 import { getServerLang } from '@/lib/server-lang';
-import dynamic from 'next/dynamic';
 import type { MatchOfferDoc } from './MatchingOffers';
 import BackLink from '@/components/BackLink';
-import PreloadLinks, { type PreloadItem } from '@/components/PreloadLinks';
 import OwnerSellerCard from './OwnerSellerCard';
 import WantedBadge from './WantedBadge';
 import PriceReducedBadge from './PriceReducedBadge';
 import RateCta from '@/components/RateCta';
 import NotFoundCta from './NotFoundCta';
 
-// Round 11 Slim-2 (12 Oct 2026): code-split heavy client components at the
-// usage site. ssr:true keeps the server-rendered HTML (SEO intact, no
-// layout shift); the component's client JS ships as a SEPARATE chunk that
-// hydrates after the initial page bundle instead of being part of it.
-function ActionsSkeleton() {
-  return (
-    <div
-      className="mt-[14px] rounded-xl bg-white border border-[#e5e7eb] p-[10px]"
-      aria-hidden="true"
-    >
-      <div className="grid grid-cols-2 gap-[6px]">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-[34px] rounded-lg bg-zinc-100 animate-pulse" />
-        ))}
-        <div className="h-[34px] rounded-lg bg-zinc-100 animate-pulse col-span-2" />
-      </div>
-    </div>
-  );
-}
-
-function MatchesSkeleton() {
-  return (
-    <div className="mt-4 rounded-xl bg-white shadow-sm p-5" aria-hidden="true">
-      <div className="h-6 w-40 bg-zinc-100 rounded animate-pulse mb-4" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl bg-zinc-100 aspect-[4/3] animate-pulse" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Below-fold section on wanted ads (drags ListingCardView + FavoriteToggle
-// + matching lib out of the initial bundle — nothing else on the listing
-// page uses them).
-const MatchingOffers = dynamic(() => import('./MatchingOffers'), {
-  loading: () => <MatchesSkeleton />,
-});
-
-// Interactive buttons (favorite / contact / propose / share / report) — the
-// buttons' chunk is by far the heaviest on the page (~32KB source). SSR HTML
-// still renders the buttons on first paint; only the client JS is deferred.
-const ListingActions = dynamic(() => import('./ListingActions'), {
-  loading: () => <ActionsSkeleton />,
-});
+import ActionsLoader from './ActionsLoader';
+import MatchesLoader from './MatchesLoader';
 
 // Fire-and-forget recorders with no UI — client-only, never block hydration.
 // `ssr: false` is illegal in Server Components, so they live behind the tiny
@@ -113,22 +67,22 @@ import {
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
 
-// Round 149 + Round 159 preload targets, in priority order: the hero
-// (full-size photo 0 — displayUrlFor falls back to it for 100% of
-// production listings, T11) at high priority, then the first 3 strip
-// thumbs at low priority. Consumed by <PreloadLinks>, which emits them
-// as raw HTML ahead of the gallery <img>s.
-function listingPreloads(
-  hero: string | undefined,
-  thumbs: string[]
-): PreloadItem[] {
-  const items: PreloadItem[] = [];
-  if (hero) items.push({ href: hero, fetchPriority: 'high' });
-  for (const t of thumbs.slice(0, 3)) {
-    if (t) items.push({ href: t, fetchPriority: 'low' });
-  }
-  return items;
-}
+// Round 17 T3: the Round 149/159 manual preload set (hero + strip
+// thumbs[0..2] via <PreloadLinks>) is REMOVED — a Slow-3G A/B (n=6/arm,
+// interleaved, 390px) showed every tag it emitted was wasted or
+// redundant, and dropping them improved gallery completion:
+//   - the "hero" tag preloaded photos[0] (full-size), but the gallery
+//     hero displays thumbs[0] (LIS-9 progressive hero) — a high-priority
+//     fetch of bytes nothing shows at first paint, contending with the
+//     real images on thin pipes;
+//   - the thumbs[0..2] tags duplicated React 19's automatic
+//     <link rel="preload" as="image" fetchPriority="high"> hoisting for
+//     the eager+high strip imgs (verified in served HTML: the auto tags
+//     land in <head>, ahead of any body tags).
+// Measured medians, ttfb removed: hero completion -1.6s, strip thumb #2
+// -0.9s; first content unchanged (parse-driven, ttfb-dominated).
+// The strip's eager+high imgs (Gallery.tsx, Round 16 T9) plus React's
+// auto-preloads carry the whole load — no manual tags needed.
 
 async function _getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -354,7 +308,9 @@ async function ListingContent({
   let jsonLdScript = '';
   try {
     // Round 133: same cookie language as generateMetadata above.
-    jsonLdScript = JSON.stringify(seoForListing(l, id, await getServerLang()).jsonLd).replace(
+    // Round 17 T7: reuse pageLang (same request, same cookie) instead of
+    // reading the cookie store a second time.
+    jsonLdScript = JSON.stringify(seoForListing(l, id, pageLang).jsonLd).replace(
       /</g,
       '\\u003c'
     );
@@ -370,35 +326,30 @@ async function ListingContent({
   const isWanted = !!l.isWanted;
   // 11 Oct 2026: seekers store isWanted=true but show seeker badge, not wanted.
   const isSeeker = l.categoryId === 'jobs' && (l.answers as Record<string, unknown> | undefined)?.jobType === 'jobSeeker';
-  let similar: ListingCard[] | null = null;
-  let similarWindow: ListingCard[] | null = null;
-  if (l.categoryId) {
-    try {
-      if (isWanted) {
-        similarWindow = await fetchSimilarWindow(l.categoryId);
-      } else {
-        similar = await fetchSimilarListings(
-          l.categoryId,
-          Number(l.wilayaCode) || 0,
-          id
-        );
-      }
-    } catch {
-      similar = null;
-      similarWindow = null;
-    }
-  }
-  // js/listing.js loadSeller parity: fetch the full seller profile for the
-  // trust row (rating, verified badge, pro store name) — best-effort, never
-  // breaks the page (legacy's background fetchUserRest catch behavior).
-  let profile: SellerProfile | null = null;
-  if (l.sellerId) {
-    try {
-      profile = await fetchSeller(l.sellerId);
-    } catch {
-      profile = null;
-    }
-  }
+  // Round 17 T7: the similar-ads query and the seller-profile fetch are
+  // independent — fire them in parallel instead of sequentially. Same
+  // merge points, same null-on-failure behavior as the sequential
+  // version (js/listing.js loadMatches + loadSeller parity): identical
+  // output, ~1 fewer serial Firestore round-trip.
+  const [similar, similarWindow, profile] = await Promise.all([
+    !isWanted && l.categoryId
+      ? fetchSimilarListings(l.categoryId, Number(l.wilayaCode) || 0, id).catch(
+          (): ListingCard[] | null => null
+        )
+      : Promise.resolve(null as ListingCard[] | null),
+    isWanted && l.categoryId
+      ? fetchSimilarWindow(l.categoryId).catch(
+          (): ListingCard[] | null => null
+        )
+      : Promise.resolve(null as ListingCard[] | null),
+    // js/listing.js loadSeller parity: fetch the full seller profile for
+    // the trust row (rating, verified badge, pro store name) —
+    // best-effort, never breaks the page (legacy's background
+    // fetchUserRest catch behavior).
+    l.sellerId
+      ? fetchSeller(l.sellerId).catch((): SellerProfile | null => null)
+      : Promise.resolve(null as SellerProfile | null),
+  ]);
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6">
@@ -426,21 +377,8 @@ async function ListingContent({
           dangerouslySetInnerHTML={{ __html: jsonLdScript }}
         />
       )}
-      {/* Round 149 (hero) + Round 159 (strip thumbs[0..2]): image preloads.
-          Round 16 T12: emitted as RAW HTML via <PreloadLinks> (see
-          components/preload-links.ts) instead of JSX <link> tags in the
-          body — T10 measured the JSX tags flushing late in <body>, AFTER
-          the images they were meant to accelerate (React 19 hoists body
-          <link> resources late in the stream), and ReactDOM.preload() is
-          a silent no-op under this repo's Turbopack + cacheComponents +
-          PPR setup. Raw HTML cannot be reordered: the tags land exactly
-          here, ahead of the gallery <img>s. Priorities preserved from the
-          original design: the hero keeps high priority and always wins
-          the bandwidth race; the thumbs preload low at parse time and
-          the strip's eager imgs (Gallery.tsx) raise them to high at
-          hydration. Only the first 3 thumbs: the rest load via the
-          strip's eager imgs and the LIS-10 idle prewarm. */}
-      <PreloadLinks items={listingPreloads(photos[0], thumbs)} />
+      {/* Round 17 T3: manual preload set removed (see note above) — the
+          gallery's eager+high imgs and React 19's auto-preloads cover it. */}
       {/* Gallery — clickable thumbnails + fullscreen lightbox
           (client component; mirrors js/listing.js LIS-8 gallery,
           LIS-9 progressive hero, LIS-10 idle prewarm). */}
@@ -501,7 +439,7 @@ async function ListingContent({
         )}
         {/* Favorite + contact seller (client component — needs auth state) */}
         {l.sellerId && (
-          <ListingActions
+          <ActionsLoader
             listingId={id}
             sellerId={l.sellerId}
             title={title}
@@ -554,7 +492,7 @@ async function ListingContent({
           js/market.js matchingOffers); regular ads show similar ads. */}
       {isWanted ? (
         similarWindow !== null && (
-          <MatchingOffers
+          <MatchesLoader
             windowDocs={similarWindow.map(
               (d): MatchOfferDoc => ({
                 ...d,

@@ -34,6 +34,15 @@ import {
 // .next() — FAIL OPEN. Never 404 on a transient failure; the page's own
 // transient-error UI handles it at HTTP 200. Check code + timeout live
 // in src/proxy-404.ts (edge-safe, no React, no firebase libs).
+// The Zak-ordered trilingual 404 (Round 14). Built once per call — the
+// HTML string itself is a module-level constant in proxy-404.ts.
+function trilingual404(): NextResponse {
+  return new NextResponse(TRILINGUAL_404_HTML, {
+    status: 404,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
+}
+
 export async function proxy(req: NextRequest) {
   const m = req.nextUrl.pathname.match(
     /^\/(?:(fr|en)\/)?guides\/(prix-voitures-occasion-(\d{4}))$/,
@@ -60,30 +69,38 @@ export async function proxy(req: NextRequest) {
     }
   }
   if (req.method === 'GET' || req.method === 'HEAD') {
+    // Round 17 T8: single regex capture — the old code matched the path
+    // with one regex (result used only as a truthy test) and then re-split
+    // the path to extract prefix/id. One capture does both.
     const detail = req.nextUrl.pathname.match(
-      /^\/(?:listing|seller|announcement)\/([^/]+)\/?$/,
+      /^\/(listing|seller|announcement)\/([^/]+)\/?$/,
     );
     if (detail) {
-      const segs = req.nextUrl.pathname.split('/').filter(Boolean);
-      const [prefix, rawId] = [segs[0], segs[1]];
-      if (rawId) {
-        const id = decodeURIComponent(rawId);
-        let check: 'missing' | 'exists' | 'check-failed' = 'check-failed';
-        if (prefix === 'listing') {
-          check = await checkDocExists('listings', stripHtmlSuffix(id));
-        } else if (prefix === 'seller') {
-          check = await checkDocExists('users_public', id);
-        } else if (prefix === 'announcement') {
-          check = await checkDocExists('announcements', id, true);
-        }
-        if (check === 'missing') {
-          return new NextResponse(TRILINGUAL_404_HTML, {
-            status: 404,
-            headers: { 'content-type': 'text/html; charset=utf-8' },
-          });
-        }
-        // 'check-failed' → fail open (NextResponse.next() below).
+      const [, prefix, rawId] = detail;
+      // Malformed percent-encoding (e.g. /listing/%zz) can never address
+      // a real document — a literal % in a doc id is %25-encoded, which
+      // decodes cleanly (verified: /listing/%25zz → check → 404). And
+      // Next's own dynamic-param decoding 500s on the malformed form, so
+      // failing open would still 500. Answer the trilingual 404 directly.
+      let id: string;
+      try {
+        id = decodeURIComponent(rawId);
+      } catch {
+        return trilingual404();
       }
+      let check: 'missing' | 'exists' | 'check-failed' = 'check-failed';
+      if (prefix === 'listing') {
+        check = await checkDocExists('listings', stripHtmlSuffix(id));
+      } else if (prefix === 'seller') {
+        check = await checkDocExists('users_public', id);
+      } else {
+        // prefix === 'announcement'
+        check = await checkDocExists('announcements', id, true);
+      }
+      if (check === 'missing') {
+        return trilingual404();
+      }
+      // 'check-failed' → fail open (NextResponse.next() below).
     }
   }
   return NextResponse.next();

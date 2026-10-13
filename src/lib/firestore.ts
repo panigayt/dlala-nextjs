@@ -1060,6 +1060,13 @@ async function runSearchPipeline(
     return r;
   };
 
+  // Round 17 T6: the all-wilayas wanted pool does not depend on the main
+  // query's results — fire it in parallel with the main query instead of
+  // after it. fetchWantedZeroWilaya never rejects (fails closed to []),
+  // so a main-query throw below leaves no unhandled rejection.
+  // Same merge point and same merge logic below: identical output.
+  const wantedZeroP = f.wilaya ? fetchWantedZeroWilaya(f) : null;
+
   let res;
   let usedFallback = false;
   try {
@@ -1077,6 +1084,18 @@ async function runSearchPipeline(
     .filter((r) => r.document)
     .map((r) => r.document);
   let docs = rawDocs.map(restDocToObj);
+
+  // Round 17 T6: boost verdicts are per-seller and identical for any subset
+  // of this pool, so start fetching them as soon as the main query resolves —
+  // they overlap the refinements below (CPU work) instead of running after.
+  // Same condition and same final partition as before: identical output.
+  const needBoost =
+    (!f.sort || f.sort === 'recent') && !(f.q && f.q.trim());
+  const boostMapP = needBoost
+    ? fetchSellerBoostMap(docs.filter((d) => !d.isWanted)).catch(
+        () => new Map<string, boolean>()
+      )
+    : null;
 
   // Fallback path: apply cat/wilaya/price filters client-side.
   if (usedFallback) {
@@ -1112,8 +1131,10 @@ async function runSearchPipeline(
   // by definition. (Sale ads can never carry wilayaCode 0: publish + rules
   // forbid it.) Production fetches them in a separate background query and
   // merges; same here.
-  if (f.wilaya) {
-    const wantedZero = await fetchWantedZeroWilaya(f);
+  if (wantedZeroP) {
+    // Round 17 T6: await the pool fired in parallel with the main query
+    // above. Merge logic unchanged from the sequential version.
+    const wantedZero = await wantedZeroP;
     if (wantedZero.length) {
       const seen = new Set(docs.map((d) => d.id));
       for (const w of wantedZero) {
@@ -1163,26 +1184,24 @@ async function runSearchPipeline(
   // default-feed-only (production isDefaultFilter parity — NOT applied
   // here), and vitrine showcase cards are also default-feed-only
   // (production insertVitrineCards early-returns on filters).
-  if ((!f.sort || f.sort === 'recent') && !(f.q && f.q.trim())) {
-    docs = await applyFeedBoostPartition(docs);
+  // Round 17 T6: the boost-map fetch was kicked off right after the main
+  // query resolved; only the await remains here. Same condition as before.
+  if (boostMapP) {
+    const boostMap = await boostMapP;
+    docs = partitionWithBoostMap(docs, boostMap);
   }
   return docs;
 }
 
-// Boosted/pro prioritization for filtered feeds (0.0.0.39 feedBoostPartition
-// parity). Stable: boosted/pro sellers' listings lead, every other card keeps
-// its relative order. Best-effort — a seller-fetch failure returns the pool
-// untouched (production's try/catch parity).
-async function applyFeedBoostPartition(docs: ListingCard[]): Promise<ListingCard[]> {
+// Pure partition step (Round 17 T6): boosted/pro
+// sellers' listings lead, every other card keeps its relative order.
+function partitionWithBoostMap(
+  docs: ListingCard[],
+  boostMap: Map<string, boolean>
+): ListingCard[] {
   const regular = docs.filter((d) => !d.isWanted);
   if (!regular.length) return docs;
   const wanted = docs.filter((d) => d.isWanted);
-  let boostMap: Map<string, boolean>;
-  try {
-    boostMap = await fetchSellerBoostMap(regular);
-  } catch {
-    return docs;
-  }
   const boosted: ListingCard[] = [];
   const rest: ListingCard[] = [];
   for (const d of regular) {
@@ -1201,8 +1220,11 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
   if (!sids.length) return map;
   const url = FIRESTORE_REST_BASE + ':batchGet?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const nowMs = Date.now();
-  for (let i = 0; i < sids.length; i += 50) {
-    const chunk = sids.slice(i, i + 50);
+  // Round 17 T6: chunks of 50 fired in parallel instead of sequentially.
+  // Same per-chunk request and same row parsing: identical map.
+  const chunks: string[][] = [];
+  for (let i = 0; i < sids.length; i += 50) chunks.push(sids.slice(i, i + 50));
+  const fetchChunk = async (chunk: string[]): Promise<Array<[string, boolean]>> => {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1215,8 +1237,9 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
       }),
       cache: 'no-store',
     });
-    if (!res.ok) continue;
+    if (!res.ok) return [];
     const body = (await res.json().catch(() => null)) as unknown;
+    const out: Array<[string, boolean]> = [];
     for (const row of Array.isArray(body) ? body : []) {
       const found = (row as Record<string, unknown> | null)?.found as
         | { name?: string; fields?: Record<string, unknown> }
@@ -1228,8 +1251,13 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
       const isPro = restValue(fields.storeTier) === 'verified';
       const bu = restValue(fields.vitrineBoostUntil);
       const ms = bu instanceof Date ? bu.getTime() : 0;
-      map.set(uid, !!isPro || (ms > nowMs));
+      out.push([uid, !!isPro || (ms > nowMs)]);
     }
+    return out;
+  };
+  const chunkResults = await Promise.all(chunks.map(fetchChunk));
+  for (const entries of chunkResults) {
+    for (const [uid, boosted] of entries) map.set(uid, boosted);
   }
   return map;
 }

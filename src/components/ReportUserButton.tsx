@@ -24,7 +24,10 @@ import { useLang } from '@/lib/i18n';
 import { withTimeout } from '@/lib/timeout';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
-import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
+// Round 17 T11: r2-upload is only needed when the reporter attaches an
+// evidence photo at submit time — dynamically imported in the submit
+// handler so it leaves the initial bundle (this button ships on the
+// listing page's initial JS via ListingShell).
 
 // All user-facing strings come from the shared trilingual store
 // (js/i18n.{ar,fr,en}.js parity); legacy report reasons use the dynamic
@@ -185,6 +188,8 @@ export default function ReportUserButton({
         // validates the shape and the uid segment) — the report evidence
         // photo lives under the reporter's own namespace.
         const key = `listings/${user.uid}/report-user-${uid}/ev_${Date.now()}.jpg`;
+        // Round 17 T11: dynamic import — r2-upload leaves the initial bundle.
+        const { uploadToR2 } = await import('@/lib/r2-upload');
         const up = await withTimeout(uploadToR2(f, key, idToken), 60000);
         photoUrl = up.publicUrl;
       }
@@ -230,6 +235,8 @@ export default function ReportUserButton({
           const committed = existing.exists() && data && data.photoUrl === photoUrl;
           if (!committed) {
             const tok = idToken || (await authMod.getIdToken(user));
+            // Round 17 T11: dynamic import — r2-upload leaves the initial bundle.
+            const { deleteR2Objects } = await import('@/lib/r2-upload');
             await deleteR2Objects([photoUrl], tok).catch(() => {});
           }
         } catch {

@@ -5,7 +5,7 @@
 // the initial SSR payload; further pages re-query /api/search with a
 // larger limit (same pattern as the seller grid, Round 69).
 
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useLang } from '@/lib/i18n';
 import {
   resultsCountText,
@@ -14,7 +14,14 @@ import {
   type SearchFilters,
 } from '@/lib/firestore';
 import ListingCardView from '@/components/ListingCardView';
-import StoreMatchCards from './StoreMatchCards';
+// Round 17 T10: lazy — StoreMatchCards renders null until its background
+// fetch resolves, so it never contributes to first paint. React.lazy
+// (not next/dynamic: its loadable runtime cost +2.9KB net, measured)
+// splits it out of the initial bundle: 595,438 -> 593,768 bytes
+// firstLoadUncompressedJsBytes (-1,670, measured via route-bundle-stats).
+// The store-matches fetch starts when the chunk evaluates, still
+// best-effort/background (js/home.js 0.0.0.1m parity).
+const StoreMatchCards = lazy(() => import('./StoreMatchCards'));
 import { filtersToQuery } from './filters';
 
 export default function SearchResultsGrid({
@@ -64,7 +71,9 @@ export default function SearchResultsGrid({
       {/* js/home.js 0.0.0.1m (Zak): verified-store cards above the results
           when the text query matches a pro store — background fetch, fails
           closed. Mounted once: "عرض المزيد" appends never re-trigger it. */}
-      <StoreMatchCards q={filters.q || ''} />
+      <Suspense fallback={null}>
+        <StoreMatchCards q={filters.q || ''} />
+      </Suspense>
       {listings.length === 0 ? (
         <div className="rounded-xl bg-white p-8 text-center text-zinc-500">
           <p className="text-lg">{t('noResults')}</p>
@@ -72,8 +81,14 @@ export default function SearchResultsGrid({
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {listings.map((l) => (
-            <ListingCardView key={l.id} l={l} />
+          {/* Round 17 T2-retry (A/B VERIFIED 13 Oct 2026, Slow 3G n=6/arm):
+              the first 4 cards sit above the fold at 390px (2-col = 2 rows)
+              — load them eagerly (home-page Round 160 parity); React 19
+              auto-preloads non-lazy imgs at SSR, so their manual preload
+              hints are dropped in page.tsx as redundant. Cards 5+ keep the
+              manual preload hints. */}
+          {listings.map((l, i) => (
+            <ListingCardView key={l.id} l={l} eager={i < 4} />
           ))}
         </div>
       )}
