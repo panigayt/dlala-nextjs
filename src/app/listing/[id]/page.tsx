@@ -377,8 +377,10 @@ async function ListingContent({
           dangerouslySetInnerHTML={{ __html: jsonLdScript }}
         />
       )}
-      {/* Round 17 T3: manual preload set removed (see note above) — the
-          gallery's eager+high imgs and React 19's auto-preloads cover it. */}
+      {/* Round 17 T3: manual preload set removed — the gallery's eager+high
+          imgs and React 19's auto-preloads cover it. (Round 21: verified the
+          Fizz auto-preloads match img URLs exactly and precede them in
+          document order; head-hoisting not achieved but order is correct.) */}
       {/* Gallery — clickable thumbnails + fullscreen lightbox
           (client component; mirrors js/listing.js LIS-8 gallery,
           LIS-9 progressive hero, LIS-10 idle prewarm). */}

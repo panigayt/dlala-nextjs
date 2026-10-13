@@ -443,26 +443,17 @@ export default function Gallery({
                 (i === sel ? 'ring-2 ring-emerald-700' : 'opacity-70 hover:opacity-100')
               }
             >
-              {/* Round 16 T12 (T9 evidence): the i===0-only eager/high
-                  asymmetry was the structural cause of the slow 2nd strip
-                  thumbnail — thumb #1 was discovered at parse while #2+
-                  waited on lazy/low. The first three strip thumbs are now
-                  eager/high (3 requests, not the 8 that competed with the
-                  hero on 11 Oct 2026); T11 measured the hero preload does
-                  NOT delay thumb #2. The Round 159 low-priority parse-time
-                  preloads for thumbs[0..2] still start the bytes early; the
-                  eager imgs then raise them to high priority at hydration.
-                  Round 8 Team 10: broken-image fallback chain (strip thumb →
-                  full photo → listing card image → neutral tile). */}
-              <SafeImg
-                key={thumbs[i] || p}
-                candidates={[thumbs[i] || p, p, fallback]}
+              {/* Round 21 (Zak video evidence 13 Oct): 0.0.0.39 renders strip
+                  thumbs as plain <img> and works on all listings; the preview's
+                  SafeImg (key remounts + fallback chain) leaves strip #2 blank
+                  on Safari. Using plain img like production. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={thumbs[i] || p}
                 alt=""
                 loading={i < 3 ? "eager" : "lazy"}
                 fetchPriority={i < 3 ? "high" : "low"}
-                decoding="async"
                 className="w-20 h-20 object-cover"
-                tileClassName="w-20 h-20"
               />
             </button>
           ))}
