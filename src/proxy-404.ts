@@ -19,7 +19,9 @@
 //    three home links). If not-found.tsx copy changes, update this HTML
 //    too — and vice versa (see the comment at the top of not-found.tsx).
 
-export const FIREBASE_API_KEY = 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
+// Round 16 T6: env-first (deploy source of truth). Fallback = production
+// key from dlala-040/js/config.js (0.0.0.39). Keep in sync with src/lib/firestore.ts.
+export const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg';
 
 export const FIRESTORE_REST_BASE =
   'https://firestore.googleapis.com/v1/projects/dlala-85cea/databases/(default)/documents';

@@ -123,8 +123,10 @@ function SettingsContent({ user }: { user: CompatUser }) {
     async (targetUid: string) => {
       setUnblocking(targetUid);
       try {
-        const { getFirebaseBundled } = await import('@/lib/firebase');
-        const { auth, authMod } = await getFirebaseBundled();
+        // Round 16 T2: the id token must come from the single shared (CDN)
+        // Auth instance — the same one the drawer observes.
+        const { getFirebaseCdn } = await import('@/lib/firebase');
+        const { auth, authMod } = await getFirebaseCdn();
         const au = auth.currentUser;
         const idToken = au ? await withTimeout(authMod.getIdToken(au), 15000) : '';
         if (!idToken) throw new Error('signed-out');
@@ -238,8 +240,12 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setDeleteErr(null);
     setDeleteBusy(true);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { auth, authMod, db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseBundled, getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseBundled();
+      // Round 16 T2: auth ops (re-auth, deleteUser, signOut) go through the
+      // single shared (CDN) Auth instance — the same one the drawer
+      // observes — so sign-out here updates the drawer immediately.
+      const { auth, authMod } = await getFirebaseCdn();
       // Fresh re-authentication is mandatory.
       const cred = authMod.EmailAuthProvider.credential(user.email || '', deletePw);
       try {

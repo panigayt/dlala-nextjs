@@ -534,7 +534,23 @@ function PublishForm({
   const router = useRouter();
   const [title, setTitle] = useState(() => readDraft()?.title || '');
   const [cat, setCat] = useState(() => readDraft()?.cat || '');
-  const [wilaya, setWilaya] = useState(() => readDraft()?.wilaya || '');
+  // 13 Oct 2026 (Round 16, BUG 4): wanted mode stores wilayaCode 0
+  // ("all wilayas") — the legacy js/publish.js parity value. Opening
+  // /publish?mode=wanted left wilaya='' with the select hidden, so
+  // validate() always failed wantedWilayaAutoError. Default to '0' for
+  // wanted initial mode (no draft).
+  const [wilaya, setWilaya] = useState(() => {
+    const d = readDraft();
+    if (d?.wilaya) return d.wilaya;
+    if (d) return ''; // draft without wilaya — keep as-is
+    return initialMode === 'wanted' ? '0' : '';
+  });
+  // 13 Oct 2026 (Round 16, T7b): wanted mode always carries wilaya '0'
+  // ("all wilayas", legacy js/publish.js parity). DERIVED, not synced —
+  // a setState-in-effect guard here triggered react-hooks/set-state-in-effect
+  // (cascading renders). Covers stale drafts saved with wilaya='' in wanted
+  // mode and any path that enables wanted without touching wilaya.
+  const effectiveWilaya = isWanted ? '0' : wilaya;
   const [price, setPrice] = useState(() => readDraft()?.price || '');
   const [condition, setCondition] = useState(() => readDraft()?.condition || '');
   const [qty, setQty] = useState(() => readDraft()?.qty || '1');
@@ -792,7 +808,8 @@ function PublishForm({
     const priceNum = price.trim() === '' ? NaN : Number(price);
     if (!isJobsCat && !(priceNum >= 0)) { fail(t('errorPrice')); return false; }
     if (!isJobsCat && priceNum > 100000000) { fail(t('errorPriceTooHigh')); return false; }
-    if (isWanted && wilaya !== '0') { fail(t('wantedWilayaAutoError')); return false; }
+    // Wanted mode always carries wilaya '0' via effectiveWilaya (derived, not
+    // synced) — no check needed; the value cannot be stale by construction.
     if (!isWanted && !(Number(wilaya) >= 1)) { fail(t('errorRequired')); return false; }
     // Category questions: required ones
     const requiredByCat: Record<string, string[]> = {
@@ -963,9 +980,10 @@ function PublishForm({
     try {
       const priceNum = price.trim() === '' ? 0 : Number(price);
       const effPrice = cat === 'jobs' ? 0 : priceNum;
-      // Job seekers keep their concrete wilaya despite isWanted=true
-      const isSeekerPre = cat === 'jobs' && answers['qJobType'] === 'jobSeeker';
-      const wilayaCode = isWanted && !isSeekerPre ? 0 : Number(wilaya || 16);
+      // wanted → 0 ("all wilayas"); job seekers (form isWanted=false) keep
+      // their concrete wilaya. effectiveWilaya is derived so wanted can
+      // never carry a stale raw value.
+      const wilayaCode = Number(effectiveWilaya || 16);
       const idToken = await authMod.getIdToken(user);
 
       if (editId) {

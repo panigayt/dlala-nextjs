@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebaseBundled, type CompatUser } from '@/lib/firebase';
+import { getFirebaseBundled, getFirebaseCdn, type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -328,7 +328,8 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       return;
     }
     // Re-check via fresh auth state — reload the page if now verified.
-    const client = await getFirebaseBundled().catch(() => null);
+    // Round 16 T2: read from the single shared (CDN) Auth instance.
+    const client = await getFirebaseCdn().catch(() => null);
     const cu = client?.auth.currentUser;
     if (cu && cu.emailVerified) window.location.reload();
     else {

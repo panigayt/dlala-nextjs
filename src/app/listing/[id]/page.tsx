@@ -42,6 +42,7 @@ import { getServerLang } from '@/lib/server-lang';
 import dynamic from 'next/dynamic';
 import type { MatchOfferDoc } from './MatchingOffers';
 import BackLink from '@/components/BackLink';
+import PreloadLinks, { type PreloadItem } from '@/components/PreloadLinks';
 import OwnerSellerCard from './OwnerSellerCard';
 import WantedBadge from './WantedBadge';
 import PriceReducedBadge from './PriceReducedBadge';
@@ -111,6 +112,23 @@ import {
 } from './ListingShell';
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
+
+// Round 149 + Round 159 preload targets, in priority order: the hero
+// (full-size photo 0 — displayUrlFor falls back to it for 100% of
+// production listings, T11) at high priority, then the first 3 strip
+// thumbs at low priority. Consumed by <PreloadLinks>, which emits them
+// as raw HTML ahead of the gallery <img>s.
+function listingPreloads(
+  hero: string | undefined,
+  thumbs: string[]
+): PreloadItem[] {
+  const items: PreloadItem[] = [];
+  if (hero) items.push({ href: hero, fetchPriority: 'high' });
+  for (const t of thumbs.slice(0, 3)) {
+    if (t) items.push({ href: t, fetchPriority: 'low' });
+  }
+  return items;
+}
 
 async function _getListing(id: string): Promise<ListingDetail | null> {
   'use cache';
@@ -408,28 +426,21 @@ async function ListingContent({
           dangerouslySetInnerHTML={{ __html: jsonLdScript }}
         />
       )}
-      {/* Round 149: preload the hero image for faster LCP on weak connections.
-          The URL is known at SSR time; the browser starts fetching immediately. */}
-      {photos[0] && (
-        <link rel="preload" as="image" href={photos[0]} fetchPriority="high" />
-      )}
-      {/* Round 159: preload the first strip thumbnails (thumbs[0..2]) with low
-          priority so they start fetching at HTML parse time — before React
-          hydration — instead of waiting for the client strip render. The hero
-          keeps high priority and always wins the bandwidth race. Only the
-          first 3 are preloaded: the rest load via the strip's eager imgs and
-          the LIS-10 idle prewarm. */}
-      {thumbs.slice(0, 3).map((t, i) =>
-        t ? (
-          <link
-            key={`thumb-preload-${i}`}
-            rel="preload"
-            as="image"
-            href={t}
-            fetchPriority="low"
-          />
-        ) : null
-      )}
+      {/* Round 149 (hero) + Round 159 (strip thumbs[0..2]): image preloads.
+          Round 16 T12: emitted as RAW HTML via <PreloadLinks> (see
+          components/preload-links.ts) instead of JSX <link> tags in the
+          body — T10 measured the JSX tags flushing late in <body>, AFTER
+          the images they were meant to accelerate (React 19 hoists body
+          <link> resources late in the stream), and ReactDOM.preload() is
+          a silent no-op under this repo's Turbopack + cacheComponents +
+          PPR setup. Raw HTML cannot be reordered: the tags land exactly
+          here, ahead of the gallery <img>s. Priorities preserved from the
+          original design: the hero keeps high priority and always wins
+          the bandwidth race; the thumbs preload low at parse time and
+          the strip's eager imgs (Gallery.tsx) raise them to high at
+          hydration. Only the first 3 thumbs: the rest load via the
+          strip's eager imgs and the LIS-10 idle prewarm. */}
+      <PreloadLinks items={listingPreloads(photos[0], thumbs)} />
       {/* Gallery — clickable thumbnails + fullscreen lightbox
           (client component; mirrors js/listing.js LIS-8 gallery,
           LIS-9 progressive hero, LIS-10 idle prewarm). */}

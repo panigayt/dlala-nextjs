@@ -10,7 +10,10 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import type { SellerRating } from '@/lib/firestore';
 import { useLang } from '@/lib/i18n';
-import { getFirebaseBundled } from '@/lib/firebase';
+// Round 16 T2: getFirebaseCdn — the single shared Auth instance (same one
+// the drawer observes). auth.currentUser reads must not go through the
+// legacy bundled instance.
+import { getFirebaseCdn } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 
 export default function RatingsList({
@@ -35,7 +38,7 @@ export default function RatingsList({
   useEffect(() => {
     let mounted = true;
     // Lazy-load the Firebase SDK — keeps it off the initial page chunk.
-    getFirebaseBundled()
+    getFirebaseCdn()
       .then(({ auth }) => {
       const user = auth.currentUser;
       if (mounted) setCurrentUid(user ? user.uid : null);
@@ -53,7 +56,7 @@ export default function RatingsList({
     setReporting(rating.id);
     try {
       // Lazy-load the Firebase SDK — keeps it off the initial page chunk.
-      const { db, fsMod, auth } = await getFirebaseBundled();
+      const { db, fsMod, auth } = await getFirebaseCdn();
       // Use the existing /reports collection (targetType='review').
       // Rules: only the reviewed user may report; shape validated server-side.
       // 11 Oct 2026: deterministic ID — prevents duplicate reports on retry/reload.

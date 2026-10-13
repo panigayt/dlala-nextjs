@@ -3,10 +3,13 @@
 // Dlala auth page — client component (interactive, no SSR needed).
 //
 // Uses the shared Firebase **modular** SDK loader (src/lib/firebase):
-// getFirebaseBundled() loads the npm modular SDK (auth + firestore) as an
-// async chunk inside auth handlers/effects only — zero bundle cost up front.
-// Persistence is browserLocalPersistence (set inside the module), so
-// sessions survive deploys.
+// getFirebaseCdn() loads the modular SDK (auth + firestore) as native ESM
+// from the gstatic CDN (webpackIgnore) inside auth handlers/effects only —
+// zero bundle cost up front. It is the SAME single Auth instance the drawer
+// (SiteChrome via useAuthState) observes (Round 16 T2: fixes the drawer
+// desync — the page used to sign in through a second, bundled Auth
+// instance the drawer never saw). Persistence is browserLocalPersistence
+// (set inside the module), so sessions survive deploys.
 //
 // Signup creates the account atomically (js/auth.js parity):
 //  1. Username registry pre-check BEFORE the Auth account is created
@@ -26,7 +29,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 // Lazy: the Firebase SDK is heavy — it is only loaded inside auth
-// handlers/effects via getFirebaseBundled(). The type imports below are
+// handlers/effects via getFirebaseCdn(). The type imports below are
 // erased at compile time.
 import type {
   CompatUser,
@@ -185,10 +188,10 @@ export default function AuthPage() {
     // Already signed in: verified users proceed to their return target,
     // unverified users land on the verification gate.
     let cancelled = false;
-    // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off the
+    // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off the
     // initial page chunk.
     import('@/lib/firebase')
-      .then(({ getFirebaseBundled }) => getFirebaseBundled())
+      .then(({ getFirebaseCdn }) => getFirebaseCdn())
       .then(({ auth, authMod }) => {
         if (cancelled) return;
         unsubRef.current = authMod.onAuthStateChanged(auth, (u) => {
@@ -247,10 +250,10 @@ export default function AuthPage() {
     }
     setLoading(true);
     try {
-      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off
       // the initial page chunk.
-      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
-      const fc = await getFirebaseBundled();
+      const { getFirebaseCdn, withAuthRetry } = await import('@/lib/firebase');
+      const fc = await getFirebaseCdn();
       const { auth, authMod, db, fsMod } = fc;
       const cred = await withAuthRetry(() => authMod.signInWithEmailAndPassword(auth, em, password));
       // M3: sign-in success is determined by the sign-in result itself.
@@ -353,10 +356,10 @@ export default function AuthPage() {
     setLoading(true);
     let fc: FirebaseClient | null = null;
     try {
-      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off the
+      // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off the
       // initial page chunk.
-      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
-      fc = await getFirebaseBundled();
+      const { getFirebaseCdn, withAuthRetry } = await import('@/lib/firebase');
+      fc = await getFirebaseCdn();
       const { auth, authMod, db, fsMod } = fc;
       // SECURITY (15 Sep 2026): block disposable/temporary email domains.
       // js/auth.js parity — checked after the SDK loads, before the username
@@ -479,9 +482,9 @@ export default function AuthPage() {
         // still in flight; hold the verify gate until it settles.
         provisioningInFlight.current = true;
         try {
-          // Lazy-load the Firebase SDK (bundled async chunk).
-          const { getFirebaseBundled } = await import('@/lib/firebase');
-          const fcL9 = fc ?? (await getFirebaseBundled());
+          // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes).
+          const { getFirebaseCdn } = await import('@/lib/firebase');
+          const fcL9 = fc ?? (await getFirebaseCdn());
           const signInCred = await withTimeout(
             fcL9.authMod.signInWithEmailAndPassword(fcL9.auth, em, password)
           );
@@ -535,10 +538,10 @@ export default function AuthPage() {
     }
     setLoading(true);
     try {
-      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off
       // the initial page chunk.
-      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
-      const { auth, authMod } = await getFirebaseBundled();
+      const { getFirebaseCdn, withAuthRetry } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseCdn();
       await withAuthRetry(() => authMod.sendPasswordResetEmail(auth, em));
       if (mounted.current) {
         setOkMsg(t('resetLinkSent'));
@@ -559,10 +562,10 @@ export default function AuthPage() {
     setOkMsg(null);
     setLoading(true);
     try {
-      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off
       // the initial page chunk.
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { auth, authMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseCdn();
       const u = auth.currentUser;
       if (!u) {
         if (mounted.current) {
@@ -606,10 +609,10 @@ export default function AuthPage() {
     setOkMsg(null);
     setLoading(true);
     try {
-      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off
+      // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off
       // the initial page chunk.
-      const { getFirebaseBundled, withAuthRetry } = await import('@/lib/firebase');
-      const { auth, authMod } = await getFirebaseBundled();
+      const { getFirebaseCdn, withAuthRetry } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseCdn();
       const u = auth.currentUser;
       if (!u) {
         if (mounted.current) {
@@ -634,10 +637,10 @@ export default function AuthPage() {
 
   async function handleVerifyLogout() {
     try {
-      // Lazy-load the Firebase SDK (bundled async chunk) — keeps it off the
+      // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off the
       // initial page chunk.
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { auth, authMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { auth, authMod } = await getFirebaseCdn();
       await authMod.signOut(auth);
     } catch (e) {
       // A failed sign-out must surface in the VISIBLE mode (verify), never

@@ -38,9 +38,12 @@ export default function AuthGate({ children }: AuthGateProps) {
     (async () => {
       let loadTimer: ReturnType<typeof setTimeout> | null = null;
       try {
-        // Lazy-load the Firebase modular SDK (bundled async chunk) —
-        // keeps it off the initial page chunk.
-        const { getFirebaseBundled } = await import('@/lib/firebase');
+        // Lazy-load the Firebase modular SDK (gstatic CDN path, 0 bundle
+        // bytes) — keeps it off the initial page chunk. Round 16 T2: this
+        // is the same single Auth instance the drawer (SiteChrome) and the
+        // /auth page use — auth state is observed and mutated in exactly
+        // one place.
+        const { getFirebaseCdn } = await import('@/lib/firebase');
         // BUG #3 (T4/20, 12 Oct 2026): the old code raced the Firebase chunk
         // load against a 12s deadline and ABANDONED the promise on timeout, so
         // a slow/flaky network left the guest stuck on the error screen
@@ -49,7 +52,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         // the chunks keep loading in the background. The auth subscription is
         // established exactly once, no matter how long the chunks take, and
         // when auth state resolves it clears any timeout/load-error UI.
-        const clientP = getFirebaseBundled();
+        const clientP = getFirebaseCdn();
         // 12s UI deadline — shows «مشكلة في الاتصال» + retry while we keep
         // waiting for the chunks (manual retry = reload, same as before).
         loadTimer = setTimeout(() => {
@@ -92,7 +95,7 @@ export default function AuthGate({ children }: AuthGateProps) {
       } catch {
         if (loadTimer) clearTimeout(loadTimer);
         // Genuine load failure (chunks errored, not merely slow) — retry UI,
-        // same as before. getFirebaseBundled() resets its cached promise on
+        // same as before. getFirebaseCdn() resets its cached promise on
         // failure, so manual retry reloads the chunks fresh.
         if (mounted.current && !cancelled) setLoadError(true);
       }

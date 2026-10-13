@@ -62,7 +62,11 @@ import type { FirebaseStorage, StorageReference } from 'firebase/storage';
 
 export const FIREBASE_CONFIG = {
   // Production key from dlala-040/js/config.js (0.0.0.39).
-  apiKey: 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg',
+  // Round 16 T6: env-first. Vercel env NEXT_PUBLIC_FIREBASE_API_KEY is the
+  // deploy source of truth; the hardcoded fallback is the production key
+  // from dlala-040/js/config.js (0.0.0.39), verified accepted by Identity
+  // Toolkit 13 Oct 2026.
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyCcW4X5IvCTi5ujyaBzQl7aJVeYd-A5mcg',
   authDomain: 'dlala-85cea.firebaseapp.com',
   projectId: 'dlala-85cea',
   storageBucket: 'dlala-85cea.firebasestorage.app',

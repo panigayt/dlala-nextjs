@@ -107,6 +107,9 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   const prevFocus = useRef<Element | null>(null);
   const toastTimer = useRef<number | null>(null);
   const mounted = useRef(true);
+  // Latest signed-in uid, updated in an effect — guards the delayed
+  // profile auto-retry against a sign-out/sign-in change mid-wait.
+  const latestUid = useRef<string | null>(null);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
@@ -115,6 +118,10 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   const signedIn = auth.status === 'signed-in';
   const user: CompatUser | null = signedIn ? auth.user : null;
   const client: FirebaseClient | null = signedIn ? auth.client : null;
+
+  useEffect(() => {
+    latestUid.current = signedIn && user ? user.uid : null;
+  }, [signedIn, user]);
 
   // Referral capture: ?ref=CODE -> localStorage (js/app.js renderChrome parity).
   useEffect(() => {
@@ -147,7 +154,13 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   // P1-5 REST approach replaced here by the SDK read — Round 12: modular).
   // Async: state is only set in async continuations (after await) —
   // no synchronous setState in the effect body (cascading-render safe).
-  const loadProfileAsync = useCallback(async () => {
+  // Round 16 (post-signup commit race): onAuthStateChanged fires
+  // synchronously inside createUserWithEmailAndPassword, BEFORE signup's
+  // ensureUserDoc batch commits — the first getDoc can miss a doc that
+  // lands <2s later. A miss therefore retries ONCE after ~2s before
+  // latching 'error'. Genuine misses (long-deleted docs etc.) still latch
+  // error after the single bounded retry.
+  const loadProfileAsync = useCallback(async (attempt = 0) => {
     if (!user || !client) return;
     const uid = user.uid;
     setProfileState('loading');
@@ -158,9 +171,16 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       if (snap.exists()) {
         setProfile((snap.data() || {}) as ProfileData);
         setProfileState('ready');
-      } else {
-        setProfileState('error');
+        return;
       }
+      if (attempt < 1) {
+        // Bounded auto-retry for the post-signup commit race.
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!mounted.current || latestUid.current !== uid) return;
+        await loadProfileAsync(attempt + 1);
+        return;
+      }
+      setProfileState('error');
     } catch {
       if (mounted.current) setProfileState('error');
     }
