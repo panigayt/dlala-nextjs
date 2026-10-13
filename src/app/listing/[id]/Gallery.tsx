@@ -188,6 +188,30 @@ export default function Gallery({
   // component's own probe chain (the Speed-29 delegated handler only
   // claims .img-blurup, which the hero never gets).
   const selClamped = all.length ? Math.max(0, Math.min(sel, all.length - 1)) : 0;
+
+  // Round 21 (0.0.0.39 parity): preload the next 2 strip thumbnails via
+  // new Image(), like production's preloadRemainingPhotos(). This makes
+  // strip #2 instant — it's a new download (not cached from feed), so the
+  // HTML img tag alone isn't enough on slow connections.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const conn = (navigator as any).connection || {};
+      if (conn.saveData) return;
+      const eff = String(conn.effectiveType || '');
+      if (eff === '2g' || eff === 'slow-2g') return;
+      for (let k = 1; k <= 2; k++) {
+        const idx = selClamped + k;
+        if (idx >= all.length) break;
+        const url = thumbs[idx] || all[idx];
+        if (url) {
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = url;
+        }
+      }
+    } catch {}
+  }, [selClamped, all, thumbs]);
   const instantSrc =
     selClamped === 0 && heroLqip
       ? heroLqip
