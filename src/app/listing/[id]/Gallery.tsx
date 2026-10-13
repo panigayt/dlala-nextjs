@@ -443,16 +443,13 @@ export default function Gallery({
                 (i === sel ? 'ring-2 ring-emerald-700' : 'opacity-70 hover:opacity-100')
               }
             >
-              {/* Round 21 (Zak video evidence 13 Oct): 0.0.0.39 renders strip
-                  thumbs as plain <img> and works on all listings; the preview's
-                  SafeImg (key remounts + fallback chain) leaves strip #2 blank
-                  on Safari. Using plain img like production. */}
+              {/* Round 21 (Zak: preview slow on ALL listings, 0.0.0.39 fine):
+                  making strip EXACTLY like production — plain img, no
+                  loading/fetchPriority/decoding hints. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={thumbs[i] || p}
                 alt=""
-                loading={i < 3 ? "eager" : "lazy"}
-                fetchPriority={i < 3 ? "high" : "low"}
                 className="w-20 h-20 object-cover"
               />
             </button>
