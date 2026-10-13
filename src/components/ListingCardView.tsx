@@ -29,6 +29,20 @@ function wilayaName(code: number | undefined, lang: Lang): string {
 function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?: boolean; priority?: boolean; gold?: boolean }) {
   const { t, lang } = useLang();
   const img = cardImage(l);
+  // Round 21 (archive 24 Sep 2026): the 2nd thumbnail URL is COLD — warm it
+  // ON TAP (pointerdown fires before navigation). Preloading in the listing
+  // page's useEffect is too late (after hydration). This matches 0.0.0.39's
+  // preloadRemainingPhotos() behavior.
+  const warmSecondThumb = () => {
+    try {
+      const t2 = (l.photo_thumbs && l.photo_thumbs[1]) || (l.thumbUrls && l.thumbUrls[1]) || (l.photoUrls && l.photoUrls[1]);
+      if (t2) {
+        const im = new Image();
+        im.decoding = 'async';
+        im.src = t2;
+      }
+    } catch {}
+  };
   const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
   const jobType = (l.answers && typeof l.answers.jobType === 'string' && l.answers.jobType) || '';
   const isSeeker = jobType === 'jobSeeker';
@@ -47,6 +61,7 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
     <a
       href={`/listing/${l.id}`}
       data-sid={l.sellerId || ''}
+      onPointerDown={warmSecondThumb}
       className={`block relative rounded-xl bg-white border overflow-hidden hover:shadow-md transition-shadow ${gold ? 'border-amber-400' : 'border-[#e5e7eb]'}`}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
