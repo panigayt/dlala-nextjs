@@ -114,9 +114,13 @@ async function SearchLoader({
   // so manual preload hints for those 4 are redundant. Only the below-fold
   // thumbs (cards 5-6, genuinely lazy) keep manual hints: first-card render
   // median -464ms vs the 6-hint config, FCP -52ms, 6-thumb completion tied.
+  // Round 20 T11: SECOND band — cards 7-12 at fetchpriority="low" (home
+  // page parity): pre-warms just-below-fold rows without contending with
+  // the critical band on weak networks.
   return (
     <>
       <FeedPreloadHints cards={data ? data.listings.slice(4, 6) : []} />
+      <FeedPreloadHints cards={data ? data.listings.slice(6, 12) : []} priority="low" />
       <SearchPage
         key={filtersToQuery(filters)}
         filters={filters}

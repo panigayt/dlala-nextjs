@@ -99,7 +99,19 @@ export default async function Home() {
   // the card <img>s. Same card order the grid renders.
   return (
     <>
-      <FeedPreloadHints cards={feed ? feed.cards : []} />
+      {/* Round 20 T4: hint only cards 5-6. The first 4 cards render
+          loading="eager" (HomePage) so React 19's Fizz renderer already
+          auto-emits <link rel="preload" as="image"> for them — manual hints
+          over the full list produced 4 byte-duplicate preload pairs
+          (Round 19). Same treatment the search page got (slice(4, 6),
+          Round 17 T2-retry). Cards 1-4 keep their Fizz auto-preloads, so
+          all 6 first thumbnails remain hinted. */}
+      <FeedPreloadHints cards={feed ? feed.cards.slice(4, 6) : []} />
+      {/* Round 20 T11: SECOND band — cards 7-12 (slice(6, 12)) at
+          fetchpriority="low". Pre-warms the just-below-fold rows without
+          contending with the critical band (Fizz-auto 0-3 + high 4-5)
+          on weak networks. NOT all 24 — the critical band keeps priority. */}
+      <FeedPreloadHints cards={feed ? feed.cards.slice(6, 12) : []} priority="low" />
       <HomePage feed={feed} error={error} />
     </>
   );

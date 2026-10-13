@@ -42,7 +42,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https://dzdlala.com https://img.dzdlala.com https://*.r2.dev https://firebasestorage.googleapis.com https://*.googleapis.com",
               "connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.r2.dev https://*.r2.cloudflarestorage.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
               "font-src 'self' data:",
-              "frame-src 'self'",
+              "frame-src 'self' https://dlala-85cea.firebaseapp.com", // 13 Oct 2026: allow Firebase Auth iframe (preventive; blocks popup/redirect flows otherwise).
               "frame-ancestors 'self'",
               "object-src 'none'",
               "base-uri 'self'",

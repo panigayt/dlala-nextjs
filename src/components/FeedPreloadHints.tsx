@@ -23,18 +23,33 @@
 // critical resources on weak networks.
 //
 // Used by: src/app/page.tsx (home) and src/app/search/page.tsx (search).
+//
+// Round 20 T11: a SECOND band — cards 6-11 (slice(6, 12)) emitted at
+// fetchpriority="low". T6-T10 proved 100% of home card thumbnail dispatches
+// are initiator=parser and that preload(high) hints override loading="lazy"
+// deferral (cards 4-5 dispatch in the parse-time wave); the dominant cost is
+// download duration under contention. The low band pre-warms the
+// just-below-fold rows without contending with the 6 critical above-fold
+// thumbs (Fizz-auto 0-3 + manual high 4-5). NEVER preload all 24: on weak
+// networks that starves the critical band.
 
 import { cardImage, type ListingCard } from '@/lib/firestore';
 import PreloadLinks, { type PreloadItem } from './PreloadLinks';
 
 const MAX_HINTS = 6;
 
-export default function FeedPreloadHints({ cards }: { cards: ListingCard[] }) {
+export default function FeedPreloadHints({
+  cards,
+  priority = 'high',
+}: {
+  cards: ListingCard[];
+  priority?: PreloadItem['fetchPriority'];
+}) {
   const items: PreloadItem[] = [];
   for (const c of cards) {
     const u = cardImage(c);
     if (u && !items.some((it) => it.href === u)) {
-      items.push({ href: u, fetchPriority: 'high' });
+      items.push({ href: u, fetchPriority: priority });
     }
     if (items.length >= MAX_HINTS) break;
   }

@@ -170,6 +170,9 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
         src={rewriteDefaultImg(img || '')}
         alt={alt}
         loading={eager ? 'eager' : 'lazy'}
+        // Round 20 T11: eager cards carry fetchpriority="high" (same as the
+        // LQIP branch) so the Fizz-auto preloads inherit the priority.
+        {...(eager ? { fetchpriority: 'high' } : {})}
         decoding="async"
         className={className}
         onError={() => setBroken(true)}
@@ -223,7 +226,11 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
       className={className ? `img-blurup ${className}` : 'img-blurup'}
       data-hi={hi}
       data-noretry="1"
-      {...(priority ? { 'data-prio': 'high', fetchpriority: 'high' } : {})}
+      {...(priority ? { 'data-prio': 'high' } : {})}
+      // Round 20 T11: the 4 eager card <img>s (cards 0-3, loading="eager")
+      // carry fetchpriority="high" so React 19's Fizz-auto preloads inherit
+      // the priority. data-prio stays first-card-only for the hi-res upgrade.
+      {...(priority || eager ? { fetchpriority: 'high' } : {})}
       loading={eager ? 'eager' : 'lazy'}
       decoding="async"
     />
