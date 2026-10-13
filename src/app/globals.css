@@ -186,3 +186,15 @@ body {
 }
 .bh-follow-btn:hover { background: #095c43; }
 .bh-follow-btn.on { background: #e7f2ec; color: #0b6b4f; border: 1px solid #0b6b4f; }
+/* Production .detail .seller-card .follow-btn (style-listing.css) — compact pill
+   on the listing-page seller card (NOT the full-width hero button above). */
+.listing-follow-btn {
+  flex: 0 0 auto; margin-inline-start: auto;
+  background: #0b6b4f; color: #fff; border: none;
+  padding: 6px 12px; border-radius: 20px;
+  font-weight: 700; font-size: 12px; cursor: pointer;
+  white-space: nowrap; min-height: 44px;
+  transition: background-color .15s;
+}
+.listing-follow-btn:hover { background: #095c43; }
+.listing-follow-btn.on { background: #e7f2ec; color: #0b6b4f; border: 1px solid #0b6b4f; }

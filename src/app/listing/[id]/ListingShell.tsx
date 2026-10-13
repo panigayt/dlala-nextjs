@@ -192,8 +192,8 @@ export function SellerCardBody({
             )}
           </span>
         </div>
-        <div className="shrink-0 min-w-[120px]">
-          <FollowButton storeUid={sellerId} />
+        <div className="shrink-0">
+          <FollowButton storeUid={sellerId} className="listing-follow-btn" />
         </div>
       </div>
       {ratingRow && <p className="mt-1 text-sm text-zinc-500">{ratingRow}</p>}
