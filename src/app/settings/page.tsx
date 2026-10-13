@@ -81,8 +81,8 @@ function SettingsContent({ user }: { user: CompatUser }) {
   // ---- Blocked users -------------------------------------------------------
   const loadBlocked = useCallback(async () => {
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       const snap = await withTimeout(
         fsMod.getDocs(fsMod.query(fsMod.collection(db, 'blocks'), fsMod.where('blockerUid', '==', user.uid))),
         20000
@@ -196,8 +196,8 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setReportErr(null);
     setReportBusy(true);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       const ref = fsMod.doc(fsMod.collection(db, 'users', user.uid, 'tickets'));
       await withTimeout(
         fsMod.setDoc(ref, {
@@ -240,8 +240,8 @@ function SettingsContent({ user }: { user: CompatUser }) {
     setDeleteErr(null);
     setDeleteBusy(true);
     try {
-      const { getFirebaseBundled, getFirebaseCdn } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       // Round 16 T2: auth ops (re-auth, deleteUser, signOut) go through the
       // single shared (CDN) Auth instance — the same one the drawer
       // observes — so sign-out here updates the drawer immediately.
