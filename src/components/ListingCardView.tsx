@@ -35,6 +35,12 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
   // preloadRemainingPhotos() behavior.
   const warmSecondThumb = () => {
     try {
+      // 0.0.0.39 parity: skip on data-saver / 2g (bandwidth contention
+      // would slow the navigation on very weak connections).
+      const conn = (navigator as any).connection || {};
+      if (conn.saveData) return;
+      const eff = String(conn.effectiveType || '');
+      if (eff === '2g' || eff === 'slow-2g') return;
       const t2 = (l.photo_thumbs && l.photo_thumbs[1]) || (l.thumbUrls && l.thumbUrls[1]) || (l.photoUrls && l.photoUrls[1]);
       if (t2) {
         const im = new Image();

@@ -81,7 +81,23 @@ function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: str
 // Mirrors js/auth.js ensureUserDoc() — rules-compliant create with every
 // required field (termsAcceptedAt = one-time acceptance, legal evidence).
 async function ensureUserDoc(fc: FirebaseClient, uid: string, name: string, username: string): Promise<void> {
-  const { db, fsMod } = fc;
+  const { db, fsMod, auth, authMod } = fc;
+  // Round 22 T6 — root cause of the fresh-signup "Missing or insufficient
+  // permissions" failures (Round 21 T14, reproduced 2/2). The Firestore
+  // client's Auth credential can lag behind a resolved
+  // createUserWithEmailAndPassword — the ID token is not yet issued /
+  // attached to the Firestore channel, so the batch commits with
+  // request.auth == null and the create rules (isOwner(uid),
+  // request.resource.data.userId == request.auth.uid) deny it. Forcing a
+  // fresh ID token here guarantees the read and the batch both carry the
+  // caller's identity before anything commits. Non-fatal on failure: the
+  // P2 login heal recreates the doc on the next sign-in.
+  try {
+    const u = auth.currentUser;
+    if (u && u.uid === uid) await withTimeout(authMod.getIdToken(u, true), 15000);
+  } catch (e) {
+    console.error('ensureUserDoc token refresh failed (non-fatal):', e);
+  }
   const snap = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users/' + uid)));
   if (snap.exists()) return;
   const batch = fsMod.writeBatch(db);
