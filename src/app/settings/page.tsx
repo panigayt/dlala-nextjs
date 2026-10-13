@@ -340,7 +340,14 @@ function SettingsContent({ user }: { user: CompatUser }) {
           router.push(authLoginHref(window.location.pathname, window.location.search));
           return;
         }
-        throw de;
+        // R22 T7: the Cloud Function (authoritative finisher) races this
+        // call — when it wins, the Auth account is already gone and
+        // deleteUser fails with auth/user-not-found. That is SUCCESS (the
+        // account is deleted), not a failure: fall through to sign-out and
+        // the / redirect below. Mirrors the function's own step-7 handling
+        // ("already gone"). Without this, the user saw a false
+        // "deletionFailed" error for a completed deletion.
+        if (dc !== 'auth/user-not-found') throw de;
       }
       try {
         await authMod.signOut(auth);

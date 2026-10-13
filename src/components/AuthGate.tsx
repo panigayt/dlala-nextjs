@@ -61,6 +61,20 @@ export default function AuthGate({ children }: AuthGateProps) {
         const client = await clientP;
         if (loadTimer) clearTimeout(loadTimer);
         if (cancelled || !mounted.current) return;
+        // R22 T7: wait for the initial auth state to settle before
+        // subscribing. On a fresh page load onAuthStateChanged can fire a
+        // transient null before the persisted session restores — treating
+        // that first null as "signed out" wrongly bounced valid sessions
+        // to /auth (reproduced 3/3 on /settings: bounce at ~8s with the
+        // localStorage session intact throughout). authStateReady resolves
+        // once the SDK knows the real initial state, so a genuine
+        // signed-out user still redirects normally below.
+        try {
+          await client.auth.authStateReady();
+        } catch {
+          // non-fatal: fall through to the subscription below
+        }
+        if (cancelled || !mounted.current) return;
         unsubRef.current = client.authMod.onAuthStateChanged(client.auth, (u) => {
           if (!mounted.current || cancelled) return;
           authResolved = true;
