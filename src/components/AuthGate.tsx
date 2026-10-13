@@ -26,6 +26,7 @@ export default function AuthGate({ children }: AuthGateProps) {
   const [loadError, setLoadError] = useState(false);
   const mounted = useRef(true);
   const unsubRef = useRef<(() => void) | null>(null);
+  const nullTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -61,19 +62,14 @@ export default function AuthGate({ children }: AuthGateProps) {
         const client = await clientP;
         if (loadTimer) clearTimeout(loadTimer);
         if (cancelled || !mounted.current) return;
-        // R22 T7: wait for the initial auth state to settle before
-        // subscribing. On a fresh page load onAuthStateChanged can fire a
-        // transient null before the persisted session restores — treating
-        // that first null as "signed out" wrongly bounced valid sessions
-        // to /auth (reproduced 3/3 on /settings: bounce at ~8s with the
-        // localStorage session intact throughout). authStateReady resolves
-        // once the SDK knows the real initial state, so a genuine
-        // signed-out user still redirects normally below.
-        try {
-          await client.auth.authStateReady();
-        } catch {
-          // non-fatal: fall through to the subscription below
-        }
+        // R24 T16: R22's authStateReady() fix was structurally ineffective —
+        // in firebase-auth@10.12.0 it resolves on the FIRST onAuthStateChanged
+        // event (the transient null itself), never waiting for the real
+        // session. Root fix: don't bounce on the first null. Wait 3s; if a
+        // user arrives, it's a session restore. If still null after 3s,
+        // it's a genuine signed-out.
+        let seenUser = false;
+        // nullTimer uses nullTimerRef (see above)
         if (cancelled || !mounted.current) return;
         unsubRef.current = client.authMod.onAuthStateChanged(client.auth, (u) => {
           if (!mounted.current || cancelled) return;
@@ -90,13 +86,28 @@ export default function AuthGate({ children }: AuthGateProps) {
           setLoadError(false);
           setTimedOut(false);
           if (u) {
+            seenUser = true;
+            if (nullTimerRef.current) {
+              clearTimeout(nullTimerRef.current);
+              nullTimerRef.current = null;
+            }
             setUser(u);
-          } else {
-            // Not signed in — bounce to /auth (requireAuth behavior).
-            // QA 16 Sep 2026 #4 (js/app.js saveScrollForReturn parity): keep the
-            // scroll position across the /auth round-trip.
+          } else if (seenUser) {
+            // Was signed in, now null = genuine sign-out. Bounce immediately.
             saveScrollForReturn(window.location.pathname);
             router.push(authLoginHref(window.location.pathname, window.location.search));
+          } else {
+            // First null: might be transient (session restoring). Wait 3s.
+            // If a user arrives, the timer is cancelled above. If still null,
+            // it's a genuine signed-out — bounce then.
+            if (nullTimerRef.current) clearTimeout(nullTimerRef.current);
+            nullTimerRef.current = setTimeout(() => {
+              if (!mounted.current || cancelled) return;
+              if (!seenUser && !client.auth.currentUser) {
+                saveScrollForReturn(window.location.pathname);
+                router.push(authLoginHref(window.location.pathname, window.location.search));
+              }
+            }, 3000);
           }
         });
         // Safety: if onAuthStateChanged never fires within 12s of subscribing,
@@ -122,6 +133,10 @@ export default function AuthGate({ children }: AuthGateProps) {
       if (authTimer) {
         clearTimeout(authTimer);
         authTimer = null;
+      }
+      if (nullTimerRef.current) {
+        clearTimeout(nullTimerRef.current);
+        nullTimerRef.current = null;
       }
       if (unsubRef.current) {
         unsubRef.current();
