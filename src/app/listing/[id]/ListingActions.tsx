@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthState, getFirebaseBundled } from '@/lib/firebase';
+import { useAuthState, getFirebaseCdn } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
@@ -610,7 +610,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         // https:// URLs — the old refFromURL/ref-path branch guard collapses
         // into one call with identical semantics (delete per URL, ignore
         // missing objects, whole step non-fatal).
-        const { storage, storageMod } = await getFirebaseBundled();
+        const { storage, storageMod } = await getFirebaseCdn();
         await Promise.all(
           urls.map(async (u) => {
             try {

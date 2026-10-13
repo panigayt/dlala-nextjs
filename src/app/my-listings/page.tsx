@@ -11,13 +11,13 @@
 // - Email-verification banner for unverified users
 // - Empty state with "publish" CTA
 //
-// Round 12: Firebase compat SDK → modular (getFirebaseBundled path).
+// Round 12: Firebase compat SDK → modular (getFirebaseCdn path).
 
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebaseBundled, getFirebaseCdn, type CompatUser } from '@/lib/firebase';
+import { getFirebaseCdn, type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
@@ -98,9 +98,9 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      // Round 12: modular SDK via getFirebaseBundled (was dynamic
+      // Round 12: modular SDK via getFirebaseCdn (was dynamic
       // firebase-compat import). Loader stays at the usage site.
-      const { db, fsMod } = await getFirebaseBundled();
+      const { db, fsMod } = await getFirebaseCdn();
       const snap = await withTimeout(
         fsMod.getDocs(
           fsMod.query(
@@ -178,7 +178,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setConfirmSoldId(null);
       setActionBusy(id);
       try {
-        const { db, fsMod } = await getFirebaseBundled();
+        const { db, fsMod } = await getFirebaseCdn();
         // 12 Oct 2026: include updatedAt for sitemap/feed ordering.
         await withTimeout(fsMod.updateDoc(fsMod.doc(db, 'listings', id), {
           status: 'sold',
@@ -217,7 +217,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       setConfirmDeleteId(null);
       setActionBusy(id);
       try {
-        const { db, storage, fsMod, storageMod } = await getFirebaseBundled();
+        const { db, storage, fsMod, storageMod } = await getFirebaseCdn();
         // Verify ownership first (mirrors js/acct-common.js delAd).
         const listingRef = fsMod.doc(db, 'listings', id);
         const snap = await withTimeout(fsMod.getDoc(listingRef), 15000);
@@ -305,7 +305,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
     try {
       // Round 12: sendEmailVerification is a top-level modular function
       // (not a User method).
-      const { authMod } = await getFirebaseBundled();
+      const { authMod } = await getFirebaseCdn();
       await withTimeout(authMod.sendEmailVerification(user), 15000);
       // 12 Oct 2026: inline success (was window.alert).
       setError(null);
@@ -319,7 +319,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const iVerified = useCallback(async () => {
     try {
       // Round 12: reload is a top-level modular function (not a User method).
-      const { authMod } = await getFirebaseBundled();
+      const { authMod } = await getFirebaseCdn();
       await withTimeout(authMod.reload(user), 15000);
     } catch {
       // 12 Oct 2026: inline error (was window.alert).

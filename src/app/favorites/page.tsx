@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
 // 12 Oct 2026 (Round 12): migrated to the modular Firebase SDK
-// (@/lib/firebase; firebase-compat users → getFirebaseBundled()). The lazy
+// (@/lib/firebase; firebase-compat users → getFirebaseCdn()). The lazy
 // dynamic import('@/lib/firebase') at each usage site keeps the SDK off the
 // initial chunk (topology preserved). AuthGate still passes the old compat
 // user type, so the user prop takes the minimal structural shape both the
@@ -221,8 +221,8 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
     setError(null);
     cursorRef.current = null;
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       const q = fsMod.query(
         fsMod.collection(db, 'favorites', user.uid, 'items'),
         fsMod.orderBy('createdAt', 'desc'),
@@ -266,8 +266,8 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
     if (!cursorRef.current || loadingMore) return;
     setLoadingMore(true);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       // startAfter with the previous page's last DocumentSnapshot — modular
       // equivalent of the old compat .startAfter(docSnap): extracts the
       // orderBy field values from the snapshot (same subcollection, same
@@ -317,8 +317,8 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
     async (listingId: string) => {
       setRetrying(listingId);
       try {
-        const { getFirebaseBundled } = await import('@/lib/firebase');
-        const { db, fsMod } = await getFirebaseBundled();
+        const { getFirebaseCdn } = await import('@/lib/firebase');
+        const { db, fsMod } = await getFirebaseCdn();
         const l = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'listings/' + listingId)), 15000);
         if (!mounted.current) return;
         if (!l.exists()) {
@@ -351,8 +351,8 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
       setRemoving(listingId);
       setRemoveErr(null); // clear previous error on retry
       try {
-        const { getFirebaseBundled } = await import('@/lib/firebase');
-        const { db, fsMod } = await getFirebaseBundled();
+        const { getFirebaseCdn } = await import('@/lib/firebase');
+        const { db, fsMod } = await getFirebaseCdn();
         // 11 Oct 2026: atomic batch — prevents orphan listingFavoriters docs
         // (which caused phantom price-drop notifications).
         const batch = fsMod.writeBatch(db);

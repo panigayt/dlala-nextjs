@@ -13,14 +13,14 @@
 //   (per-user seen watermark in localStorage, stamped on profile open)
 // - Empty state with browse CTA
 //
-// Round 12: Firebase compat SDK → modular (getFirebaseBundled path).
+// Round 12: Firebase compat SDK → modular (getFirebaseCdn path).
 
 'use client';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AuthGate from '@/components/AuthGate';
-import { getFirebaseBundled, type FirebaseClient, type CompatUser } from '@/lib/firebase';
+import { getFirebaseCdn, type FirebaseClient, type CompatUser } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
@@ -177,9 +177,9 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      // Round 12: modular SDK via getFirebaseBundled (was dynamic
+      // Round 12: modular SDK via getFirebaseCdn (was dynamic
       // firebase-compat import). Loader stays at the usage site.
-      const client = await getFirebaseBundled();
+      const client = await getFirebaseCdn();
       const { db, fsMod } = client;
       const snap = await withTimeout(
         fsMod.getDocs(
@@ -278,7 +278,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
     async (storeId: string) => {
       setUnfollowing(storeId);
       try {
-        const { db, fsMod } = await getFirebaseBundled();
+        const { db, fsMod } = await getFirebaseCdn();
         // Find the follow doc(s) and delete them.
         const snap = await withTimeout(
           fsMod.getDocs(

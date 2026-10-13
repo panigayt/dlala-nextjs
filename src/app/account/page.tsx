@@ -149,8 +149,8 @@ function AccountContent({ user }: { user: CompatUser }) {
     }
     setLoadErr(null);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       const d = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users/' + user.uid)), 20000);
       if (!mounted.current) return;
       if (!d.exists()) {
@@ -207,8 +207,8 @@ function AccountContent({ user }: { user: CompatUser }) {
   const createProfile = useCallback(async () => {
     setProfBusy(true);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod } = await getFirebaseCdn();
       // Derive a unique username (mirrors js/app.js claimUniqueUsername).
       const base = (user.displayName || (user.email || '').split('@')[0] || 'user')
         .toLowerCase()
@@ -272,8 +272,8 @@ function AccountContent({ user }: { user: CompatUser }) {
     setProfOk(false);
     setProfBusy(true);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod, storage, storageMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod, storage, storageMod } = await getFirebaseCdn();
       const old = profData || {};
       const oldUsername = old.username || '';
       const oldPhotoPath = old.photoPath || '';
@@ -374,8 +374,8 @@ function AccountContent({ user }: { user: CompatUser }) {
       } catch {
         throw new Error('errorPhoto');
       }
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { storage, storageMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { storage, storageMod } = await getFirebaseCdn();
       const path = `profiles/${user.uid}/store-${kind}_${Date.now()}.jpg`;
       const snap = await withTimeout(storageMod.uploadBytes(storageMod.ref(storage, path), safe), 30000);
       return withTimeout(storageMod.getDownloadURL(snap.ref), 15000);
@@ -398,8 +398,8 @@ function AccountContent({ user }: { user: CompatUser }) {
     setStoreOk(false);
     setStoreBusy(true);
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { db, fsMod, storage, storageMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { db, fsMod, storage, storageMod } = await getFirebaseCdn();
       const old = profData || {};
       let coverUrl = old.storeCoverUrl || '';
       let logoUrl = old.storeLogoUrl || '';
@@ -497,8 +497,8 @@ function AccountContent({ user }: { user: CompatUser }) {
 
   const resendVerification = useCallback(async () => {
     try {
-      const { getFirebaseBundled } = await import('@/lib/firebase');
-      const { authMod } = await getFirebaseBundled();
+      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { authMod } = await getFirebaseCdn();
       await withTimeout(authMod.sendEmailVerification(user), 15000);
       // 12 Oct 2026: success uses resendOk (green), not profErr (red).
       // Separate from profOk to show correct "email sent" message.
@@ -510,8 +510,8 @@ function AccountContent({ user }: { user: CompatUser }) {
   }, [user, t]);
 
   const iVerified = useCallback(async () => {
-    const { getFirebaseBundled } = await import('@/lib/firebase');
-    const fb = await getFirebaseBundled().catch(() => null);
+    const { getFirebaseCdn } = await import('@/lib/firebase');
+    const fb = await getFirebaseCdn().catch(() => null);
     if (!fb) {
       setProfErr(t('authConnectionProblem'));
       return;
