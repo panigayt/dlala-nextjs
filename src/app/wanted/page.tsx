@@ -24,6 +24,21 @@ import {
 import WantedShell from './WantedShell';
 import type { WantedFilters } from './WantedFilterBar';
 import { getServerLang } from '@/lib/server-lang';
+import { SITE } from '@/lib/seo';
+import type { Metadata } from 'next';
+
+// 14 Oct 2026 audit R18: server-rendered SEO (was client-side document.title only).
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await getServerLang();
+  const title =
+    lang === 'fr' ? 'Recherches — DLALA' : lang === 'en' ? 'Wanted — DLALA' : 'مطلوب — دلالة';
+  const url = `${SITE}/wanted`;
+  return {
+    title,
+    alternates: { canonical: url },
+    openGraph: { title, url, type: 'website' },
+  };
+}
 
 const WANTED_LIMIT = 60;
 
