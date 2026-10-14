@@ -281,7 +281,9 @@ export function filterModelItems(
     const m = String(ans.model || '').toLowerCase();
     const wantB = modelInfo.brand.toLowerCase();
     const wantM = modelInfo.model.toLowerCase();
-    if (!b.includes(wantB) && !m.includes(wantM)) {
+    // 14 Oct 2026 audit R35: was && (brand OR model match) — included wrong
+    // models (e.g. Megane on Clio 4 page). Now requires BOTH brand AND model.
+    if (!b.includes(wantB) || !m.includes(wantM)) {
       // Fallback: check title
       const t = String(titleOf(f.title) || '').toLowerCase();
       if (!t.includes(wantB) || !t.includes(wantM)) continue;
