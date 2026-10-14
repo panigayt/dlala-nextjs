@@ -300,7 +300,7 @@ export function buildWilayaPage(
 ${hreflangs}
 <style>
 body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:16px;background:#f7f7f7;color:#1a1a1a;max-width:1100px;margin-inline:auto}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden}
 .card img{width:100%;height:160px;object-fit:cover;display:block;background:#eee}
 .card .cbody{padding:10px}
