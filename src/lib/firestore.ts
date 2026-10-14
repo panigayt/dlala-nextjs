@@ -82,6 +82,10 @@ export interface ListingCard {
   negotiable?: boolean;
   views?: number;
   photoVariants?: boolean;
+  // Round 62: canonical card image (trimFeedCard) — the single URL the card
+  // renders. Preferred by renderers; cardImage(l) stays the fallback for
+  // paths that still send the photo arrays (/api/feed, /api/search).
+  img?: string;
 }
 
 function restDocToObj(doc: { name: string; fields?: Record<string, unknown> }): ListingCard {
@@ -522,6 +526,56 @@ export function trimSimilarCard(l: ListingCard): ListingCard {
     thumbUrls: Array.isArray(l.thumbUrls) && l.thumbUrls[0] ? [l.thumbUrls[0]] : [],
     wilayaCode: l.wilayaCode,
     createdAt: l.createdAt,
+  };
+}
+
+// Round 62: trim the home-feed payload (the home path never got the Round 23
+// trimSimilarCard treatment). Measured 14 Oct 2026: each of the 24 feed
+// cards carried 3 image arrays — photo_thumbs byte-identical to thumbUrls
+// (24/24 cards) and photoUrls never consumed by the home renderer —
+// ~31KB of URL bytes per serialization copy. The canonical image is
+// resolved server-side ONCE via cardImage() (byte-identical to what every
+// card <img> renders today); the arrays are dropped.
+//
+// Kept verbatim — every field the home-feed consumers read:
+//   - ListingCardView: id, title, price, wilayaCode, createdAt, sellerId,
+//     status, isWanted, isWholesale, priceReduced, previousPrice,
+//     favoriteCount, categoryId, answers{jobType,salary}
+//   - client feed logic (taste ranking, follow boost, new-from-followed
+//     strip): categoryId, price, wilayaCode, sellerId, isWanted, createdAt
+//     — all in the set above.
+//   - BlurUpImage: photoVariants + photoUrls[0] — the w32 LQIP and the
+//     desktop w640 upgrade are DERIVED from photoUrls[0]; dropping it would
+//     change the rendered image (real visual regression for R11+ listings),
+//     so the single first element is kept, mirroring trimSimilarCard.
+//     photo_thumbs/thumbUrls are fully dropped (cardImage() is pre-resolved
+//     into `img`; no home-feed path reads them).
+// Applied to both `cards` and `wantedPool` in getFeed() (src/app/page.tsx).
+// /api/feed (load-more) and /api/search (filters) intentionally still send
+// the full arrays — renderers prefer l.img with cardImage(l) as fallback.
+export function trimFeedCard(l: ListingCard): ListingCard {
+  const a = (l.answers || {}) as Record<string, unknown>;
+  const answers: Record<string, unknown> = {};
+  if (typeof a.jobType === 'string') answers.jobType = a.jobType;
+  if (typeof a.salary === 'number') answers.salary = a.salary;
+  return {
+    id: l.id,
+    title: l.title,
+    price: l.price,
+    wilayaCode: l.wilayaCode,
+    createdAt: l.createdAt,
+    sellerId: l.sellerId,
+    status: l.status,
+    isWanted: l.isWanted,
+    isWholesale: l.isWholesale,
+    priceReduced: l.priceReduced,
+    previousPrice: l.previousPrice,
+    favoriteCount: l.favoriteCount,
+    categoryId: l.categoryId,
+    answers: l.answers ? answers : undefined,
+    photoUrls: Array.isArray(l.photoUrls) && l.photoUrls[0] ? [l.photoUrls[0]] : [],
+    photoVariants: !!l.photoVariants,
+    img: cardImage(l),
   };
 }
 

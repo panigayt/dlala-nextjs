@@ -50,6 +50,8 @@ interface ProcessedPhoto {
   w640: File | null; // W640 WebP hero variant
   w1024: File | null; // W1024 WebP hero variant
   lqip: File | null; // W32 LQIP blur-up placeholder
+  thumbIsMain: boolean; // R62 FIX 3: 320-variant skipped (canvas ≤320px — "no upscale"),
+  // so the already-uploaded main photo doubles as the thumb (zero extra bytes).
   hash: string; // perceptual aHash (16 hex chars)
   previewUrl: string; // blob URL for preview
 }
@@ -134,8 +136,17 @@ async function makeVariant(
   const blob = await new Promise<Blob | null>((res) =>
     c.toBlob(res, 'image/webp', q)
   );
-  if (!blob) return null;
-  return new File([blob], `${baseName}${suffix}.webp`, { type: 'image/webp' });
+  if (blob && blob.size)
+    return new File([blob], `${baseName}${suffix}.webp`, { type: 'image/webp' });
+  // R62 FIX 3: WebP encode unavailable (old browsers): JPEG fallback —
+  // mirrors encodePhoto in @/lib/stripExif. The upload loop keys the variant
+  // by the File's actual extension (like the main photo), and uploadToR2
+  // serves file.type as the content-type, so the .jpg serves correctly.
+  const jpeg = await new Promise<Blob | null>((res) =>
+    c.toBlob(res, 'image/jpeg', q)
+  );
+  if (!jpeg) return null;
+  return new File([jpeg], `${baseName}${suffix}.jpg`, { type: 'image/jpeg' });
 }
 
 async function processPhoto(file: File): Promise<ProcessedPhoto> {
@@ -157,6 +168,10 @@ async function processPhoto(file: File): Promise<ProcessedPhoto> {
   if (bitmap.close) bitmap.close();
 
   const baseName = (file.name || 'photo').replace(/\.\w+$/, '').slice(0, 40);
+  // R62 FIX 3: exact mirror of makeVariant's "no upscale" guard for width 320
+  // (scale = 320 / canvas.width >= 1). When true, the main photo is already
+  // ≤320px wide, so it doubles as the thumb in the upload loop.
+  const thumbIsMain = canvas.width <= 320;
   const thumb = await makeVariant(canvas, baseName, 320, '-thumb');
   const w640 = await makeVariant(canvas, baseName, 640, '-w640');
   const w1024 = await makeVariant(canvas, baseName, 1024, '-w1024');
@@ -174,6 +189,7 @@ async function processPhoto(file: File): Promise<ProcessedPhoto> {
     w640,
     w1024,
     lqip,
+    thumbIsMain,
     hash,
     previewUrl: URL.createObjectURL(main),
   };
@@ -908,17 +924,27 @@ function PublishForm({
       urls.push(publicUrl);
       hashes.push(p.hash || '');
       // Variants: w320 thumb (photo_thumbs content), w640/w1024 heroes, w32 LQIP.
+      // 14 Oct 2026 (R62 FIX 3): variant keys use the File's actual extension —
+      // makeVariant now emits .jpg when the browser has no WebP encoder.
+      const vext = (f: File) => f.name.match(/\.\w+$/)?.[0] || '.webp';
       let photoOk = true;
       if (p.thumb) {
-        const thumbUrl = await putWithRetry(p.thumb, r2KeyFor(uid, listingId, `w320_${ts}_${i}.webp`));
+        const thumbUrl = await putWithRetry(p.thumb, r2KeyFor(uid, listingId, `w320_${ts}_${i}${vext(p.thumb)}`));
         thumbs.push(thumbUrl);
         if (!thumbUrl) photoOk = false;
+      } else if (p.thumbIsMain) {
+        // Root cause of the webp-less "thumb" (R62 FIX 3): makeVariant returns
+        // null when the source is already ≤320px wide ("no upscale"), and R2
+        // has no server-side thumb generator to heal the null. The main photo
+        // IS correctly sized then, so it doubles as the thumb — zero extra
+        // bytes, zero extra uploads — instead of a permanent null.
+        thumbs.push(publicUrl);
       } else {
         thumbs.push(null);
       }
-      const w640Url = p.w640 ? await putWithRetry(p.w640, r2KeyFor(uid, listingId, `w640_${ts}_${i}.webp`)) : '';
-      const w1024Url = p.w1024 ? await putWithRetry(p.w1024, r2KeyFor(uid, listingId, `w1024_${ts}_${i}.webp`)) : '';
-      const w32Url = p.lqip ? await putWithRetry(p.lqip, r2KeyFor(uid, listingId, `w32_${ts}_${i}.webp`)) : '';
+      const w640Url = p.w640 ? await putWithRetry(p.w640, r2KeyFor(uid, listingId, `w640_${ts}_${i}${vext(p.w640)}`)) : '';
+      const w1024Url = p.w1024 ? await putWithRetry(p.w1024, r2KeyFor(uid, listingId, `w1024_${ts}_${i}${vext(p.w1024)}`)) : '';
+      const w32Url = p.lqip ? await putWithRetry(p.lqip, r2KeyFor(uid, listingId, `w32_${ts}_${i}${vext(p.lqip)}`)) : '';
       if (p.w640 && !w640Url) photoOk = false;
       if (p.w1024 && !w1024Url) photoOk = false;
       if (p.lqip && !w32Url) photoOk = false;

@@ -425,6 +425,7 @@ export default function Gallery({
             'w-full aspect-[4/3] object-cover g-hero' + (shownSharp ? '' : ' blurred')
           }
           tileClassName="w-full aspect-[4/3]"
+          loading="eager"
           fetchPriority="high"
           decoding="async"
         />

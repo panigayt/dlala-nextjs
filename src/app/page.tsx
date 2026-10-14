@@ -18,7 +18,7 @@
 
 import type { Metadata } from 'next';
 import { cacheLife } from 'next/cache';
-import { fetchFeed, fetchWanted, interleaveWanted, type ListingCard } from '@/lib/firestore';
+import { fetchFeed, fetchWanted, interleaveWanted, trimFeedCard, type ListingCard } from '@/lib/firestore';
 import { t } from '@/lib/i18n-strings';
 import { getServerLang } from '@/lib/server-lang';
 import HomePage, { type HomeFeedData } from '@/components/HomePage';
@@ -69,11 +69,15 @@ async function getFeed(): Promise<HomeFeedData> {
   ]);
   // Legacy splits the fetched docs (js/home.js: regular/wanted filters).
   const regular = docs.filter((d) => !d.isWanted);
-  const cards = interleaveWanted(regular, wantedPool);
+  // Round 62: trim the feed payload — resolve the canonical card image
+  // server-side once and drop the 3 photo arrays (see trimFeedCard).
+  // Applied to BOTH the interleaved cards and the wanted pool (the pool is
+  // serialized too and re-interleaved client-side on "load more").
+  const cards = interleaveWanted(regular, wantedPool).map(trimFeedCard);
   const wantedOffset = cards.filter((c) => c.isWanted).length;
   return {
     cards,
-    wantedPool,
+    wantedPool: wantedPool.map(trimFeedCard),
     regularOffset: PAGE_SIZE,
     wantedOffset,
     hasMore: docs.length >= PAGE_SIZE,

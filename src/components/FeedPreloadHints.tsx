@@ -16,11 +16,13 @@
 // served HTML). Raw HTML cannot be reordered: the bytes land exactly
 // where this component renders, which is BEFORE the card <img>s.
 //
-// URLs come from cardImage() — byte-identical to the src the card <img>
-// renders (ListingCardView / FeedWithLoadMore both use cardImage) — so the
-// preload is a cache hit, never a wasted fetch. Empties are skipped and
-// duplicate URLs collapsed. Hard cap of 6: more would contend with
-// critical resources on weak networks.
+// URLs come from the canonical card image — byte-identical to the src the
+// card <img> renders (ListingCardView / FeedWithLoadMore both render
+// l.img ?? cardImage(l)) — so the preload is a cache hit, never a wasted
+// fetch. l.img is set by trimFeedCard (home feed); cardImage(l) covers the
+// paths that still send the photo arrays (/api/feed load-more, /api/search
+// filters). Empties are skipped and duplicate URLs collapsed. Hard cap of 6:
+// more would contend with critical resources on weak networks.
 //
 // Used by: src/app/page.tsx (home) and src/app/search/page.tsx (search).
 //
@@ -47,7 +49,7 @@ export default function FeedPreloadHints({
 }) {
   const items: PreloadItem[] = [];
   for (const c of cards) {
-    const u = cardImage(c);
+    const u = c.img ?? cardImage(c);
     if (u && !items.some((it) => it.href === u)) {
       items.push({ href: u, fetchPriority: priority });
     }
