@@ -85,6 +85,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             DNS+TCP+TLS setup (saves ~200-500ms on mobile). */}
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
+        {/* 14 Oct 2026 (image-speed): preconnect to the R2 image host — every
+            feed card thumbnail is served from here and it was missing, so the
+            first image paid full DNS+TCP+TLS (~1-3 RTTs, ~1s on slow mobile).
+            Host derived from R2_PUBLIC_URL (no hardcode); skipped when unset. */}
+        {(() => {
+          try {
+            const base = process.env.R2_PUBLIC_URL || '';
+            const host = base ? new URL(base).host : '';
+            return host ? (
+              <link rel="preconnect" href={`https://${host}`} crossOrigin="anonymous" />
+            ) : null;
+          } catch {
+            return null;
+          }
+        })()}
       </head>
       <body className="min-h-screen antialiased">
         <SiteChrome>{children}</SiteChrome>

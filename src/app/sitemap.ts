@@ -8,6 +8,7 @@ import {
   qualifyingModelUrls,
   MIN_LISTINGS,
 } from '@/lib/model-pages';
+import { qualifyingWilayaUrls, WILAYA_MIN_LISTINGS } from '@/lib/wilaya-pages';
 
 const BASE = 'https://dzdlala.com';
 
@@ -102,7 +103,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // FIX-FN-018: /voitures/modeles/<slug> with >= MIN_LISTINGS live cars,
     // emitted weekly/0.7 like the production buildSitemapXml landing URLs).
     // Only the Arabic canonical path is advertised (production parity).
+    // Round 132: car-model SEO landing pages (production sitemap parity —
+    // FIX-FN-018: /voitures/modeles/<slug> with >= MIN_LISTINGS live cars,
+    // emitted weekly/0.7 like the production buildSitemapXml landing URLs).
+    // Only the Arabic canonical path is advertised (production parity).
+    // 14 Oct 2026: cars-per-wilaya SEO landing pages (/voitures/wilaya/<slug>,
+    // trilingual ar/fr/en, Arabic canonical). Same weekly/0.7 as the model
+    // pages; only wilayas with >= WILAYA_MIN_LISTINGS live cars qualify
+    // (thin-content guard parity). Only the Arabic canonical path is
+    // advertised (production parity with the model pages).
+    // NOTE: fetchAvailableCars is 'use cache' + cacheLife('hours'), so the
+    // single fetch below serves both computations.
     let modelUrls: MetadataRoute.Sitemap = [];
+    let wilayaUrls: MetadataRoute.Sitemap = [];
     try {
       const cars = await fetchAvailableCars();
       modelUrls = qualifyingModelUrls(cars, MIN_LISTINGS).map((path) => ({
@@ -110,10 +123,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         changeFrequency: 'weekly' as const,
         priority: 0.7,
       }));
+      wilayaUrls = qualifyingWilayaUrls(cars, WILAYA_MIN_LISTINGS).map((path) => ({
+        url: `${BASE}${path}`,
+        changeFrequency: 'weekly' as const,
+        priority: 0.7,
+      }));
     } catch {
-      // Firestore unreachable for the model counts — skip them
+      // Firestore unreachable for the counts — skip both
     }
-    return [...staticRoutes, ...listingUrls, ...modelUrls];
+    return [...staticRoutes, ...listingUrls, ...modelUrls, ...wilayaUrls];
   } catch {
     // Firestore unreachable — return static routes only
     return staticRoutes;
