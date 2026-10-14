@@ -91,7 +91,7 @@ export async function generateMetadata({
     };
   }
   const d = renderArticleData(slug, LANG);
-  if (!d) return {};
+  if (!d) notFound();
   return {
     title: d.title,
     description: d.description,
