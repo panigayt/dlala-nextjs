@@ -10,13 +10,17 @@ export function parseSearchFilters(
     const v = sp[k];
     return typeof v === 'string' ? v : '';
   };
+  // 14 Oct 2026 audit R16: accept common param aliases.
+  const sortRaw = get('sort');
+  const sort =
+    sortRaw === 'price-asc' ? 'priceAsc' : sortRaw === 'price-desc' ? 'priceDesc' : sortRaw || undefined;
   return {
     q: get('q') || undefined,
-    cat: get('cat') || undefined,
+    cat: get('cat') || get('category') || undefined,
     wilaya: get('wilaya') || undefined,
-    min: get('min') || undefined,
-    max: get('max') || undefined,
-    sort: get('sort') || undefined,
+    min: get('min') || get('priceMin') || undefined,
+    max: get('max') || get('priceMax') || undefined,
+    sort,
     fOs: get('fOs') || undefined,
     fBrand: get('fBrand') || undefined,
     fCarBrand: get('fCarBrand') || undefined,
