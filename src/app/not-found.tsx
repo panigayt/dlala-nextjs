@@ -11,6 +11,25 @@
 // the proxy HTML too, and vice versa.
 
 import Link from 'next/link';
+import type { Metadata } from 'next';
+
+// SEO: this boundary renders on a REAL HTTP 404. Next.js unconditionally
+// injects <meta name="robots" content="noindex"/> for it, but without an
+// explicit export the root layout's metadata is inherited verbatim —
+// `robots: {index:true, follow:true}` plus the homepage title/description/OG
+// would leak onto the 404 and conflict with the framework's noindex.
+// Restrictive-only metadata here: both tags say no-index/no-follow and the
+// inherited homepage metadata is gone.
+export const metadata: Metadata = {
+  title: 'صفحة غير موجودة | دلالة',
+  description:
+    "عذراً، هذه الصفحة غير موجودة. / Désolé, cette page n'existe pas. / Sorry, this page does not exist.",
+  robots: { index: false, follow: false },
+  openGraph: {
+    title: 'صفحة غير موجودة | دلالة',
+    description: 'عذراً، هذه الصفحة غير موجودة.',
+  },
+};
 
 export default function NotFound() {
   return (
