@@ -7,13 +7,14 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 // Round 12: firebase-client user → CDN path. The new useAuthState() loads
 // the modular SDK from gstatic lazily inside its effect — the dynamic
 // boundary holds: nothing Firebase-shaped enters the initial bundle.
 import { useAuthState, type CompatUser, type FirebaseClient } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
 import PlatformBanner from './PlatformBanner';
+import AuthLinks, { AuthLinksFallback } from './AuthLinks';
 
 // Version shown in the footer (legacy: APP_VERSION).
 const APP_VERSION = '0.1.0';
@@ -87,7 +88,6 @@ interface ProfileData {
 
 function ChromeInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/';
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { lang, setLang, t } = useLang();
   const auth = useAuthState();
@@ -387,13 +387,10 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
     );
   };
 
-  // NAV-4: login vs signup active state follows ?mode=signup. The login link
-  // carries ?return= so the user lands back where they came from (AUT-4).
-  const signupMode = searchParams.get('mode') === 'signup';
+  // NAV-4/AUT-4: login/signup links with ?mode=signup and ?return= are rendered
+  // by the isolated <AuthLinks> component (useSearchParams() must not run at
+  // the SiteChrome top level — it breaks static generation for /guides/*).
   const isAuthPage = activePage === 'auth';
-  const returnParam = !isAuthPage
-    ? '?return=' + encodeURIComponent(pathname + (searchParams.toString() ? '?' + searchParams.toString() : ''))
-    : '';
 
   const langButtons = () =>
     (['ar', 'fr', 'en'] as Lang[]).map((l) => (
@@ -450,22 +447,14 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   const drawerLinks = !user ? (
     <>
       {PUBLIC_ENTRIES.map((e) => navLink(e, closeDrawerInstant))}
-      <Link
-        href={'/auth' + returnParam}
-        className={!isAuthPage || signupMode ? '' : 'active'}
-        aria-current={!isAuthPage || signupMode ? undefined : 'page'}
-        onClick={closeDrawerInstant}
-      >
-        {t('login')}
-      </Link>
-      <Link
-        href="/auth?mode=signup"
-        className={signupMode ? 'active' : ''}
-        aria-current={signupMode ? 'page' : undefined}
-        onClick={closeDrawerInstant}
-      >
-        {t('signup')}
-      </Link>
+      <Suspense fallback={<AuthLinksFallback t={t} />}>
+        <AuthLinks
+          isAuthPage={isAuthPage}
+          pathname={pathname}
+          t={t}
+          onNavigate={closeDrawerInstant}
+        />
+      </Suspense>
     </>
   ) : (
     <>
@@ -529,22 +518,13 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
               </Link>
             ) : null}
             {!user ? (
-              <>
-                <Link
-                  href={'/auth' + returnParam}
-                  className={isAuthPage && !signupMode ? 'active' : ''}
-                  aria-current={isAuthPage && !signupMode ? 'page' : undefined}
-                >
-                  {t('login')}
-                </Link>
-                <Link
-                  href="/auth?mode=signup"
-                  className={isAuthPage && signupMode ? 'active' : ''}
-                  aria-current={isAuthPage && signupMode ? 'page' : undefined}
-                >
-                  {t('signup')}
-                </Link>
-              </>
+              <Suspense fallback={<AuthLinksFallback t={t} />}>
+                <AuthLinks
+                  isAuthPage={isAuthPage}
+                  pathname={pathname}
+                  t={t}
+                />
+              </Suspense>
             ) : null}
             {user ? (
               <Link
