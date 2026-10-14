@@ -52,11 +52,16 @@ const langListeners = new Set<() => void>();
 function readStoredLang(): Lang {
   if (typeof window === 'undefined') return 'ar';
   try {
-    const l = window.localStorage.getItem('dlala_lang');
-    if (l === 'fr' || l === 'en' || l === 'ar') return l;
-    // Round 133: cookie fallback (localStorage cleared/unavailable).
+    // 14 Oct 2026 (Zak ordered «اصلح»): cookie FIRST — matches the pre-paint
+    // script (cookie-first) and the server (which only sees the cookie).
+    // Previously localStorage-first here could flip the language AFTER
+    // hydration when the two disagreed (pre-paint had already applied the
+    // cookie language). The switcher writes both atomically, so this only
+    // matters in artificially constructed conflict states — now they agree.
     const m = document.cookie.match(/(?:^|;\s*)dlala_lang=(ar|fr|en)(?:;|$)/);
     if (m) return m[1] as Lang;
+    const l = window.localStorage.getItem('dlala_lang');
+    if (l === 'fr' || l === 'en' || l === 'ar') return l;
   } catch {
     // ignore — corrupted storage keeps the default
   }
