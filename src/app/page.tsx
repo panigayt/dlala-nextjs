@@ -35,13 +35,13 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description: desc,
     // 12 Oct 2026: canonical for SEO (was missing).
-    alternates: { canonical: 'https://dzdlala.com/' },
+    alternates: { canonical: 'https://www.dzdlala.com/' },
     openGraph: {
       title,
       description: desc,
       type: 'website',
-      url: 'https://dzdlala.com/',
-      images: [{ url: 'https://dzdlala.com/icon.png' }],
+      url: 'https://www.dzdlala.com/',
+      images: [{ url: 'https://www.dzdlala.com/icon.png' }],
     },
     twitter: {
       card: 'summary',

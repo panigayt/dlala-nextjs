@@ -21,7 +21,7 @@ import SwRegister from "@/components/SwRegister";
 // language-aware generateMetadata; the root default/template applies only
 // where children don't set one.
 export const metadata: Metadata = {
-  metadataBase: new URL("https://dzdlala.com"),
+  metadataBase: new URL("https://www.dzdlala.com"),
   title: {
     default: "دلالة — سوق الجزائر للإعلانات المبوبة",
     // Round 11 (12 Oct 2026): template is "%s" (no suffix) — every child
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   description:
     "موقع دلالة: إعلانات مبوبة مجانية في الجزائر — سيارات، عقارات، هواتف، والمزيد.",
   // Round 11 (12 Oct 2026): NO root canonical — a site-wide canonical of "/"
-  // would wrongly claim https://dzdlala.com/ as canonical for every page
+  // would wrongly claim https://www.dzdlala.com/ as canonical for every page
   // lacking its own (seller, privacy, terms, announcements…). Those pages
   // should set their own canonicals (follow-up); home/listing/guides/search
   // already do. No canonical is neutral; a wrong one is harmful.

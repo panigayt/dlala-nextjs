@@ -38,7 +38,7 @@ const TOGGLE_BLOCK_URL =
 
 // Canonical store share URL — verbatim js/market.js storeShareUrl.
 const storeShareUrl = (uid: string) =>
-  'https://dzdlala.com/seller.html?uid=' + encodeURIComponent(uid);
+  'https://www.dzdlala.com/seller.html?uid=' + encodeURIComponent(uid);
 
 // Icon-only store share button (0.0.0.39 .share-icon-btn parity, 0.0.0.1o):
 // Web Share API when available, else the WhatsApp / Facebook / copy-link

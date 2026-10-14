@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: { params: Promise<{ uid: stri
   if (!seller) return { title: 'DLALA', robots: { index: false, follow: false } };
   return {
     title: `DLALA — ${seller.name || 'Seller'}`,
-    alternates: { canonical: 'https://dzdlala.com/seller/' + encodeURIComponent(uid) },
+    alternates: { canonical: 'https://www.dzdlala.com/seller/' + encodeURIComponent(uid) },
   };
 }
 

@@ -285,7 +285,7 @@ async function ListingContent({
   // (dzdlala.com blocks hotlinking on the preview domain). Fixes existing
   // listings without Firestore updates.
   const rewriteDefaultImg = (u: string) =>
-    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
+    u.replace('https://www.dzdlala.com/img/default_ads/', '/img/default_ads/');
   const photos = (l.photoUrls && l.photoUrls.length ? l.photoUrls : []).map(rewriteDefaultImg);
   // 0.0.0.1s per-index thumbnail preference (js/app.js detailInnerHtml):
   // photo_thumbs, then legacy thumbUrls, then the full photo.

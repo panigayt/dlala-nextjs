@@ -18,21 +18,21 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title,
     description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-    alternates: { canonical: 'https://dzdlala.com/privacy' },
+    alternates: { canonical: 'https://www.dzdlala.com/privacy' },
     openGraph: {
       type: 'website',
       siteName: 'DLALA',
       locale: 'ar_DZ',
       title,
       description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-      url: 'https://dzdlala.com/privacy',
-      images: ['https://dzdlala.com/icon-512.png'],
+      url: 'https://www.dzdlala.com/privacy',
+      images: ['https://www.dzdlala.com/icon-512.png'],
     },
     twitter: {
       card: 'summary',
       title,
       description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-      images: ['https://dzdlala.com/icon-512.png'],
+      images: ['https://www.dzdlala.com/icon-512.png'],
     },
   };
 }

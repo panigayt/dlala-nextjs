@@ -91,7 +91,7 @@ export async function generateMetadata({
     return {
       title: fullTitle,
       description: desc || undefined,
-      alternates: { canonical: 'https://dzdlala.com/announcement/' + encodeURIComponent(id) },
+      alternates: { canonical: 'https://www.dzdlala.com/announcement/' + encodeURIComponent(id) },
       openGraph: {
         title: fullTitle,
         description: desc || undefined,

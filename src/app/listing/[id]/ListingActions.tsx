@@ -58,7 +58,7 @@ function reasonLabel(id: string, t: (k: string) => string): string {
 // is routed by the Android app AND served by hosting, so one URL works in
 // browsers, the app, and iOS Safari).
 const shareUrlFor = (listingId: string) =>
-  'https://dzdlala.com/listing.html?id=' + listingId;
+  'https://www.dzdlala.com/listing.html?id=' + listingId;
 
 function Modal({
   title,

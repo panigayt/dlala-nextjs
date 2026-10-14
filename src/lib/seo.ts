@@ -21,7 +21,7 @@
 
 // Canonical site base (production domain). Must match the BASE in
 // src/app/sitemap.ts.
-export const SITE = 'https://dzdlala.com';
+export const SITE = 'https://www.dzdlala.com';
 
 import { t, type Lang } from './i18n-strings';
 

@@ -153,7 +153,7 @@ export default function BlurUpImage({ listing, img, alt, eager, priority, classN
   const lqip = lqipUrlFor(listing);
   // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
   const rewriteDefaultImg = (u: string) =>
-    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
+    u.replace('https://www.dzdlala.com/img/default_ads/', '/img/default_ads/');
   if (!lqip) {
     // No derivable LQIP (old listings, non-variant URLs): today's behavior.
     // Round 14 T6: the 📷 tile (was a blank div) + the mount check catches

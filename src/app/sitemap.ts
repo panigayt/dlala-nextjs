@@ -10,7 +10,7 @@ import {
 } from '@/lib/model-pages';
 import { qualifyingWilayaUrls, WILAYA_MIN_LISTINGS } from '@/lib/wilaya-pages';
 
-const BASE = 'https://dzdlala.com';
+const BASE = 'https://www.dzdlala.com';
 
 // Production sitemap (10 Oct 2026 monitor): 1,261 URLs — 1,195 live listing
 // URLs + 66 non-listing URLs. The old code capped listings at 100, so ~1,100

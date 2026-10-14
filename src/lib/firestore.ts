@@ -1353,7 +1353,7 @@ export function cardImage(l: ListingCard): string {
   // job/wanted ads store absolute production URLs, which the preview CSP
   // blocks (img-src has no dzdlala.com). Central fix for all card renderers.
   const rewrite = (u: string) =>
-    u.replace('https://dzdlala.com/img/default_ads/', '/img/default_ads/');
+    u.replace('https://www.dzdlala.com/img/default_ads/', '/img/default_ads/');
   const thumbs = l.photo_thumbs;
   if (Array.isArray(thumbs) && thumbs[0]) return rewrite(thumbs[0] as string);
   const urls = l.photoUrls;
