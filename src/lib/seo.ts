@@ -187,7 +187,9 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> {
       returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
     },
   };
-  if (typeof o.price === 'number' && isFinite(o.price)) offers.price = o.price;
+  // 14 Oct 2026 audit R6: 1-DZD is the pipeline's no-price convention —
+  // never emit it as a real price (Google would show "1 DZD").
+  if (typeof o.price === 'number' && isFinite(o.price) && o.price > 1) offers.price = o.price;
   if (o.condition === 'new') offers.itemCondition = 'https://schema.org/NewCondition';
   else if (o.condition === 'used') offers.itemCondition = 'https://schema.org/UsedCondition';
   const ld: Record<string, unknown> = {
