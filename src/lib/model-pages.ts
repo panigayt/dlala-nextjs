@@ -139,9 +139,10 @@ export interface ModelCardItem {
 
 // S-03 (0.0.0.21): card links use the canonical /listing/<id> form.
 export function cardHtml(item: ModelCardItem, pos: number, lang: string): string {
-  void pos;
+  // 14 Oct 2026 audit R24: first 4 cards eager + high priority (above fold).
+  const eager = pos <= 4;
   const img = item.photo
-    ? `<img src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" loading="lazy" width="300" height="300">`
+    ? `<img src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''} width="300" height="300">`
     : `<div class="noimg">دلالة</div>`;
   const href = `${SITE}/listing/${escHtml(item.id)}`;
   return `<article class="card">

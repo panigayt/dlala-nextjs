@@ -302,6 +302,7 @@ export function buildWilayaPage(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://pub-bf326f03c4774a4287a473be0a7de582.r2.dev" crossorigin>
 <title>${escHtml(title)}</title>
 <meta name="description" content="${escHtml(description)}">
 <link rel="canonical" href="${escHtml(canonicalUrl)}">
