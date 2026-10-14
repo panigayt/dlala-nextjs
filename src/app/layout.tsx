@@ -74,10 +74,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             see an Arabic-flash; no-JS/crawlers keep the ar/rtl fallback.
             (Preview CSP allows 'unsafe-inline' for scripts.)
             Round 31 Fix B: also check localStorage (cookie may miss on
-            first navigation, but localStorage has the user's choice). */}
+            first navigation, but localStorage has the user's choice).
+            Round 42: PREFER PATH LOCALE — /fr/... and /en/... URLs set
+            lang/dir from location.pathname FIRST (fresh visitors have no
+            cookie yet; without this, /fr/ pages shipped lang="ar"). */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var m=document.cookie.match(/(?:^|;\\s*)dlala_lang=(fr|en|ar)/);var l=m?m[1]:null;if(!l){try{var s=localStorage.getItem('dlala_lang');if(s==='fr'||s==='en'||s==='ar')l=s;}catch(e){}}if(!l)l='ar';document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';}catch(e){}`,
+            __html: `try{var l=null;try{var p=location.pathname;if(/^\\/fr(\\/|$)/.test(p))l='fr';else if(/^\\/en(\\/|$)/.test(p))l='en';}catch(e){}if(!l){var m=document.cookie.match(/(?:^|;\\s*)dlala_lang=(fr|en|ar)/);l=m?m[1]:null;}if(!l){try{var s=localStorage.getItem('dlala_lang');if(s==='fr'||s==='en'||s==='ar')l=s;}catch(e){}}if(!l)l='ar';document.documentElement.lang=l;document.documentElement.dir=l==='ar'?'rtl':'ltr';}catch(e){}`,
           }}
         />
         {/* Round 160 — 0.0.0.39 index.html parity: preconnect to the image
