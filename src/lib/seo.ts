@@ -79,7 +79,9 @@ export function listingBrandName(
     if (!/^(cb|pb)[A-Z]/.test(b)) return '';
     const name = BRAND_LATIN[b];
     if (!name || name === b) return '';
-    if (!/^[A-Za-z0-9][A-Za-z0-9 .&'\-]*$/.test(name)) return '';
+    // Allow Latin accented chars (Citroën) — 14 Oct 2026: 'ë' was rejected,
+    // dropping brand from JSON-LD on every Citroen listing.
+    if (!/^[A-Za-z0-9À-ÿ][A-Za-z0-9À-ÿ .&'\-]*$/.test(name)) return '';
     return name;
   } catch {
     return '';
