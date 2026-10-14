@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 
 import { SITE } from '@/lib/seo';
-import { GUIDE_SLUGS, renderArticleData, type GuideLang } from '@/lib/guides';
+import { renderArticleData, type GuideLang } from '@/lib/guides';
 import {
   loadPriceGuide,
   priceGuideSlugYear,
@@ -19,16 +19,16 @@ import { GuideBreadcrumbs, PriceGuideView } from '../../../guides/[slug]/page';
 
 const LANG: GuideLang = 'fr';
 
-
-export function generateStaticParams() {
-  return GUIDE_SLUGS.map((slug) => ({ slug }));
-}
+// Round 43: request-time render — see the note on the Arabic article page
+// (SiteChrome's usePathname() empties statically prerendered bodies).
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  // Request-time render (see ../../guides/[slug]/page.tsx).
+  await connection();
   const { slug } = await params;
   // Dynamic live price guide (S-17/S-18/S-25) — see ../../guides/[slug]/page.tsx.
   const pgYear = priceGuideSlugYear(slug);
@@ -110,6 +110,8 @@ export default async function GuideArticleFrPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  // Request-time render (see generateMetadata above).
+  await connection();
   const { slug } = await params;
   const pgYear = priceGuideSlugYear(slug);
   if (pgYear !== null) {

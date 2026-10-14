@@ -6,6 +6,7 @@
 // cards sorted by title (localeCompare parity).
 
 import type { Metadata } from 'next';
+import { connection } from 'next/server';
 
 import { SITE } from '@/lib/seo';
 import { renderIndexData, type GuideLang } from '@/lib/guides';
@@ -13,7 +14,14 @@ import { GuideBreadcrumbs } from './[slug]/page';
 
 const LANG: GuideLang = 'ar';
 
+// Round 43: request-time render — SiteChrome's usePathname() suspends during
+// static prerender and empties the prerendered body (guides SEO bug, Oct 2026).
+// `connection()` is the Next 16 / cacheComponents way to opt into
+// request-time rendering. Edge cache: src/proxy.ts sets s-maxage=3600.
+
 export async function generateMetadata(): Promise<Metadata> {
+  // Request-time render (see above).
+  await connection();
   const d = renderIndexData(LANG);
   return {
     title: d.title,
@@ -45,6 +53,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function GuidesIndexPage() {
+  // Request-time render (see generateMetadata above).
+  await connection();
   const d = renderIndexData(LANG);
   return (
     <div className="guide-page" dir="rtl" lang="ar">

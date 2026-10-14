@@ -5,7 +5,7 @@
 // chat.html has its own custom header and no site chrome).
 'use client';
 
-import { Suspense, createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 // Round 12: firebase-client user → CDN path. The new useAuthState() loads
@@ -87,11 +87,16 @@ interface ProfileData {
 }
 
 function ChromeInner({ children }: { children: React.ReactNode }) {
-  // Round 42: usePathname() at top level breaks static prerender (empty shells
-  // on guides/announcements). Pathname comes from context; the provider is
-  // Suspense-wrapped below, and the fallback provides '/' so pages prerender
-  // fully (nav active-state corrects on hydration — progressive enhancement).
-  const pathname = useContext(PathnameCtx) || '/';
+  // NOTE (Round 43): usePathname() suspends during static prerender, which
+  // defers this whole subtree (incl. page children) to client rendering —
+  // static pages prerender as empty shells (guides SEO bug, Oct 2026).
+  // Round 42 tried rendering children in the Suspense fallback instead, but
+  // that breaks the build: data pages await uncached Firestore reads outside
+  // Suspense ("uncached or runtime data during prerendering"). The working
+  // model: pages that need SSR HTML must not be statically prerendered —
+  // they use `export const dynamic = 'force-dynamic'` and render fully at
+  // request time, where usePathname() resolves normally (guides, Oct 2026).
+  const pathname = usePathname() || '/';
   const router = useRouter();
   const { lang, setLang, t } = useLang();
   const auth = useAuthState();
@@ -478,7 +483,11 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
     </>
   );
 
-  const year = new Date().getFullYear();
+  // Round 43: build-time year from next.config `env` (inlined as a literal).
+  // NEVER call new Date() here — Next 16 fails the whole build when a client
+  // component evaluates it during static prerender ("unstable value";
+  // silently blocked the 5e322b7/ec5982a/9025853 Vercel deploys, 15 Oct 2026).
+  const year = Number(process.env.DLALA_BUILD_YEAR) || 2026;
   // Round 14 T14: footer guide links follow the current UI language —
   // EN readers get /en/guides/<slug> (EN articles exist for all 4 slugs),
   // FR readers get /fr/guides/<slug>, AR stays /guides/<slug>. Uses the
@@ -647,28 +656,10 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Pathname via context so usePathname() never runs at ChromeInner's top level
-// (Next.js 16: that forces the whole subtree — including page {children} —
-// to client-side rendering, producing empty prerendered shells).
-const PathnameCtx = createContext<string>('/');
-
-function PathnameProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname() || '/';
-  return <PathnameCtx.Provider value={pathname}>{children}</PathnameCtx.Provider>;
-}
-
 export default function SiteChrome({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense
-      fallback={
-        <PathnameCtx.Provider value="/">
-          <ChromeInner>{children}</ChromeInner>
-        </PathnameCtx.Provider>
-      }
-    >
-      <PathnameProvider>
-        <ChromeInner>{children}</ChromeInner>
-      </PathnameProvider>
+    <Suspense fallback={null}>
+      <ChromeInner>{children}</ChromeInner>
     </Suspense>
   );
 }

@@ -13,7 +13,6 @@ import { connection } from 'next/server';
 
 import { SITE } from '@/lib/seo';
 import {
-  GUIDE_SLUGS,
   renderArticleData,
   type Breadcrumb,
   type GuideLang,
@@ -29,18 +28,24 @@ import { getPriceStats } from '@/lib/price-stats';
 
 const LANG: GuideLang = 'ar';
 
-// Only the known slugs exist — anything else is a 404 (the function answers
-// 404 'Not found' for unknown slugs).
-
-export function generateStaticParams() {
-  return GUIDE_SLUGS.map((slug) => ({ slug }));
-}
+// Round 43: request-time render (NOT static). SiteChrome's usePathname()
+// suspends during static prerender, deferring the whole subtree — including
+// this page — to client rendering, so statically prerendered guides shipped
+// EMPTY bodies (SEO disaster, Oct 2026). `connection()` is the Next 16 /
+// cacheComponents way to opt a route into request-time rendering
+// (`export const dynamic` is rejected). At request time usePathname()
+// resolves and this page SSRs fully. Unknown slugs 404 via renderArticleData
+// → notFound() below (the proxy also 404s unknown slugs before render).
+// Edge-cache parity with the old static output: src/proxy.ts sets
+// s-maxage=3600 on /guides/* (1h, matches the price guide's data cache).
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  // Request-time render (see above).
+  await connection();
   const { slug } = await params;
   // Dynamic live price guide (S-17/S-18/S-25) — Zak 27 Sep 2026 «يجب ان يكون
   // تلقائيا»: median + p25–p75 per model computed LIVE from Firestore.
@@ -165,6 +170,8 @@ export default async function GuideArticlePage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  // Request-time render (see generateMetadata above).
+  await connection();
   const { slug } = await params;
   const pgYear = priceGuideSlugYear(slug);
   if (pgYear !== null) {

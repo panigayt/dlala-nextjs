@@ -3,6 +3,7 @@
 // Same SEO parity as the Arabic index (see ../../page.tsx).
 
 import type { Metadata } from 'next';
+import { connection } from 'next/server';
 
 import { SITE } from '@/lib/seo';
 import { renderIndexData, type GuideLang } from '@/lib/guides';
@@ -10,7 +11,12 @@ import { GuideBreadcrumbs } from '../../guides/[slug]/page';
 
 const LANG: GuideLang = 'fr';
 
+// Round 43: request-time render — see the note on the Arabic index page
+// (SiteChrome's usePathname() empties statically prerendered bodies).
+
 export async function generateMetadata(): Promise<Metadata> {
+  // Request-time render (see ../../page.tsx).
+  await connection();
   const d = renderIndexData(LANG);
   return {
     title: d.title,
@@ -42,6 +48,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function GuidesIndexFrPage() {
+  // Request-time render (see generateMetadata above).
+  await connection();
   const d = renderIndexData(LANG);
   return (
     <div className="guide-page" dir="ltr" lang="fr">

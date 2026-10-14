@@ -114,7 +114,19 @@ export async function proxy(req: NextRequest) {
       // 'check-failed' → fail open (NextResponse.next() below).
     }
   }
-  return NextResponse.next();
+  // Round 43: guide pages are request-rendered (force-dynamic) so they SSR
+  // fully; give them edge-cache parity with the old static output. The URL
+  // fully determines the language (/fr/, /en/ prefixes — the cookie redirect
+  // above already ran), so caching by URL is safe. 1h matches the price
+  // guide's data cache (S-17/S-18/S-25).
+  const res = NextResponse.next();
+  if (/^\/(?:(?:fr|en)\/)?guides(\/|$)/.test(req.nextUrl.pathname)) {
+    res.headers.set(
+      'Cache-Control',
+      'public, s-maxage=3600, stale-while-revalidate=86400',
+    );
+  }
+  return res;
 }
 
 export const config = {
