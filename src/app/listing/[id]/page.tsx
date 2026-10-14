@@ -414,6 +414,8 @@ async function ListingContent({
           createdAtISO={l.createdAt ? l.createdAt.toISOString() : null}
           answers={l.answers as Record<string, unknown> | undefined}
           isWanted={isWanted}
+          negotiable={(l as { negotiable?: boolean }).negotiable}
+          price={l.price}
         />
         {/* js/app.js FIX-WEB-025 parity: stat-row under the meta grid —
             views with proper Arabic plurals + favorite count (public

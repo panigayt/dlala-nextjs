@@ -21,6 +21,7 @@ import {
   type SellerProfile,
 } from '@/lib/firestore';
 import { isConditionExempt } from '@/lib/seo';
+import { catName } from '@/lib/categories';
 import { answerRows } from '@/lib/answers';
 import TimeAgo from '@/components/TimeAgo';
 import BlurUpImage from '@/components/BlurUpImage';
@@ -69,6 +70,9 @@ export function SoldBanner() {
 }
 
 // Meta grid: wilaya / condition / published labels + values.
+// 14 Oct 2026 (Zak ordered «اضفهم»): also category + price rows —
+// production 0.0.0.39 parity (D4). Appended after the existing rows;
+// existing row order untouched.
 export function MetaGrid({
   wilayaCode,
   condition,
@@ -76,6 +80,8 @@ export function MetaGrid({
   createdAtISO,
   answers,
   isWanted,
+  negotiable,
+  price,
 }: {
   wilayaCode?: number;
   condition?: string;
@@ -83,6 +89,8 @@ export function MetaGrid({
   createdAtISO?: string | null;
   answers?: Record<string, unknown> | null;
   isWanted?: boolean;
+  negotiable?: boolean;
+  price?: number;
 }) {
   const { t, lang } = useLang();
   const showCond =
@@ -113,6 +121,19 @@ export function MetaGrid({
           </b>
         </div>
       )}
+      {/* 0.0.0.39 parity rows (Zak «اضفهم» 14 Oct 2026). Production always
+          shows the price row: «قابل للتفاوض» when negotiable, else the price
+          (its restorePricePair injects the price row for non-negotiable). */}
+      {categoryId && (
+        <div>
+          <span className="text-zinc-500">{t('category')}: </span>
+          <b>{catName(categoryId, lang)}</b>
+        </div>
+      )}
+      <div>
+        <span className="text-zinc-500">{t('price')}: </span>
+        <b>{negotiable ? t('negotiable') : formatPrice(price || 0, lang)}</b>
+      </div>
     </div>
   );
 }
