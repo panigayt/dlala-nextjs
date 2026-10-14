@@ -51,6 +51,17 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  // Round 45 (15 Oct 2026): build/deploy marker. Lets the audit loop (and
+  // Zak) tell a stale deployment from a fresh one: fetch any page, read
+  // <meta name="dlala-build">, compare against the latest main commit.
+  // Vercel injects VERCEL_GIT_COMMIT_SHA at build time; local builds say
+  // "local". Pure metadata — zero behavioral impact, root layout stays
+  // sync + fully static (no cookies()/headers() — see the 12 Oct warning
+  // above).
+  other: {
+    "dlala-build":
+      (process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 7),
+  },
 };
 
 // Round 7 Team 9 (12 Oct 2026): the viewport meta was NEVER present in the
