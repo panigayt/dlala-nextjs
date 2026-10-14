@@ -179,6 +179,8 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
     ? `Annonces ${modelInfo.brand} ${modelInfo.model} d'occasion en Algérie : ${items.length} annonces avec prix et photos. Contact direct avec les vendeurs.`
     : `إعلانات ${modelInfo.ar} مستعملة في الجزائر: ${items.length} إعلان بالأسعار والصور. تواصل مباشر مع البائعين.`;
   const url = modelUrl(modelInfo.slug);
+  // Self-referencing canonical per language (14 Oct 2026 audit R5).
+  const canonicalUrl = isFr ? `${SITE}/fr/voitures/modeles/${modelInfo.slug}` : url;
   const cards = items.map((it, i) => cardHtml(it, i + 1, lang)).join('\n');
   const listItems = items.map((it, i) => ({
     '@type': 'ListItem', position: i + 1,
@@ -187,7 +189,7 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
-      { '@type': 'ItemList', name: title, url, numberOfItems: items.length, itemListElement: listItems },
+      { '@type': 'ItemList', name: title, url: canonicalUrl, numberOfItems: items.length, itemListElement: listItems },
       {
         '@type': 'BreadcrumbList',
         itemListElement: [
@@ -205,7 +207,7 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escHtml(title)}</title>
 <meta name="description" content="${escHtml(description)}">
-<link rel="canonical" href="${escHtml(url)}">
+<link rel="canonical" href="${escHtml(canonicalUrl)}">
 <style>
 body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:16px;background:#f7f7f7;color:#1a1a1a}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}

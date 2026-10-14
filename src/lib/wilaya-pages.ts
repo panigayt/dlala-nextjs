@@ -209,6 +209,14 @@ export function buildWilayaPage(
   const title = pageTitle(w, lang);
   const description = pageDescription(w, items, total, lang);
   const url = wilayaUrl(w.slug);
+  // Self-referencing canonical per language (14 Oct 2026 audit R5):
+  // FR/EN pages must NOT canonicalize to the AR URL.
+  const canonicalUrl =
+    lang === 'fr'
+      ? `${SITE}/fr/voitures/wilaya/${w.slug}`
+      : lang === 'en'
+        ? `${SITE}/en/voitures/wilaya/${w.slug}`
+        : url;
   const cards = items.map((it, i) => cardHtml(it, i + 1, lang)).join('\n');
 
   // JSON-LD: ItemList with Offer per item (price rich data), BreadcrumbList.
@@ -238,8 +246,8 @@ export function buildWilayaPage(
       {
         '@type': 'ItemList',
         name: title,
-        url,
-        numberOfItems: total,
+        url: canonicalUrl,
+        numberOfItems: listItems.length,
         itemListElement: listItems,
       },
       {
@@ -296,7 +304,7 @@ export function buildWilayaPage(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escHtml(title)}</title>
 <meta name="description" content="${escHtml(description)}">
-<link rel="canonical" href="${escHtml(url)}">
+<link rel="canonical" href="${escHtml(canonicalUrl)}">
 ${hreflangs}
 <style>
 body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:16px;background:#f7f7f7;color:#1a1a1a;max-width:1100px;margin-inline:auto}
@@ -314,9 +322,6 @@ body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:1
 .cta-top .b{display:inline-block;background:#0d7a4f;color:#fff!important;font-weight:700;font-size:15.5px;padding:12px 34px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(13,122,79,.35)}
 .cta{display:inline-block;background:#0d7a4f;color:#fff!important;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;margin:16px 0;font-size:16px}
 .teaser{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin:18px 0}
-.faq{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:12px 16px;margin:10px 0}
-.faq h3{font-size:15px;margin:0 0 6px}
-.faq p{margin:0;font-size:14px;color:#333}
 nav.breadcrumb{font-size:13px;color:#666;margin-bottom:8px}
 nav.breadcrumb a{color:#0d7a4f}
 .pop{margin:18px 0;font-size:14px}
