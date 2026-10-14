@@ -124,6 +124,8 @@ export const config = {
     '/en/guides/prix-voitures-occasion-:year(\\d+)',
     '/guides',
     '/guides/:slug*',
+    '/fr/guides',
+    '/fr/guides/:slug*',
     '/en/guides',
     '/en/guides/:slug*',
     // Round 14 (12 Oct 2026): proxy-based real 404s. No nested sub-routes
