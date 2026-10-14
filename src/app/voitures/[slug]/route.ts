@@ -7,7 +7,10 @@ import { WILAYA_BY_SLUG } from '@/lib/wilaya-pages';
 // must not 404). Only wilaya slugs redirect; anything else → 404.
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
-  const w = WILAYA_BY_SLUG[String(slug || '').toLowerCase()];
+  // 14 Oct 2026 audit R27: legacy French-name alias (Alger → algiers).
+  const slugLower = String(slug || '').toLowerCase();
+  const aliased = slugLower === 'alger' ? 'algiers' : slugLower;
+  const w = WILAYA_BY_SLUG[aliased];
   if (!w) return new NextResponse('Not found', { status: 404 });
   return NextResponse.redirect(`https://www.dzdlala.com/voitures/wilaya/${w.slug}`, 301);
 }
