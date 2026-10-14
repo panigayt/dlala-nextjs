@@ -1,9 +1,10 @@
 // Car-model SEO landing page — French version (/fr/voitures/modeles/<slug>).
 //
 // Production parity: the seoCategories function serves ?lang=fr (and the
-// /fr/ prefix) as a human convenience — French content with the SAME Arabic
-// canonical URL. Cached briefly so a stale FR render can't linger (verbatim
-// CF cache policy).
+// /fr/ prefix) as a human convenience — French content with a self-referencing
+// French canonical URL (14 Oct 2026 audit R5 — verified in
+// src/lib/model-pages.ts buildModelPage, line ~183). Cached briefly so a
+// stale FR render can't linger (verbatim CF cache policy).
 
 import {
   MODEL_BY_SLUG,

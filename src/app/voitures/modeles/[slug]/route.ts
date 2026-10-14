@@ -5,7 +5,8 @@
 // same rendered HTML document (returned as-is — these pages must be
 // byte-faithful to the CF's SSR for indexability). French visitors use
 // /fr/voitures/modeles/<slug> (getLang /fr/ prefix parity); the canonical
-// link always points at this Arabic URL (verbatim CF behavior).
+// link is self-referencing per language (14 Oct 2026 audit R5 — verified in
+// src/lib/model-pages.ts buildModelPage, line ~183).
 
 import {
   MODEL_BY_SLUG,
