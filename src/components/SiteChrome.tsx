@@ -5,7 +5,7 @@
 // chat.html has its own custom header and no site chrome).
 'use client';
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 // Round 12: firebase-client user → CDN path. The new useAuthState() loads
@@ -87,7 +87,11 @@ interface ProfileData {
 }
 
 function ChromeInner({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname() || '/';
+  // Round 42: usePathname() at top level breaks static prerender (empty shells
+  // on guides/announcements). Pathname comes from context; the provider is
+  // Suspense-wrapped below, and the fallback provides '/' so pages prerender
+  // fully (nav active-state corrects on hydration — progressive enhancement).
+  const pathname = useContext(PathnameCtx) || '/';
   const router = useRouter();
   const { lang, setLang, t } = useLang();
   const auth = useAuthState();
@@ -643,10 +647,28 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Pathname via context so usePathname() never runs at ChromeInner's top level
+// (Next.js 16: that forces the whole subtree — including page {children} —
+// to client-side rendering, producing empty prerendered shells).
+const PathnameCtx = createContext<string>('/');
+
+function PathnameProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() || '/';
+  return <PathnameCtx.Provider value={pathname}>{children}</PathnameCtx.Provider>;
+}
+
 export default function SiteChrome({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={null}>
-      <ChromeInner>{children}</ChromeInner>
+    <Suspense
+      fallback={
+        <PathnameCtx.Provider value="/">
+          <ChromeInner>{children}</ChromeInner>
+        </PathnameCtx.Provider>
+      }
+    >
+      <PathnameProvider>
+        <ChromeInner>{children}</ChromeInner>
+      </PathnameProvider>
     </Suspense>
   );
 }
