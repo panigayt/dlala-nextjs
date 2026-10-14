@@ -144,6 +144,7 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   publishWantedBtn: { ar: "نشر الطلب", fr: "Publier la demande", en: "Post the request" },
   budgetLabel: { ar: "الميزانية (دج)", fr: "Budget (DZD)", en: "Budget (DZD)" },
   title: { ar: "العنوان", fr: "Titre", en: "Title" },
+  titlePh: { ar: "مثال: رونو سامبول 2011 ديزل", fr: "Ex : Renault Symbol 2011 diesel", en: "E.g. Renault Symbol 2011 diesel" },
   description: { ar: "الوصف", fr: "Description", en: "Description" },
   category: { ar: "القسم", fr: "Catégorie", en: "Category" },
   wilaya: { ar: "الولاية", fr: "Wilaya", en: "Wilaya" },

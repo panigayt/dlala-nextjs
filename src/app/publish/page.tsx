@@ -1351,6 +1351,7 @@ function PublishForm({
             maxLength={80}
             className={inputCls}
             value={title}
+            placeholder={t('titlePh')}
             onChange={(e) => setTitle(e.target.value)}
           />
           <div className="text-xs text-zinc-400 mt-1 mb-4 text-left" dir="ltr">
