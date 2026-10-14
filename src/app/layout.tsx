@@ -7,6 +7,7 @@ import "./guides.css";
 import SiteChrome from "@/components/SiteChrome";
 import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
+import SwRegister from "@/components/SwRegister";
 
 // 12 Oct 2026 (Round 11 Team 1): FULLY STATIC root metadata.
 // Root cause fix for Round 10 T1: the previous root generateMetadata did
@@ -97,6 +98,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <ScrollRestoreArmer />
         </Suspense>
+        {/* 14 Oct 2026 (Zak ordered): register the image-cache service worker.
+            Images only — repeat views load listing photos from cache. */}
+        <SwRegister />
       </body>
     </html>
   );
