@@ -36,9 +36,6 @@ export function generateStaticParams() {
   return GUIDE_SLUGS.map((slug) => ({ slug }));
 }
 
-// Unknown slugs → 404 at routing level (no soft-404).
-export const dynamicParams = false;
-
 export async function generateMetadata({
   params,
 }: {
