@@ -68,6 +68,17 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(url, 307);
     }
   }
+  // 14 Oct 2026 audit R21: unknown guide slugs → real 404 (was soft-404).
+  // The [slug] page's notFound() doesn't set 404 status under cacheComponents.
+  const guideMatch = req.nextUrl.pathname.match(/^\/(?:(fr|en)\/)?guides\/([^/]+)\/?$/);
+  if (guideMatch) {
+    const gslug = guideMatch[2].toLowerCase();
+    const known = ['acheter-voiture-occasion', 'controler-telephone-occasion', 'eviter-arnaques'];
+    const isPriceGuide = /^prix-voitures-occasion-\d{4}$/.test(gslug);
+    if (!known.includes(gslug) && !isPriceGuide) {
+      return trilingual404();
+    }
+  }
   if (req.method === 'GET' || req.method === 'HEAD') {
     // Round 17 T8: single regex capture — the old code matched the path
     // with one regex (result used only as a truthy test) and then re-split
