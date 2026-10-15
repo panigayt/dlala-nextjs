@@ -25,58 +25,80 @@ export interface BlurUpListing {
 // (same pattern as legacy's error delegation).
 let blurUpInstalled = false;
 
-function installBlurUpHandler(): void {
-  if (blurUpInstalled) return;
-  blurUpInstalled = true;
-  if (typeof document === 'undefined' || !document.addEventListener) return;
-  document.addEventListener(
-    'load',
-    (e) => {
-      const t = e.target as HTMLElement | null;
-      if (!t || t.tagName !== 'IMG' || !t.classList || !t.classList.contains('img-blurup')) return;
-      if (t.getAttribute('data-done') === '1') return; // one claim per img
-      t.setAttribute('data-done', '1');
-      try {
-        const hi0 = t.getAttribute('data-hi');
-        if (!hi0) {
-          t.classList.add('hi');
-          return;
-        }
-        const pre = new Image();
-        try {
-          pre.decoding = 'async';
-        } catch {
-          /* noop */
-        }
-        try {
-          if (t.getAttribute('data-prio') === 'high' && 'fetchPriority' in pre) {
-            (pre as { fetchPriority?: string }).fetchPriority = 'high';
-          }
-        } catch {
-          /* noop */
-        }
-        pre.onload = () => {
-          try {
-            if (!t.isConnected) return;
-            const hiNow = t.getAttribute('data-hi'); // re-read: may be hero now
-            if (hiNow) (t as HTMLImageElement).src = hiNow; // identical URL = no-op
-            t.classList.add('hi');
-          } catch {
-            /* noop */
-          }
-        };
-        pre.onerror = () => {}; // keep the blurred LQIP — better than broken
-        pre.src = hi0;
-      } catch {
-        try {
-          t.classList.add('hi');
-        } catch {
-          /* noop */
-        }
+// Upgrade one blur-up img: preload data-hi, swap src, unblur.
+// Extracted so the post-install sweep can upgrade images whose `load` event
+// already fired (cached LQIP) before the delegated listener was attached.
+function upgradeImg(t: HTMLImageElement): void {
+  if (t.getAttribute('data-done') === '1') return; // one claim per img
+  t.setAttribute('data-done', '1');
+  try {
+    const hi0 = t.getAttribute('data-hi');
+    if (!hi0) {
+      t.classList.add('hi');
+      return;
+    }
+    const pre = new Image();
+    try {
+      pre.decoding = 'async';
+    } catch {
+      /* noop */
+    }
+    try {
+      if (t.getAttribute('data-prio') === 'high' && 'fetchPriority' in pre) {
+        (pre as { fetchPriority?: string }).fetchPriority = 'high';
       }
-    },
-    true
-  );
+    } catch {
+      /* noop */
+    }
+    pre.onload = () => {
+      try {
+        if (!t.isConnected) return;
+        const hiNow = t.getAttribute('data-hi'); // re-read: may be hero now
+        if (hiNow) t.src = hiNow; // identical URL = no-op
+        t.classList.add('hi');
+      } catch {
+        /* noop */
+      }
+    };
+    pre.onerror = () => {}; // keep the blurred LQIP — better than broken
+    pre.src = hi0;
+  } catch {
+    try {
+      t.classList.add('hi');
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function installBlurUpHandler(): void {
+  if (typeof document === 'undefined' || !document.addEventListener) return;
+  if (!blurUpInstalled) {
+    blurUpInstalled = true;
+    document.addEventListener(
+      'load',
+      (e) => {
+        const t = e.target as HTMLElement | null;
+        if (!t || t.tagName !== 'IMG' || !t.classList || !t.classList.contains('img-blurup')) return;
+        upgradeImg(t as HTMLImageElement);
+      },
+      true
+    );
+  }
+  // Sweep runs on EVERY mount (not just the first): new cards from infinite
+  // scroll / client navigation may also have cached LQIPs whose `load` fired
+  // before this effect. Only unclaimed, successfully-loaded imgs qualify.
+  try {
+    document.querySelectorAll<HTMLImageElement>('img.img-blurup:not([data-done])').forEach((img) => {
+      try {
+        if (img.complete && img.naturalWidth > 0) upgradeImg(img);
+      } catch {
+        /* noop */
+      }
+    });
+  } catch {
+    /* noop */
+  }
 }
 
 // Hydration-safe desktop detection (useSyncExternalStore: server snapshot
