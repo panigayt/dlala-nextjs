@@ -60,6 +60,21 @@ export const WILAYA_BY_SLUG: Record<string, WilayaInfo> = Object.fromEntries(
   WILAYAS_INFO.map((w) => [w.slug, w]),
 );
 
+// 15 Oct 2026: legacy Google-indexed URLs use different slug conventions
+// (e.g. /voitures/m-sila vs our /voitures/wilaya/msila). Tolerant lookup:
+// exact match first, then hyphen-stripped (verified zero collisions across
+// all 69 wilayas), so old variants 301 to the canonical page.
+const WILAYA_BY_STRIPPED_SLUG: Record<string, WilayaInfo> = Object.fromEntries(
+  WILAYAS_INFO.map((w) => [w.slug.replace(/-/g, ''), w]),
+);
+
+export function findWilayaByLegacySlug(raw: string): WilayaInfo | undefined {
+  let s = String(raw || '').toLowerCase();
+  // 14 Oct 2026 audit R27: legacy French-name alias (Alger → algiers).
+  if (s === 'alger') s = 'algiers';
+  return WILAYA_BY_SLUG[s] || WILAYA_BY_STRIPPED_SLUG[s.replace(/-/g, '')];
+}
+
 export function wilayaUrl(slug: string): string {
   return `${SITE}/voitures/wilaya/${slug}`;
 }
