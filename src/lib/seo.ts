@@ -187,9 +187,13 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> {
       returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
     },
   };
-  // 14 Oct 2026 audit R6: 1-DZD is the pipeline's no-price convention —
-  // never emit it as a real price (Google would show "1 DZD").
-  if (typeof o.price === 'number' && isFinite(o.price) && o.price > 1) offers.price = o.price;
+  // 15 Oct 2026 (Google Search Console critical): 1-DZD is the pipeline's
+  // no-price convention. Google now REQUIRES price inside offers — but emitting
+  // "1 DZD" would be a false price. Resolution: when there is no real price,
+  // omit the entire `offers` object (valid Product without price snippet,
+  // no critical error) instead of emitting offers without price.
+  const hasRealPrice = typeof o.price === 'number' && isFinite(o.price) && o.price > 1;
+  if (hasRealPrice) offers.price = o.price;
   if (o.condition === 'new') offers.itemCondition = 'https://schema.org/NewCondition';
   else if (o.condition === 'used') offers.itemCondition = 'https://schema.org/UsedCondition';
   const ld: Record<string, unknown> = {
@@ -197,7 +201,8 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> {
     '@type': 'Product',
     name: o.title,
     description: o.description,
-    offers: offers,
+    // No real price → no offers object at all (Google critical-error fix).
+    ...(hasRealPrice ? { offers } : {}),
   };
   if (o.image) ld.image = Array.isArray(o.image) ? o.image : [o.image];
   // 0.0.0.30 (Zak): brand only when honestly known.
