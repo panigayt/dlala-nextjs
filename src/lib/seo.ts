@@ -164,7 +164,14 @@ export interface ListingJsonLdInput {
 }
 
 // Verbatim port of js/seo.js listingJsonLd().
-export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> {
+// 16 Oct 2026 (Google Search Console critical, 2nd round): Google now REQUIRES
+// Product markup to have offers/review/aggregateRating. Yesterday's fix (omit
+// offers when no real price) triggered this. Resolution: when there is no real
+// price (1-DZD negotiable convention), return null — no Product JSON-LD at all.
+// Honest: no fake "1 DZD" price, no validation errors, no rich snippet.
+export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> | null {
+  const hasRealPrice = typeof o.price === 'number' && isFinite(o.price) && o.price > 1;
+  if (!hasRealPrice) return null;
   const offers: Record<string, unknown> = {
     '@type': 'Offer',
     url: o.url,
@@ -190,10 +197,7 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> {
   // 15 Oct 2026 (Google Search Console critical): 1-DZD is the pipeline's
   // no-price convention. Google now REQUIRES price inside offers — but emitting
   // "1 DZD" would be a false price. Resolution: when there is no real price,
-  // omit the entire `offers` object (valid Product without price snippet,
-  // no critical error) instead of emitting offers without price.
-  const hasRealPrice = typeof o.price === 'number' && isFinite(o.price) && o.price > 1;
-  if (hasRealPrice) offers.price = o.price;
+  offers.price = o.price;
   if (o.condition === 'new') offers.itemCondition = 'https://schema.org/NewCondition';
   else if (o.condition === 'used') offers.itemCondition = 'https://schema.org/UsedCondition';
   const ld: Record<string, unknown> = {
@@ -201,8 +205,7 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> {
     '@type': 'Product',
     name: o.title,
     description: o.description,
-    // No real price → no offers object at all (Google critical-error fix).
-    ...(hasRealPrice ? { offers } : {}),
+    offers,
   };
   if (o.image) ld.image = Array.isArray(o.image) ? o.image : [o.image];
   // 0.0.0.30 (Zak): brand only when honestly known.

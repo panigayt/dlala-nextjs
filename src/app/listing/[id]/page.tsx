@@ -120,7 +120,7 @@ function seoForListing(
   l: ListingDetail,
   id: string,
   lang: Lang
-): { metadata: Metadata; jsonLd: Record<string, unknown> } {
+): { metadata: Metadata; jsonLd: Record<string, unknown> | null } {
   const title = cardTitle(l, lang).trim();
   // js/listing.js applyListingSeoHead: priceLabel + negotiable suffix,
   // wilayaLabel (allWilayas fallback), condLabel unless condition-exempt
@@ -310,10 +310,10 @@ async function ListingContent({
     // Round 133: same cookie language as generateMetadata above.
     // Round 17 T7: reuse pageLang (same request, same cookie) instead of
     // reading the cookie store a second time.
-    jsonLdScript = JSON.stringify(seoForListing(l, id, pageLang).jsonLd).replace(
-      /</g,
-      '\\u003c'
-    );
+    // 16 Oct 2026: listingJsonLd returns null for no-real-price listings
+    // (Google requires offers/review/aggregateRating on Product) — skip.
+    const ld = seoForListing(l, id, pageLang).jsonLd;
+    if (ld) jsonLdScript = JSON.stringify(ld).replace(/</g, '\\u003c');
   } catch {
     jsonLdScript = '';
   }
