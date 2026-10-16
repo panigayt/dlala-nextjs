@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Suspense } from "react";
 import "./globals.css";
 import "./chrome.css";
@@ -77,6 +78,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ar" dir="rtl">
       <head>
+        {/* 16 Oct 2026: Google Analytics 4 (dlala-85cea property).
+            strategy="afterInteractive" = non-blocking; page renders first,
+            analytics loads after. Zero impact on perceived speed. */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-VTX14GJMFL"
+          strategy="afterInteractive"
+        />
+        <Script id="ga4-init" strategy="afterInteractive">
+          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-VTX14GJMFL');`}
+        </Script>
         {/* 12 Oct 2026: pre-paint lang/dir from the dlala_lang cookie.
             The root layout must stay a SYNC server component — awaiting
             cookies() here forces every route dynamic and breaks the
