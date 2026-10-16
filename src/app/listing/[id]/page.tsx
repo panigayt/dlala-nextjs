@@ -146,10 +146,35 @@ function seoForListing(
   // for OG + JSON-LD (Google prefers absolute image URLs).
   const rawImage = cardImage(l) || `${SITE}/icon-512.png`;
   const image = rawImage.startsWith('http') ? rawImage : `${SITE}${rawImage}`;
+  // Round 199 (F7): JSON-LD Product `image` carries every gallery photo,
+  // not just the card image — richer rich-results eligibility. Mirrors the
+  // gallery strip's per-index thumb choice (photo_thumbs[i] || thumbUrls[i]
+  // || photoUrls[i]); every entry absolute. Falls back to the single card
+  // image when the listing has no photos (ld.image is never an empty array).
+  const rewriteDefaultAd = (u: string) =>
+    u.replace('https://www.dzdlala.com/img/default_ads/', '/img/default_ads/');
+  const absImg = (u: string) => {
+    const v = rewriteDefaultAd(u);
+    return v.startsWith('http') ? v : `${SITE}${v}`;
+  };
+  const photoCount = Math.max(
+    l.photoUrls?.length ?? 0,
+    l.photo_thumbs?.length ?? 0,
+    l.thumbUrls?.length ?? 0
+  );
+  const allImages: string[] = [];
+  for (let i = 0; i < photoCount; i++) {
+    const u =
+      (l.photo_thumbs && l.photo_thumbs[i]) ||
+      (l.thumbUrls && l.thumbUrls[i]) ||
+      (l.photoUrls && l.photoUrls[i]);
+    if (u) allImages.push(absImg(u));
+  }
+  if (!allImages.length) allImages.push(image);
   const jsonLd = listingJsonLd({
     title: title || 'DLALA',
     description: seo.description,
-    image,
+    image: allImages,
     brand: listingBrandName(l.answers),
     url,
     price: Number(l.price) || 0,
