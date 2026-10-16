@@ -12,8 +12,11 @@ export function parseSearchFilters(
   };
   // 14 Oct 2026 audit R16: accept common param aliases.
   const sortRaw = get('sort');
+  // 16 Oct 2026 audit R247 (N39): match aliases case-insensitively; keep
+  // the original casing for all other values (server sorts are case-sensitive).
+  const sortLower = sortRaw.toLowerCase();
   const sort =
-    sortRaw === 'price-asc' ? 'priceAsc' : sortRaw === 'price-desc' ? 'priceDesc' : sortRaw || undefined;
+    sortLower === 'price-asc' ? 'priceAsc' : sortLower === 'price-desc' ? 'priceDesc' : sortRaw || undefined;
   return {
     q: get('q') || undefined,
     cat: get('cat') || get('category') || undefined,

@@ -111,6 +111,15 @@ export async function proxy(req: NextRequest) {
       if (check === 'missing') {
         return trilingual404();
       }
+      // Round 196 (F5): legacy "{id}.html" URLs serve the listing with a
+      // self-canonical to the .html URL — a duplicate-content pair with the
+      // clean canonical URL. 301 the .html form to the clean URL for existing
+      // docs only (missing docs 404 above; check-failed falls open below).
+      if (prefix === 'listing' && check === 'exists' && /\.html$/i.test(id)) {
+        const url = req.nextUrl.clone();
+        url.pathname = `/listing/${stripHtmlSuffix(id)}`;
+        return NextResponse.redirect(url, 301);
+      }
       // 'check-failed' → fail open (NextResponse.next() below).
     }
   }
