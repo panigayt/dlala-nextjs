@@ -245,7 +245,9 @@ export function buildWilayaPage(
         url: `${SITE}/listing/${encodeURIComponent(it.id)}`,
       },
     };
-    if (it.rawPrice > 0) {
+    // 16 Oct 2026: mirror listing-page rule — 1 DZD is the negotiable
+    // convention, never emit as a real price (Google rich-snippet flag).
+    if (it.rawPrice > 1) {
       (item.item as Record<string, unknown>).offers = {
         '@type': 'Offer',
         price: it.rawPrice,
