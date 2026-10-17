@@ -199,11 +199,19 @@ function pageTitle(w: WilayaInfo, lang: Lang): string {
 function pageDescription(w: WilayaInfo, items: WilayaCardItem[], total: number, lang: Lang): string {
   const name = wilayaDisplayName(w, lang);
   const samples = items.slice(0, 3).map((it) => sampleLine(it, lang)).join(lang === 'ar' ? '، ' : ', ');
-  if (lang === 'fr')
-    return `${total} voitures à vendre à ${name} : ${samples}. Contact direct avec les vendeurs sur DLALA.`;
-  if (lang === 'en')
-    return `${total} cars for sale in ${name}: ${samples}. Contact sellers directly on DLALA.`;
-  return `${total} سيارة للبيع في ${name}: ${samples}. تواصل مباشر مع البائعين على دلالة.`;
+  // 17 Oct 2026 (SEO audit FIX #5): keep the template lean — taglines
+  // shortened to a single brand word so even 3 samples rarely exceed
+  // 160 chars.
+  const d =
+    lang === 'fr'
+      ? `${total} voitures à vendre à ${name} : ${samples} — DLALA.`
+      : lang === 'en'
+        ? `${total} cars for sale in ${name}: ${samples} — DLALA.`
+        : `${total} سيارة للبيع في ${name}: ${samples} — دلالة.`;
+  // 17 Oct 2026 (SEO audit FIX #5): hard cap — sample titles are
+  // unbounded, so guarantee <160 chars (Google truncates ~155-160).
+  if (d.length > 160) return d.slice(0, 157).trimEnd() + '…';
+  return d;
 }
 
 
