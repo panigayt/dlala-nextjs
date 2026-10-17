@@ -347,8 +347,10 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     tipsPlay: 'استئناف النصائح',
     safetyTips: 'نصائح السلامة',
     // <title> per page (js/app.js PAGE_TITLES — verbatim js/i18n.ar.js)
-    title_home: 'دلالة — الرئيسية', title_publish: 'انشر إعلان — دلالة',
-    meta_home_desc: 'دلالة — سوق الجزائر للإعلانات المبوبة: سيارات، هواتف، عقارات والمزيد',
+    // 17 Oct 2026 (SEO audit FIX #6): keyword-optimized Arabic homepage
+    // title (<60 chars) + description (120-155 chars).
+    title_home: 'دلالة — إعلانات الجزائر: سيارات، عقارات، هواتف', title_publish: 'انشر إعلان — دلالة',
+    meta_home_desc: 'دلالة — سوق الإعلانات المبوبة في الجزائر: آلاف إعلانات السيارات، الهواتف، العقارات والمزيد. انشر إعلانك مجاناً وتواصل مباشرة مع البائعين.',
     photoLimitReached: 'الحد الأقصى 10 صور لكل إعلان',
     title_favorites: 'المفضلة — دلالة', title_myFollows: 'متابعاتي — دلالة',
     title_conversations: 'المحادثات — دلالة', title_chat: 'المحادثة — دلالة',
