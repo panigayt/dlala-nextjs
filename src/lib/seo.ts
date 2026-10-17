@@ -146,8 +146,13 @@ export function listingSeoText(o: ListingSeoInput): {
   if (o.priceLabel) parts.push(o.priceLabel);
   if (o.wilayaLabel) parts.push(o.wilayaLabel);
   if (o.condLabel) parts.push(o.condLabel);
-  let desc =
-    title + (parts.length ? ' — ' + parts.join(' · ') : '') + '. ' + (o.siteTagline || 'DLALA');
+  // 17 Oct 2026 (SEO audit FIX #14): priceLabel carries fmtPriceText's
+  // U+2066…U+2069 LTR isolates (correct for RTL page rendering, but they
+  // leak as invisible control characters into <meta name="description">).
+  // Metadata must be plain text — strip the isolates before the cap.
+  let desc = (
+    title + (parts.length ? ' — ' + parts.join(' · ') : '') + '. ' + (o.siteTagline || 'DLALA')
+  ).replace(/[\u2066\u2069]/g, '');
   if (desc.length > 160) desc = desc.slice(0, 157) + '…';
   return { title: title ? title + ' — DLALA' : 'DLALA', description: desc };
 }
