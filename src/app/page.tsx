@@ -41,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description: desc,
       type: 'website',
       url: 'https://www.dzdlala.com/',
-      images: [{ url: 'https://www.dzdlala.com/icon.png' }],
+      images: [{ url: 'https://www.dzdlala.com/icon-512.png' }],
     },
     twitter: {
       card: 'summary',
