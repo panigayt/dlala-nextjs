@@ -66,6 +66,7 @@ import {
 } from './ListingShell';
 import Gallery from './Gallery';
 import { lqipUrlFor } from '@/lib/image-variants';
+import LocalizedDocTitle from '@/components/LocalizedDocTitle';
 
 // Round 17 T3: the Round 149/159 manual preload set (hero + strip
 // thumbs[0..2] via <PreloadLinks>) is REMOVED — a Slow-3G A/B (n=6/arm,
@@ -249,9 +250,15 @@ export async function generateMetadata({
   // (kept as belt-and-braces; the not-found boundary also injects noindex).
   if (!listing) return { title: 'DLALA', robots: { index: false, follow: false } };
   try {
-    // Round 133: localize the tab title to the reader's language
-    // (dlala_lang cookie; localStorage is client-only).
-    return seoForListing(listing, id, await getServerLang()).metadata;
+    // 17 Oct 2026 (audit H2 — root-cause fix): metadata is STATIC Arabic —
+    // no dlala_lang cookie read. Awaiting cookies() in generateMetadata
+    // deferred the metadata segment past the initial <head> flush, so Next
+    // streamed <title>/<meta>/OG/canonical into <body> (verified: </head>
+    // at byte 1980, <title> at byte 15081). Static metadata resolves before
+    // the head flush. The tab title still follows the reader's language:
+    // ListingContent renders <LocalizedDocTitle> with the cookie-localized
+    // SEO title (same request, same cookie — Round 17 T7 pattern).
+    return seoForListing(listing, id, 'ar').metadata;
   } catch {
     return { title: 'DLALA', robots: { index: false, follow: false } };
   }
@@ -343,14 +350,20 @@ async function ListingContent({
   // script tag — crawlers read JSON-LD anywhere in the HTML. '<' is
   // escaped (\u003c) so user content can never break out of the script.
   let jsonLdScript = '';
+  // 17 Oct 2026 (audit H2): the <title> metadata is static Arabic so it
+  // lands in <head>; the reader's localized SEO title (Round 133) is
+  // applied to the tab via <LocalizedDocTitle> below instead.
+  let localizedTitle = 'DLALA';
   try {
-    // Round 133: same cookie language as generateMetadata above.
     // Round 17 T7: reuse pageLang (same request, same cookie) instead of
     // reading the cookie store a second time.
     // 16 Oct 2026: listingJsonLd returns null for no-real-price listings
     // (Google requires offers/review/aggregateRating on Product) — skip.
-    const ld = seoForListing(l, id, pageLang).jsonLd;
-    if (ld) jsonLdScript = JSON.stringify(ld).replace(/</g, '\\u003c');
+    const seo = seoForListing(l, id, pageLang);
+    if (seo.jsonLd) jsonLdScript = JSON.stringify(seo.jsonLd).replace(/</g, '\\u003c');
+    if (typeof seo.metadata.title === 'string' && seo.metadata.title) {
+      localizedTitle = seo.metadata.title;
+    }
   } catch {
     jsonLdScript = '';
   }
@@ -390,6 +403,10 @@ async function ListingContent({
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-6">
+      {/* 17 Oct 2026 (audit H2): static-Arabic <title> metadata lands in
+          <head>; the reader's localized SEO title goes on the tab here
+          (Round 133 behavior preserved). */}
+      <LocalizedDocTitle title={localizedTitle} />
       {/* LIS-7 (16 Sep 2026, js/listing.js): the back link returns to the
           previous page (feed with its filters/scroll intact) via
           history.back() instead of dumping to home; href="/" is the

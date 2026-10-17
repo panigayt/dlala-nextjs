@@ -44,17 +44,21 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  // Request-time render (see above).
-  await connection();
+  // 17 Oct 2026 (audit H2 — root-cause fix): NO connection()/cookies()
+  // here. Request-time reads in generateMetadata defer the metadata segment
+  // past the initial <head> flush, so Next streams <title>/<meta>/OG into
+  // <body> (verified in production HTML). The page body below keeps its own
+  // connection() (Round 43: SiteChrome usePathname + priceGuideYear()'s
+  // new Date() need request-time rendering), so the route stays dynamic and
+  // this metadata still resolves per-request — before the head flush —
+  // with the current year.
   const { slug } = await params;
   // Dynamic live price guide (S-17/S-18/S-25) — Zak 27 Sep 2026 «يجب ان يكون
   // تلقائيا»: median + p25–p75 per model computed LIVE from Firestore.
   const pgYear = priceGuideSlugYear(slug);
   if (pgYear !== null) {
-    // Live guide → request-time render (Next 16: new Date() is unstable
-    // during prerender; the price guide is inherently dynamic).
+    // Live guide → request-time render (see above).
     // Old-year slugs never reach here (src/proxy.ts 301s them).
-    await connection();
     const g = loadPriceGuide(LANG, priceGuideYear());
     if (!g) return {};
     const d = renderPriceGuideData({

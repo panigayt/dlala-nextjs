@@ -19,22 +19,17 @@ import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import { fetchAnnouncements, type Announcement } from '@/lib/firestore';
 import { t } from '@/lib/i18n-strings';
-import { getServerLang } from '@/lib/server-lang';
 import AnnouncementsClient, { AnnSkeleton } from './AnnouncementsClient';
 import type { AnnListItem } from './AnnList';
 
-// Round 133: <title> follows the reader's language (dlala_lang cookie;
-// localStorage is client-only).
-// 11 Oct 2026: localized description + OG tags (share button needs previews).
-export async function generateMetadata(): Promise<Metadata> {
-  const lang = await getServerLang();
-  const descs: Record<string, string> = {
-    ar: 'الإعلانات الرسمية من فريق دلالة',
-    fr: 'Annonces officielles de l\'équipe Dlala',
-    en: 'Official announcements from the Dlala team',
-  };
-  const desc = descs[lang] || descs.ar;
-  const title = t('title_announcements', lang);
+// 17 Oct 2026 (audit H2 — root-cause fix): generateMetadata is STATIC — no
+// dlala_lang cookie read (awaiting cookies() streamed the tags into <body>).
+// Crawlers get the Arabic fallback; the tab re-localizes on hydration via
+// lib/i18n updateDocTitle (titleKeyForPath '/announcements' →
+// 'title_announcements').
+export function generateMetadata(): Metadata {
+  const desc = 'الإعلانات الرسمية من فريق دلالة';
+  const title = t('title_announcements', 'ar');
   return {
     title,
     description: desc,

@@ -15,8 +15,10 @@ const LANG: GuideLang = 'en';
 // (SiteChrome's usePathname() empties statically prerendered bodies).
 
 export async function generateMetadata(): Promise<Metadata> {
-  // Request-time render (see ../../page.tsx).
-  await connection();
+  // 17 Oct 2026 (audit H2): NO connection() in generateMetadata — it
+  // streamed the metadata into <body>. See ../../guides/[slug]/page.tsx:
+  // the page body keeps its own connection(), so the route stays dynamic
+  // and this resolves per-request, before the head flush.
   const d = renderIndexData(LANG);
   return {
     title: d.title,

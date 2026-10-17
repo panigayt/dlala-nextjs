@@ -28,10 +28,13 @@ import { SITE } from '@/lib/seo';
 import type { Metadata } from 'next';
 
 // 14 Oct 2026 audit R18: server-rendered SEO (was client-side document.title only).
-export async function generateMetadata(): Promise<Metadata> {
-  const lang = await getServerLang();
-  const title =
-    lang === 'fr' ? 'Recherches — DLALA' : lang === 'en' ? 'Wanted — DLALA' : 'مطلوب — دلالة';
+// 17 Oct 2026 (audit H2 — root-cause fix): generateMetadata is STATIC — no
+// dlala_lang cookie read. Awaiting cookies() deferred the metadata segment
+// past the initial <head> flush, so Next streamed the tags into <body>.
+// Crawlers get the Arabic fallback; the tab re-localizes on hydration via
+// lib/i18n updateDocTitle (titleKeyForPath '/wanted' → 'title_wanted').
+export function generateMetadata(): Metadata {
+  const title = 'مطلوب — دلالة';
   const url = `${SITE}/wanted`;
   return {
     title,

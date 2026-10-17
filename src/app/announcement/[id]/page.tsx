@@ -47,10 +47,13 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  // Round 133: localize the tab title to the reader's language
-  // (dlala_lang cookie; localStorage is client-only).
-  const lang = await getServerLang();
-  const suffix = lang === 'ar' ? 'دلالة' : 'Dlala';
+  // 17 Oct 2026 (audit H2 — root-cause fix): metadata is STATIC Arabic —
+  // no dlala_lang cookie read. Awaiting cookies() in generateMetadata
+  // deferred the metadata segment past the initial <head> flush, so Next
+  // streamed <title>/<meta>/OG into <body>. The reader's localized tab
+  // title (Round 133) is set client-side by AnnouncementDetail instead.
+  const lang = 'ar' as const;
+  const suffix = 'دلالة';
   let a: Announcement | null = null;
   let fetchFailed = false;
   try {

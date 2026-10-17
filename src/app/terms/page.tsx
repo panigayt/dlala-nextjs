@@ -8,13 +8,14 @@
 import type { Metadata } from 'next';
 
 import { t } from '@/lib/i18n-strings';
-import { getServerLang } from '@/lib/server-lang';
 import TermsClient from './TermsClient';
 
-// Round 133: <title> follows the reader's language (dlala_lang cookie;
-// localStorage is client-only). Description stays Arabic (title-only scope).
-export async function generateMetadata(): Promise<Metadata> {
-  const title = t('title_terms', await getServerLang());
+// 17 Oct 2026 (audit H2 — root-cause fix): generateMetadata is STATIC — no
+// dlala_lang cookie read (awaiting cookies() streamed the tags into <body>).
+// Crawlers get the Arabic fallback; the tab re-localizes on hydration via
+// lib/i18n updateDocTitle (titleKeyForPath '/terms' → 'title_terms').
+export function generateMetadata(): Metadata {
+  const title = t('title_terms', 'ar');
   return {
     title,
     description: 'شروط استخدام موقع وتطبيق دلالة',

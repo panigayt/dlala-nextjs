@@ -7,6 +7,7 @@
 
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useLang, type Lang } from '@/lib/i18n';
 import { annLocalized, annSafeLink } from '@/lib/firestore';
@@ -69,6 +70,20 @@ export default function AnnouncementDetail({
   const body = annLocalized(ann.body, lang);
   const date = fmtDate(ann.iso, lang);
   const link = annSafeLink(ann.link);
+
+  // 17 Oct 2026 (audit H2): the <title> metadata is static Arabic so it
+  // lands in <head>; the reader's localized title (Round 133) goes on the
+  // tab here — mirrors the server-side fullTitle in
+  // src/app/announcement/[id]/page.tsx generateMetadata.
+  useEffect(() => {
+    try {
+      document.title = title
+        ? `${title} — ${lang === 'ar' ? 'دلالة' : 'Dlala'}`
+        : t('title_announcement');
+    } catch {
+      // a title must never break the page
+    }
+  }, [title, lang, t]);
 
   return (
     <article

@@ -27,15 +27,16 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  // Request-time render (see ../../guides/[slug]/page.tsx).
-  await connection();
+  // 17 Oct 2026 (audit H2): NO connection() in generateMetadata — it
+  // streamed the metadata into <body>. See ../../guides/[slug]/page.tsx:
+  // the page body keeps its own connection(), so the route stays dynamic
+  // and this still resolves per-request, before the head flush.
   const { slug } = await params;
   // Dynamic live price guide (S-17/S-18/S-25) — see ../../guides/[slug]/page.tsx.
   const pgYear = priceGuideSlugYear(slug);
   if (pgYear !== null) {
     // Live guide → request-time render (see ../../guides/[slug]/page.tsx).
     // Old-year slugs never reach here (src/proxy.ts 301s them).
-    await connection();
     const g = loadPriceGuide(LANG, priceGuideYear());
     if (!g) return {};
     const d = renderPriceGuideData({

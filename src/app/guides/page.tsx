@@ -20,8 +20,10 @@ const LANG: GuideLang = 'ar';
 // request-time rendering. Edge cache: src/proxy.ts sets s-maxage=3600.
 
 export async function generateMetadata(): Promise<Metadata> {
-  // Request-time render (see above).
-  await connection();
+  // 17 Oct 2026 (audit H2): NO connection() in generateMetadata — it
+  // streamed the metadata into <body>. The page body below keeps its own
+  // connection() (Round 43), so the route stays dynamic and this resolves
+  // per-request, before the head flush.
   const d = renderIndexData(LANG);
   return {
     title: d.title,

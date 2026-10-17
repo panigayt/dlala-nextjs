@@ -20,17 +20,22 @@ import type { Metadata } from 'next';
 import { cacheLife } from 'next/cache';
 import { fetchFeed, fetchWanted, interleaveWanted, trimFeedCard, type ListingCard } from '@/lib/firestore';
 import { t } from '@/lib/i18n-strings';
-import { getServerLang } from '@/lib/server-lang';
 import HomePage, { type HomeFeedData } from '@/components/HomePage';
 import FeedPreloadHints from '@/components/FeedPreloadHints';
 
-// Round 133: <title> follows the reader's language (dlala_lang cookie;
-// localStorage is client-only). The meta description is inherited from the
-// root layout's static metadata (title-only scope).
-export async function generateMetadata(): Promise<Metadata> {
-  const lang = await getServerLang();
-  const title = t('title_home', lang);
-  const desc = t('meta_home_desc', lang);
+// 17 Oct 2026 (audit H2 — root-cause fix): generateMetadata is STATIC —
+// no dlala_lang cookie read. Awaiting cookies() here deferred the metadata
+// segment past the initial <head> flush, so Next streamed <title>, <meta>,
+// canonical and OG tags into <body> (verified in production HTML:
+// </head> at byte 2220, <title> at byte 85646). Static metadata resolves
+// before the head flush — crawlers get the Arabic fallback (site default,
+// same as the root layout and the /search precedent, Round 11 Team 2).
+// The <title> still follows the reader's language: lib/i18n's client-side
+// updateDocTitle re-localizes the tab on hydration (titleKeyForPath '/'
+// → 'title_home') and on every language switch.
+export function generateMetadata(): Metadata {
+  const title = t('title_home', 'ar');
+  const desc = t('meta_home_desc', 'ar');
   return {
     title,
     description: desc,
