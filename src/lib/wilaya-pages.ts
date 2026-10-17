@@ -314,6 +314,15 @@ export function buildWilayaPage(
 
   const hreflangs = `<link rel="alternate" hreflang="ar" href="${escHtml(url)}">\n<link rel="alternate" hreflang="fr" href="${escHtml(`${SITE}/fr/voitures/wilaya/${w.slug}`)}">\n<link rel="alternate" hreflang="en" href="${escHtml(`${SITE}/en/voitures/wilaya/${w.slug}`)}">\n<link rel="alternate" hreflang="x-default" href="${escHtml(url)}">`;
 
+  // 17 Oct 2026 (SEO audit FIX #3): full OG + Twitter cards, mirroring the
+  // listing-page pattern. og:image = first card photo (absolute URL),
+  // site icon as fallback.
+  const ogImageRaw = items.find((it) => it.photo)?.photo || `${SITE}/icon-512.png`;
+  const ogImage = ogImageRaw.startsWith('http')
+    ? ogImageRaw
+    : `${SITE}${ogImageRaw.startsWith('/') ? '' : '/'}${ogImageRaw}`;
+  const ogTags = `<meta property="og:type" content="website">\n<meta property="og:site_name" content="DLALA">\n<meta property="og:title" content="${escHtml(title)}">\n<meta property="og:description" content="${escHtml(description)}">\n<meta property="og:url" content="${escHtml(canonicalUrl)}">\n<meta property="og:image" content="${escHtml(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">\n<meta name="twitter:title" content="${escHtml(title)}">\n<meta name="twitter:description" content="${escHtml(description)}">\n<meta name="twitter:image" content="${escHtml(ogImage)}">`;
+
   return `<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
 <head>
@@ -324,6 +333,7 @@ export function buildWilayaPage(
 <title>${escHtml(title)}</title>
 <meta name="description" content="${escHtml(description)}">
 <link rel="canonical" href="${escHtml(canonicalUrl)}">
+${ogTags}
 ${hreflangs}
 <style>
 body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:16px;background:#f7f7f7;color:#1a1a1a;max-width:1100px;margin-inline:auto}
