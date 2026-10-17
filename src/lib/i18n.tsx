@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react';
 
 import { t, type Lang } from './i18n-strings';
 
@@ -189,15 +189,44 @@ export function subscribeLang(fn: () => void): () => void {
   };
 }
 
+// ---------------------------------------------------------------------------
+// 17 Oct 2026 (SEO audit FIX #7): forced language for URL-prefixed routes.
+//
+// /fr/ and /en/ homepages must render French/English regardless of the
+// dlala_lang cookie. The app-wide store above is cookie-driven and shared by
+// every page, so these routes wrap their subtree in <ForcedLang value="fr">
+// (or "en"): useLang() then returns the forced language (and localized t())
+// for every consumer inside — header, search bar, feed cards — while the
+// store, the cookie, and every other page behave exactly as before.
+// ---------------------------------------------------------------------------
+const ForcedLangContext = createContext<Lang | null>(null);
+
+export function ForcedLang({
+  value,
+  children,
+}: {
+  value: Lang;
+  children: ReactNode;
+}) {
+  return (
+    <ForcedLangContext.Provider value={value}>
+      {children}
+    </ForcedLangContext.Provider>
+  );
+}
+
 // React hook: app-wide language + setter (legacy js/i18n.js setLang parity).
 // All mounted consumers share one state — a switch in the header (or in
 // settings, or in the chat thread) re-renders every one of them.
 export function useLang(): { lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string } {
-  const lang = useSyncExternalStore<Lang>(
+  const forced = useContext(ForcedLangContext);
+  const storeLang = useSyncExternalStore<Lang>(
     subscribeLang,
     () => getAppLang(),
     () => 'ar', // server snapshot — SSR always renders Arabic
   );
+  // A forced URL-prefix language wins over the cookie store.
+  const lang = forced ?? storeLang;
   const setLang = useCallback((l: Lang) => setAppLang(l), []);
   const tr = useCallback((k: string) => t(k, lang), [lang]);
   return { lang, setLang, t: tr };
