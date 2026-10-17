@@ -199,6 +199,11 @@ function seoForListing(
       // with no 'product' case) — the throw silently drops the ENTIRE <head>
       // metadata (title, description, all OG/Twitter tags). Verified live:
       // listing pages rendered with no <title> at all. 'website' renders.
+      // 17 Oct 2026 (SEO audit FIX #16): re-verified against the INSTALLED
+      // Next 16.4.0 — node_modules/next/dist/lib/metadata/metadata-elements.js
+      // still has the exhaustive switch (cases: website, article, book,
+      // profile, music.*, video.* — no 'product'), and the default branch
+      // still throws. Keep 'website' until Next adds 'product' support.
       type: 'website',
       siteName: 'DLALA',
       title: seo.title,
