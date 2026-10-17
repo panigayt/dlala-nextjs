@@ -35,12 +35,15 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description: desc,
     // 12 Oct 2026: canonical for SEO (was missing).
-    alternates: { canonical: 'https://www.dzdlala.com/' },
+    // 17 Oct 2026 (SEO audit FIX #15): no trailing slash — matches the
+    // sitemap homepage URL (https://www.dzdlala.com) and the convention of
+    // every other page (listing/model/wilaya URLs have no trailing slash).
+    alternates: { canonical: 'https://www.dzdlala.com' },
     openGraph: {
       title,
       description: desc,
       type: 'website',
-      url: 'https://www.dzdlala.com/',
+      url: 'https://www.dzdlala.com',
       images: [{ url: 'https://www.dzdlala.com/icon-512.png' }],
     },
     twitter: {
