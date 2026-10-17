@@ -254,10 +254,23 @@ export function ListingDescription({
     text = description;
   }
   if (!text) return null;
+  // 17 Oct 2026: phone numbers in RTL descriptions render backwards
+  // ("0560 93 83 70" → "70 83 93 0560") on iOS Safari despite U+2066/2069
+  // isolates. Fix: split into lines; render digit-heavy lines (phone
+  // numbers) inside <bdi> for proper bidi isolation.
+  const lines = text.split('\n');
+  const isPhoneLine = (l: string) => /^[\d\s+().-]{7,}$/.test(l.trim());
   return (
     <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
       <ListingH2 k="description" />
-      <p className="whitespace-pre-wrap text-zinc-800">{text}</p>
+      <p className="whitespace-pre-wrap text-zinc-800">
+        {lines.map((l, i) => (
+          <span key={i}>
+            {isPhoneLine(l) ? <bdi dir="ltr">{l}</bdi> : l}
+            {i < lines.length - 1 && '\n'}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
