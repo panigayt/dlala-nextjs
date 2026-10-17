@@ -40,6 +40,10 @@ async function fetchAllLiveListings() {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE, changeFrequency: 'hourly', priority: 1 },
+    // 17 Oct 2026 (SEO audit FIX #4): localized homepage variants
+    // (/fr/ and /en/ homepages exist — Arabic default is unprefixed).
+    { url: `${BASE}/fr`, changeFrequency: 'hourly', priority: 1 },
+    { url: `${BASE}/en`, changeFrequency: 'hourly', priority: 1 },
     // 11 Oct 2026: /search removed — blocked in robots.txt (was Search Console warning).
     { url: `${BASE}/wanted`, changeFrequency: 'hourly', priority: 0.7 },
     { url: `${BASE}/announcements`, changeFrequency: 'daily', priority: 0.5 },
@@ -93,12 +97,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const listings = await fetchAllLiveListings();
-    const listingUrls: MetadataRoute.Sitemap = listings.map((l) => ({
-      url: `${BASE}/listing/${l.id}`,
-      lastModified: l.createdAt || undefined,
-      changeFrequency: 'daily' as const,
-      priority: 0.9,
-    }));
+    // 17 Oct 2026 (SEO audit FIX #4): language variants — Arabic is the
+    // default at unprefixed URLs (no /ar/ variant); /fr/ and /en/ variants
+    // listed for every live listing.
+    const listingUrls: MetadataRoute.Sitemap = listings.flatMap((l) => {
+      const entry = (url: string): MetadataRoute.Sitemap[number] => ({
+        url,
+        lastModified: l.createdAt || undefined,
+        changeFrequency: 'daily' as const,
+        priority: 0.9,
+      });
+      return [
+        entry(`${BASE}/listing/${l.id}`),
+        entry(`${BASE}/fr/listing/${l.id}`),
+        entry(`${BASE}/en/listing/${l.id}`),
+      ];
+    });
     // Round 132: car-model SEO landing pages (production sitemap parity —
     // FIX-FN-018: /voitures/modeles/<slug> with >= MIN_LISTINGS live cars,
     // emitted weekly/0.7 like the production buildSitemapXml landing URLs).
@@ -106,28 +120,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Round 132: car-model SEO landing pages (production sitemap parity —
     // FIX-FN-018: /voitures/modeles/<slug> with >= MIN_LISTINGS live cars,
     // emitted weekly/0.7 like the production buildSitemapXml landing URLs).
-    // Only the Arabic canonical path is advertised (production parity).
+    // 17 Oct 2026 (SEO audit FIX #4): fr/en variants advertised alongside
+    // the Arabic canonical (Arabic default stays unprefixed — no /ar/).
     // 14 Oct 2026: cars-per-wilaya SEO landing pages (/voitures/wilaya/<slug>,
     // trilingual ar/fr/en, Arabic canonical). Same weekly/0.7 as the model
     // pages; only wilayas with >= WILAYA_MIN_LISTINGS live cars qualify
-    // (thin-content guard parity). Only the Arabic canonical path is
-    // advertised (production parity with the model pages).
+    // (thin-content guard parity). 17 Oct 2026 (SEO audit FIX #4): fr/en
+    // variants advertised alongside the Arabic canonical.
     // NOTE: fetchAvailableCars is 'use cache' + cacheLife('hours'), so the
     // single fetch below serves both computations.
     let modelUrls: MetadataRoute.Sitemap = [];
     let wilayaUrls: MetadataRoute.Sitemap = [];
     try {
       const cars = await fetchAvailableCars();
-      modelUrls = qualifyingModelUrls(cars, MIN_LISTINGS).map((path) => ({
-        url: `${BASE}${path}`,
-        changeFrequency: 'weekly' as const,
-        priority: 0.7,
-      }));
-      wilayaUrls = qualifyingWilayaUrls(cars, WILAYA_MIN_LISTINGS).map((path) => ({
-        url: `${BASE}${path}`,
-        changeFrequency: 'weekly' as const,
-        priority: 0.7,
-      }));
+      // 17 Oct 2026 (SEO audit FIX #4): /fr/ and /en/ variants for the
+      // /voitures landing pages (Arabic default stays unprefixed).
+      modelUrls = qualifyingModelUrls(cars, MIN_LISTINGS).flatMap((path) => [
+        { url: `${BASE}${path}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+        { url: `${BASE}/fr${path}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+        { url: `${BASE}/en${path}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+      ]);
+      wilayaUrls = qualifyingWilayaUrls(cars, WILAYA_MIN_LISTINGS).flatMap((path) => [
+        { url: `${BASE}${path}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+        { url: `${BASE}/fr${path}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+        { url: `${BASE}/en${path}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+      ]);
     } catch {
       // Firestore unreachable for the counts — skip both
     }
