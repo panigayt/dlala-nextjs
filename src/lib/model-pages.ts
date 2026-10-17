@@ -42,13 +42,15 @@ export function fmtPrice(p: unknown): string {
   return n.toLocaleString('en-US') + ' دج';
 }
 
-const WILAYA_BY_CODE: Record<number, { ar: string; fr: string }> =
-  Object.fromEntries(WILAYAS.map((w) => [w.code, { ar: w.ar, fr: w.fr }]));
+const WILAYA_BY_CODE: Record<number, { ar: string; fr: string; en: string }> =
+  Object.fromEntries(WILAYAS.map((w) => [w.code, { ar: w.ar, fr: w.fr, en: w.en }]));
 
 export function wilayaName(code: number, lang: string): string {
   const w = WILAYA_BY_CODE[code];
   if (!w) return '';
-  return lang === 'fr' ? w.fr : w.ar;
+  if (lang === 'fr') return w.fr;
+  if (lang === 'en') return w.en;
+  return w.ar;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,8 +161,13 @@ export function cardHtml(item: ModelCardItem, pos: number, lang: string): string
 // guides function. Shown top AND bottom on every SEO landing page.
 export function ctaTopHtml(lang: string): string {
   const isFr = lang === 'fr';
-  const head = isFr ? 'Découvrez toutes les annonces sur Dlala' : 'تصفح موقع دلالة و اكتشف كل الاعلانات';
-  const btn = isFr ? 'Cliquez ici' : 'اضغط هنا';
+  const isEn = lang === 'en';
+  const head = isFr
+    ? 'Découvrez toutes les annonces sur Dlala'
+    : isEn
+      ? 'Browse all listings on Dlala'
+      : 'تصفح موقع دلالة و اكتشف كل الاعلانات';
+  const btn = isFr ? 'Cliquez ici' : isEn ? 'Click here' : 'اضغط هنا';
   return `<div class="cta-top"><span class="h">${escHtml(head)}</span><a class="b" href="${SITE}/">${escHtml(btn)}</a></div>`;
 }
 
@@ -173,15 +180,41 @@ export function carsCategoryUrl(): string {
 
 export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang: string): string {
   const isFr = lang === 'fr';
+  const isEn = lang === 'en';
+  const latinName = `${modelInfo.brand} ${modelInfo.model}`;
   const title = isFr
-    ? `${modelInfo.brand} ${modelInfo.model} d'occasion | DLALA`
-    : `${modelInfo.ar} مستعملة | دلالة`;
+    ? `${latinName} d'occasion | DLALA`
+    : isEn
+      ? `${latinName} used cars | DLALA`
+      : `${modelInfo.ar} مستعملة | دلالة`;
   const description = isFr
-    ? `Annonces ${modelInfo.brand} ${modelInfo.model} d'occasion en Algérie : ${items.length} annonces avec prix et photos. Contact direct avec les vendeurs.`
-    : `إعلانات ${modelInfo.ar} مستعملة في الجزائر: ${items.length} إعلان بالأسعار والصور. تواصل مباشر مع البائعين.`;
+    ? `Annonces ${latinName} d'occasion en Algérie : ${items.length} annonces avec prix et photos. Contact direct avec les vendeurs.`
+    : isEn
+      ? `Used ${latinName} listings in Algeria: ${items.length} ads with prices and photos. Contact sellers directly.`
+      : `إعلانات ${modelInfo.ar} مستعملة في الجزائر: ${items.length} إعلان بالأسعار والصور. تواصل مباشر مع البائعين.`;
   const url = modelUrl(modelInfo.slug);
   // Self-referencing canonical per language (14 Oct 2026 audit R5).
-  const canonicalUrl = isFr ? `${SITE}/fr/voitures/modeles/${modelInfo.slug}` : url;
+  const canonicalUrl = isFr
+    ? `${SITE}/fr/voitures/modeles/${modelInfo.slug}`
+    : isEn
+      ? `${SITE}/en/voitures/modeles/${modelInfo.slug}`
+      : url;
+  // 17 Oct 2026 (SEO audit FIX #8): full bidirectional hreflang cluster
+  // (ar default unprefixed + fr + en + x-default) — wilaya-pages.ts pattern.
+  const hreflangs = `<link rel="alternate" hreflang="ar" href="${escHtml(url)}">\n<link rel="alternate" hreflang="fr" href="${escHtml(`${SITE}/fr/voitures/modeles/${modelInfo.slug}`)}">\n<link rel="alternate" hreflang="en" href="${escHtml(`${SITE}/en/voitures/modeles/${modelInfo.slug}`)}">\n<link rel="alternate" hreflang="x-default" href="${escHtml(url)}">`;
+  const switchAr = `<a href="${escHtml(url)}">العربية</a>`;
+  const switchFr = `<a href="${escHtml(`${SITE}/fr/voitures/modeles/${modelInfo.slug}`)}">Français</a>`;
+  const switchEn = `<a href="${escHtml(`${SITE}/en/voitures/modeles/${modelInfo.slug}`)}">English</a>`;
+  const langSwitch = isFr
+    ? `${switchAr} · ${switchEn}`
+    : isEn
+      ? `${switchAr} · ${switchFr}`
+      : `${switchFr} · ${switchEn}`;
+  const homeLabel = isFr ? 'Accueil' : isEn ? 'Home' : 'الرئيسية';
+  const carsLabel = isFr ? 'Voitures' : isEn ? 'Cars' : 'سيارات';
+  const modelLabel = isFr || isEn ? latinName : modelInfo.ar;
+  const dir = isFr || isEn ? 'ltr' : 'rtl';
+  const textAlign = isFr || isEn ? 'right' : 'left';
   const cards = items.map((it, i) => cardHtml(it, i + 1, lang)).join('\n');
   const listItems = items.map((it, i) => ({
     '@type': 'ListItem',
@@ -207,7 +240,7 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
     ],
   };
   return `<!DOCTYPE html>
-<html dir="${isFr ? 'ltr' : 'rtl'}" lang="${lang}">
+<html dir="${dir}" lang="${isEn ? 'en' : lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -216,19 +249,20 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
 <title>${escHtml(title)}</title>
 <meta name="description" content="${escHtml(description)}">
 <link rel="canonical" href="${escHtml(canonicalUrl)}">
+${hreflangs}
 <style>
 body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:16px;background:#f7f7f7;color:#1a1a1a}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .cta-top{text-align:center;margin:18px 0;background:#eef7f1;border:1px solid rgba(13,122,79,.25);border-radius:14px;padding:18px 16px;box-shadow:0 2px 8px rgba(13,122,79,.08)}
 .cta-top .h{display:block;font-weight:800;font-size:16px;margin-bottom:12px;color:#0a3d28;white-space:nowrap}
 .cta-top .b{display:inline-block;background:#0d7a4f;color:#fff!important;font-weight:700;font-size:15.5px;padding:12px 34px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(13,122,79,.35)}
-html[lang="fr"] .cta-top .h{font-size:15px}
+html[lang="fr"] .cta-top .h,html[lang="en"] .cta-top .h{font-size:15px}
 </style>
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>
 </head>
 <body>
-<nav aria-label="breadcrumb"><a href="${SITE}/">${isFr ? 'Accueil' : 'الرئيسية'}</a> ‹ <a href="${isFr ? `${SITE}/fr/voitures` : carsCategoryUrl()}">${isFr ? 'Voitures' : 'سيارات'}</a> ‹ ${escHtml(isFr ? `${modelInfo.brand} ${modelInfo.model}` : modelInfo.ar)}</nav>
-<div style="text-align:${isFr ? 'right' : 'left'};margin:8px 0"><a href="${isFr ? modelUrl(modelInfo.slug) : `${SITE}/fr/voitures/modeles/${modelInfo.slug}`}">${isFr ? 'العربية' : 'Français'}</a></div>
+<nav aria-label="breadcrumb"><a href="${SITE}/">${homeLabel}</a> ‹ <a href="${isFr ? `${SITE}/fr/voitures` : isEn ? `${SITE}/en/voitures` : carsCategoryUrl()}">${carsLabel}</a> ‹ ${escHtml(modelLabel)}</nav>
+<div style="text-align:${textAlign};margin:8px 0">${langSwitch}</div>
 <h1>${escHtml(title.replace(' | دلالة', '').replace(' | DLALA', ''))}</h1>
 <p>${escHtml(description)}</p>
 ${ctaTopHtml(lang)}
