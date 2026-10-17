@@ -72,6 +72,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // 17 Oct 2026 (audit): theme-color — the logo's emerald green. Emits
+  // <meta name="theme-color" content="#0d7a4f"> in <head>; matches the PWA
+  // manifest's theme_color (src/app/manifest.ts).
+  themeColor: "#0d7a4f",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
