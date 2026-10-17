@@ -161,6 +161,10 @@ export interface ListingJsonLdInput {
   price?: number;
   condition?: string;
   status?: string;
+  /** 17 Oct 2026: true when the listing has at least one REAL product photo
+      (not the site icon fallback, not a category placeholder). Google's
+      merchant-listing validation rejects non-product images as "image manquant". */
+  hasRealImage?: boolean;
 }
 
 // Verbatim port of js/seo.js listingJsonLd().
@@ -172,6 +176,15 @@ export interface ListingJsonLdInput {
 export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> | null {
   const hasRealPrice = typeof o.price === 'number' && isFinite(o.price) && o.price > 1;
   if (!hasRealPrice) return null;
+  // 17 Oct 2026 (Google Search Console: "image" manquant, critical): Google's
+  // merchant-listing validation rejects the site-icon fallback and category
+  // placeholders as product images. No real photo → no Product JSON-LD at all.
+  // Honest: no fake image, no validation errors, no rich snippet.
+  if (!o.hasRealImage) return null;
+  // 17 Oct 2026 (Google Search Console: "description" manquant, non-critical):
+  // guard against empty descriptions.
+  const description = (o.description || '').trim();
+  if (!description) return null;
   const offers: Record<string, unknown> = {
     '@type': 'Offer',
     url: o.url,
@@ -204,7 +217,7 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> | 
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: o.title,
-    description: o.description,
+    description,
     offers,
   };
   if (o.image) ld.image = Array.isArray(o.image) ? o.image : [o.image];

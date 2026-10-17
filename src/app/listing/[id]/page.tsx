@@ -171,6 +171,12 @@ function seoForListing(
     if (u) allImages.push(absImg(u));
   }
   if (!allImages.length) allImages.push(image);
+  // 17 Oct 2026 (Google Search Console: "image" manquant): a listing has a
+  // REAL product photo only when allImages contains something other than the
+  // site-icon fallback or a category placeholder. Otherwise no Product JSON-LD.
+  const hasRealImage = allImages.some(
+    (u) => !u.includes('/icon-512.png') && !u.includes('/default_ads/')
+  );
   const jsonLd = listingJsonLd({
     title: title || 'DLALA',
     description: seo.description,
@@ -180,6 +186,7 @@ function seoForListing(
     price: Number(l.price) || 0,
     condition: l.condition,
     status: l.status,
+    hasRealImage,
   });
   const metadata: Metadata = {
     title: seo.title,
