@@ -93,6 +93,27 @@ export default async function Home() {
     error = e instanceof Error ? e.message : 'feed-error';
   }
 
+  // WebSite + Organization structured data (schema.org).
+  // Same injection pattern as the listing page (dangerouslySetInnerHTML,
+  // < escaped as \u003c so content can never break out of the script).
+  const homeJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        name: 'Dlala',
+        url: 'https://www.dzdlala.com',
+        inLanguage: ['ar', 'fr', 'en'],
+      },
+      {
+        '@type': 'Organization',
+        name: 'Dlala',
+        url: 'https://www.dzdlala.com',
+        logo: 'https://www.dzdlala.com/icon-512.png',
+      },
+    ],
+  }).replace(/</g, '\\u003c');
+
   // Round 14 T11: preload hints for the first 6 feed thumbnails. VERIFIED
   // 12 Oct 2026 via prod-build curl: React 19 does NOT hoist these into
   // <head> in Next.js 16 (same for the listing page's Round 149/159 tags)
@@ -116,6 +137,10 @@ export default async function Home() {
           contending with the critical band (Fizz-auto 0-3 + high 4-5)
           on weak networks. NOT all 24 — the critical band keeps priority. */}
       <FeedPreloadHints cards={feed ? feed.cards.slice(6, 12) : []} priority="low" />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: homeJsonLd }}
+      />
       <HomePage feed={feed} error={error} />
     </>
   );
