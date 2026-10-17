@@ -49,6 +49,18 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://*.googleapis.com https://apis.google.com",
               "style-src 'self' 'unsafe-inline'",
+              // 17 Oct 2026 (audit: "CSP img-src wildcard" — reviewed, KEPT).
+              // There is no open wildcard (`*` / bare `https:`); the two
+              // subdomain wildcards are scoped and load-bearing:
+              // - https://*.r2.dev — user-uploaded listing photos are served
+              //   from the R2 public bucket whose host is dynamic per
+              //   R2_PUBLIC_URL (e.g. pub-<id>.r2.dev); it cannot be pinned
+              //   to a single host without breaking all listing images.
+              // - https://*.googleapis.com — Google-hosted images (e.g.
+              //   profile photos from Google sign-in).
+              // https://firebasestorage.googleapis.com covers legacy
+              // listing photos; img.dzdlala.com / dzdlala.com are
+              // first-party. Tightening further would break images.
               "img-src 'self' data: blob: https://dzdlala.com https://img.dzdlala.com https://*.r2.dev https://firebasestorage.googleapis.com https://*.googleapis.com",
               "connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.r2.dev https://*.r2.cloudflarestorage.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
               "font-src 'self' data:",
