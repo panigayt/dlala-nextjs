@@ -63,6 +63,16 @@ const nextConfig: NextConfig = {
             value: "nosniff",
           },
           {
+            // 17 Oct 2026 (audit: HSTS missing includeSubDomains/preload).
+            // Vercel's platform default is `max-age=63072000`; this explicit
+            // header overrides it. includeSubDomains + preload are a
+            // deliberate commitment: the audit verified full HTTPS
+            // (complete redirect chain, zero mixed content), and the site
+            // serves img.dzdlala.com + the apex over HTTPS too.
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+          {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
           },
