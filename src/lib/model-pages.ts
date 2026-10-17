@@ -184,8 +184,13 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
   const canonicalUrl = isFr ? `${SITE}/fr/voitures/modeles/${modelInfo.slug}` : url;
   const cards = items.map((it, i) => cardHtml(it, i + 1, lang)).join('\n');
   const listItems = items.map((it, i) => ({
-    '@type': 'ListItem', position: i + 1,
-    url: `${SITE}/listing/${encodeURIComponent(it.id)}`, name: it.title,
+    '@type': 'ListItem',
+    position: i + 1,
+    item: {
+      '@type': 'Product',
+      name: it.title,
+      url: `${SITE}/listing/${encodeURIComponent(it.id)}`,
+    },
   }));
   const jsonLd = {
     '@context': 'https://schema.org',
