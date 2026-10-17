@@ -135,6 +135,29 @@ export async function proxy(req: NextRequest) {
       'public, s-maxage=3600, stale-while-revalidate=86400',
     );
   }
+  // 17 Oct 2026 (speed fix): Next.js defaults ISR pages to
+  // `public, max-age=0, must-revalidate`, forcing every browser to
+  // revalidate with the edge on each view — a wasted round-trip on weak
+  // connections. Browsers get max-age=60 (feed ISR cadence); s-maxage
+  // keeps edge behavior aligned with each page's revalidate
+  // (listing 300s, seller/announcement/home 60s).
+  const p = req.nextUrl.pathname;
+  if (/^\/(listing)\/[^/]+\/?$/.test(p)) {
+    res.headers.set(
+      'Cache-Control',
+      'public, s-maxage=300, max-age=60, stale-while-revalidate=300',
+    );
+  } else if (/^\/(seller|announcement)\/[^/]+\/?$/.test(p)) {
+    res.headers.set(
+      'Cache-Control',
+      'public, s-maxage=60, max-age=60, stale-while-revalidate=300',
+    );
+  } else if (p === '/' || p === '/fr' || p === '/en') {
+    res.headers.set(
+      'Cache-Control',
+      'public, s-maxage=60, max-age=60, stale-while-revalidate=300',
+    );
+  }
   return res;
 }
 
@@ -156,5 +179,11 @@ export const config = {
     '/listing/:id*',
     '/seller/:uid*',
     '/announcement/:id*',
+    // 17 Oct 2026 (speed fix): homepage needs the proxy to set browser
+    // cache headers (max-age=60 instead of Next's default max-age=0).
+    // Exact matches only — no sub-routes exist under these paths.
+    '/',
+    '/fr',
+    '/en',
   ],
 };
