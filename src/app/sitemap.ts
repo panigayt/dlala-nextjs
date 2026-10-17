@@ -109,8 +109,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
       return [
         entry(`${BASE}/listing/${l.id}`),
-        entry(`${BASE}/fr/listing/${l.id}`),
-        entry(`${BASE}/en/listing/${l.id}`),
+        // 17 Oct 2026: /fr/listing/ and /en/listing/ routes do NOT exist
+        // (listings are cookie-localized, not URL-localized) — advertising
+        // them would send crawlers to 404s. Only the canonical Arabic URL.
       ];
     });
     // Round 132: car-model SEO landing pages (production sitemap parity —
