@@ -52,6 +52,12 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  // 17 Oct 2026 (audit): apple-touch-icon was missing. Emits
+  // <link rel="apple-touch-icon" href="/icon-512.png"> in <head>.
+  // public/icon-512.png verified present (the same file og:image uses).
+  icons: {
+    apple: "/icon-512.png",
+  },
   // Round 45 (15 Oct 2026): build/deploy marker. Lets the audit loop (and
   // Zak) tell a stale deployment from a fresh one: fetch any page, read
   // <meta name="dlala-build">, compare against the latest main commit.
