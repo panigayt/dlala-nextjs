@@ -33,7 +33,16 @@ export function generateMetadata(): Metadata {
   return {
     title,
     description: desc,
-    alternates: { canonical: 'https://www.dzdlala.com/announcements' },
+    // Round 205 (audit R1, A3): hreflang cluster — self-referential 'ar'
+    // plus x-default. No /fr or /en announcements route exists, so fr/en
+    // targets would be 404s.
+    alternates: {
+      canonical: 'https://www.dzdlala.com/announcements',
+      languages: {
+        ar: 'https://www.dzdlala.com/announcements',
+        'x-default': 'https://www.dzdlala.com/announcements',
+      },
+    },
     openGraph: {
       title,
       description: desc,

@@ -193,7 +193,18 @@ function seoForListing(
     title: seo.title,
     description: seo.description,
     // 11 Oct 2026: canonical — prevents duplicate-content indexing.
-    alternates: { canonical: url },
+    // Round 205 (audit R1, A3): hreflang cluster — self-referential 'ar'
+    // plus x-default (the listing IS the Arabic default URL). /fr and /en
+    // listing routes do not exist (404, listings are cookie-localized —
+    // commit 7c7c8ba), so emitting fr/en hreflang targets here would point
+    // crawlers at 404s and create Search Console errors.
+    alternates: {
+      canonical: url,
+      languages: {
+        ar: url,
+        'x-default': url,
+      },
+    },
     openGraph: {
       // Round 133: 'product' was the legacy og:type, but Next 16's metadata
       // renderer throws `Invalid OpenGraph type: product` (exhaustive switch

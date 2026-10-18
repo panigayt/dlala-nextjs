@@ -43,7 +43,18 @@ export function generateMetadata(): Metadata {
     // 17 Oct 2026 (SEO audit FIX #15): no trailing slash — matches the
     // sitemap homepage URL (https://www.dzdlala.com) and the convention of
     // every other page (listing/model/wilaya URLs have no trailing slash).
-    alternates: { canonical: 'https://www.dzdlala.com' },
+    // Round 205 (audit R1, A3): full hreflang cluster — mirrors src/app/fr
+    // /page.tsx (ar = self unprefixed, fr = /fr/…, en = /en/…, x-default =
+    // the Arabic default). Both directions are now reciprocal.
+    alternates: {
+      canonical: 'https://www.dzdlala.com',
+      languages: {
+        ar: 'https://www.dzdlala.com',
+        fr: 'https://www.dzdlala.com/fr',
+        en: 'https://www.dzdlala.com/en',
+        'x-default': 'https://www.dzdlala.com',
+      },
+    },
     openGraph: {
       title,
       description: desc,

@@ -38,7 +38,13 @@ export function generateMetadata(): Metadata {
   const url = `${SITE}/wanted`;
   return {
     title,
-    alternates: { canonical: url },
+    // Round 205 (audit R1, A3): hreflang cluster — self-referential 'ar'
+    // plus x-default. No /fr or /en wanted route exists, so fr/en targets
+    // would be 404s.
+    alternates: {
+      canonical: url,
+      languages: { ar: url, 'x-default': url },
+    },
     openGraph: { title, url, type: 'website' },
   };
 }
