@@ -136,12 +136,17 @@ export function MetaGrid({
           Round 205), so the row never renders a literal "1 DZD". */}
       <div>
         <span className="text-zinc-500">{t('price')}: </span>
-        {/* Zak 18 Oct 2026 (correction): ALWAYS show the price (even 1 دج);
-            badge when negotiable OR price<=1 (1 DZD = negotiable). */}
+        {/* Zak 18 Oct 2026: 1-DZD = negotiable — show text only, never "1 دج". */}
         <b>
-          <span dir="ltr">{formatPrice(price || 0, lang)}</span>
-          {(negotiable || Number(price) <= 1) && (
-            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
+          {Number(price) <= 1 ? (
+            t('negotiable')
+          ) : (
+            <>
+              <span dir="ltr">{formatPrice(price || 0, lang)}</span>
+              {negotiable && (
+                <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
+              )}
+            </>
           )}
         </b>
       </div>
@@ -394,7 +399,7 @@ function SimilarCard({ l }: { l: ListingCard }) {
               badge when negotiable OR price<=1 (1 DZD = negotiable). */}
           <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
           {(l.negotiable || Number(l.price) <= 1) && (
-            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
+            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
           )}
           {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
         </p>

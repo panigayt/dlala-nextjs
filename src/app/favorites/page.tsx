@@ -501,7 +501,7 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
                         <p className="font-bold text-emerald-700">
                           <span dir="ltr">{formatPrice(live.price || 0, lang)}</span>
                           {(live.negotiable || Number(live.price) <= 1) && (
-                            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
+                            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
                           )}
                         </p>
                         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(live, lang)}</h3>
