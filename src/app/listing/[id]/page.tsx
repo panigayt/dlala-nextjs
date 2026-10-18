@@ -136,8 +136,13 @@ function seoForListing(
   // js/listing.js applyListingSeoHead: priceLabel + negotiable suffix,
   // wilayaLabel (allWilayas fallback), condLabel unless condition-exempt
   // (C-R24-1 — the label must not leak into meta for exempt categories).
+  // CA-D1 (Round 23, 18 Oct 2026): 1-DZD "no price" convention — the
+  // meta description must never carry a literal "1 DZD". When price <= 1
+  // the label is the localized negotiable text (hero parity, Round 205).
   const priceLabel =
-    fmtPriceText(l.price, lang) + (l.negotiable ? ' · ' + t('negotiable', lang) : '');
+    Number(l.price) <= 1
+      ? t('negotiable', lang)
+      : fmtPriceText(l.price, lang) + (l.negotiable ? ' · ' + t('negotiable', lang) : '');
   const wilayaLabel = l.wilayaCode ? wilayaName(l.wilayaCode, lang) : t('allWilayas', lang);
   const condLabel =
     l.condition && !isConditionExempt(l.categoryId, l.answers)

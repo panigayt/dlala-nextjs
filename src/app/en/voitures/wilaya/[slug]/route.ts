@@ -20,6 +20,16 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params;
+  // AF-1 (Round 7, 18 Oct 2026) + BZ-D1 (Round 23, 18 Oct 2026):
+  // non-canonical slug aliases 301-redirect to the canonical wilaya slug
+  // instead of 404ing. Locale prefix preserved.
+  const SLUG_ALIASES: Record<string, string> = {
+    alger: 'algiers',
+  };
+  const alias = SLUG_ALIASES[slug];
+  if (alias) {
+    return Response.redirect(new URL(`/en/voitures/wilaya/${alias}`, _req.url), 301);
+  }
   const wilaya = WILAYA_BY_SLUG[slug];
   if (!wilaya) {
     return new Response(notFoundPage('wilaya', 'en'), {
