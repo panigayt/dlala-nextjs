@@ -379,11 +379,17 @@ export function renderPriceGuideData({
     `<h2>${faqHeading}</h2>\n` +
     faqs.map((f) => `<h3>${escHtml(f.q)}</h3>\n<p>${escHtml(f.a)}</p>`).join('\n');
 
+  // D3 (SEO audit 18 Oct 2026): wrap each entry as {"@type":"ListItem",
+  // position, item:{...}} — the model/wilaya template pattern (Google's
+  // canonical ListItem shape). 'Product' matches the model-page template.
   const modelItems = PRICE_MODELS.filter((m) => rowsByModel[m.key]).map((m, i) => ({
     '@type': 'ListItem',
     position: i + 1,
-    name: lang === 'ar' ? m.ar : m.fr,
-    url: m.modelSlug ? `${SITE}/voitures/modeles/${m.modelSlug}` : canonical,
+    item: {
+      '@type': 'Product',
+      name: lang === 'ar' ? m.ar : m.fr,
+      url: m.modelSlug ? `${SITE}/voitures/modeles/${m.modelSlug}` : canonical,
+    },
   }));
   const jsonLd = JSON.stringify([
     {
