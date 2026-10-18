@@ -54,7 +54,14 @@ export async function generateMetadata({ params }: { params: Promise<{ uid: stri
   }
   if (!seller && !fetchFailed) notFound();
   if (!seller) return { title: 'DLALA', robots: { index: false, follow: false } };
-  const name = seller.name || seller.storeName || 'Seller';
+  // R53 Team D (18 Oct 2026): verified pro sellers show their STORE name —
+  // mirrors SellerProfileCard and VitrineShowcase (18 Sep 2026, Zak).
+  // Before this, <title>/og:title used the person name while the visible
+  // H1 showed the store name (e.g. "DLALA — Mouhamed Mo" vs "KABA STORE").
+  const name =
+    seller.storeTier === 'verified' && seller.storeName
+      ? seller.storeName
+      : seller.name || seller.storeName || 'Seller';
   const url = 'https://www.dzdlala.com/seller/' + encodeURIComponent(uid);
   const title = `DLALA — ${name}`;
   const description =
