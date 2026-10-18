@@ -24,6 +24,10 @@ import { withTimeout } from '@/lib/timeout';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang } from '@/lib/i18n';
+// Round 29 D3 (18 Oct 2026): keep the 'dlala_followed_v1' first-paint
+// cache in sync on follow/unfollow — the homepage boost otherwise stays
+// stale until the auth-settled refresh self-heals.
+import { bumpFollowedCache } from '@/lib/followBoost';
 
 // Shared follow toggle logic — mirrors js/app.js (onFollowBtnTap /
 // toggleFollow / paintFollowBtn) and the seller.html follow-btn behavior.
@@ -137,6 +141,10 @@ export function useFollowToggle(storeUid: string) {
         });
       }
       await withTimeout(batch.commit(), 15000);
+      // Round 29 D3 (18 Oct 2026): update the first-paint followed cache
+      // immediately — the homepage boost must not stay stale until the
+      // next auth-settled refresh.
+      bumpFollowedCache(storeUid, isFollow);
       if (isFollow) {
         // R84 H-2 (js/app.js): the follow notification is written in a
         // SEPARATE best-effort write AFTER the follow batch commits.
@@ -181,9 +189,14 @@ export function useFollowToggle(storeUid: string) {
           fsMod.getDoc(fsMod.doc(db, `follows/${user.uid}_${storeUid}`)),
           8000
         );
-        if (mounted.current) setFollowing(truth.exists());
+        const exists = truth.exists();
+        if (mounted.current) setFollowing(exists);
+        // Round 29 D3: reconcile the first-paint cache with server truth.
+        bumpFollowedCache(storeUid, exists);
       } catch {
         if (mounted.current) setFollowing(wasOn);
+        // Round 29 D3: the toggle failed — the pre-toggle state stands.
+        bumpFollowedCache(storeUid, wasOn);
       }
       showToast(t('errorGeneric'));
     } finally {

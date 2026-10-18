@@ -351,6 +351,19 @@ export default function FeedWithLoadMore({
       }
       regularRef.current = ranked;
       const freshRanked = ranked.slice(prevRegular.length);
+      // Round 29 D2 (18 Oct 2026): the «جديد من متابَعيك» strip pool must
+      // cover every loaded page, not just the first one — extend the raw
+      // (pre-taste) regular pool with the fresh batch and rebuild the
+      // strip from the accumulated pool.
+      if (rawRegularRef.current) {
+        rawRegularRef.current = [...rawRegularRef.current, ...freshRegular];
+        try {
+          const followed = followedRef.current;
+          if (followed) setStripCards(newFromFollows(rawRegularRef.current, followed));
+        } catch {
+          /* strip rebuild must never break load-more */
+        }
+      }
       // Follow boost on the fresh batch only (js/home.js v101): the
       // visible order is never reshuffled — "show more" appends only.
       const boostedFresh = applyFollowBoost(freshRanked, followedRef.current || new Set());

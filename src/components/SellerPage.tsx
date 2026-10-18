@@ -151,9 +151,13 @@ function StoreHero({ s, uid }: { s: SellerProfile; uid: string }) {
         <span>
           🤝 <b>{deals}</b> {t('dealsConfirmed')}
         </span>
-        <span className="boutique-fcount">
-          👥 <b>{followersCount}</b> {t('followers')}
-        </span>
+        {/* Round 29 D4 (18 Oct 2026): hide the zero count, matching the
+            ordinary seller card below — zero followers shows nothing. */}
+        {followersCount > 0 && (
+          <span className="boutique-fcount">
+            👥 <b>{followersCount}</b> {t('followers')}
+          </span>
+        )}
         <span className="bh-since">
           {t('memberSince')}: {memberSince}
         </span>

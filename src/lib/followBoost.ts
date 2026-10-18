@@ -153,3 +153,22 @@ export function setsEqual(a: Set<string> | null, b: Set<string>): boolean {
   for (const x of b) if (!a.has(x)) return false;
   return true;
 }
+
+// Round 29 D3 (18 Oct 2026): follow/unfollow must update the
+// 'dlala_followed_v1' first-paint cache IMMEDIATELY, otherwise the
+// homepage follow boost stays stale until the auth-settled refresh
+// self-heals. Only bumps when a seeded cache exists — never fabricate
+// a partial set (a direct landing on a seller page has no full set;
+// the homepage always re-seeds + refreshes from the server).
+// Best-effort, never throws.
+export function bumpFollowedCache(uid: string, following: boolean): void {
+  try {
+    if (!localStorage.getItem(FOLLOWED_CACHE_KEY)) return;
+    const set = loadFollowedCache();
+    if (following) set.add(uid);
+    else set.delete(uid);
+    saveFollowedCache(set);
+  } catch {
+    // ignore — best-effort cache
+  }
+}

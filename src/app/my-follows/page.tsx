@@ -24,6 +24,9 @@ import { getFirebaseCdn, type FirebaseClient, type CompatUser } from '@/lib/fire
 import { withTimeout } from '@/lib/timeout';
 import { useLang } from '@/lib/i18n';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
+// Round 29 D3 (18 Oct 2026): keep the 'dlala_followed_v1' first-paint
+// cache in sync on unfollow.
+import { bumpFollowedCache } from '@/lib/followBoost';
 
 const FOLLOW_SEEN_KEY = 'dlala_followseen_v1';
 const FOLLOWS_NEW_MS = 7 * 86400000;
@@ -292,6 +295,10 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
           15000
         );
         await Promise.all(snap.docs.map((d) => withTimeout(fsMod.deleteDoc(d.ref), 15000)));
+        // Round 29 D3: update the homepage first-paint followed cache
+        // immediately — it must not stay stale until the next homepage
+        // auth-settled refresh.
+        bumpFollowedCache(storeId, false);
         // Drop the seen-watermark too: a later re-follow must be able to
         // earn its "جديد" badge again.
         try {
