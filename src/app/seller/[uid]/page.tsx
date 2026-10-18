@@ -24,12 +24,29 @@
 // harmless fallback for the no-proxy case: the dynamic metadata also
 // streams after the 200 headers are sent, so a notFound() here cannot
 // set the 404 status either.
+//
+// R13 AX-F3 (18 Oct 2026): full metadata — static-Arabic description
+// (seller name + active-listing count; NO cookie read here — audit H2:
+// awaiting cookies() in generateMetadata streamed metadata into <body>),
+// openGraph profile, canonical + hreflang. /fr|/en/seller/* routes do NOT
+// exist (404), so fr/en hreflang would point crawlers at 404s — the same
+// trap Round 205 fixed on listings. ar + x-default only (task asked for
+// ar/fr/en; fr/en omitted deliberately — creating those routes is a
+// separate decision).
 export async function generateMetadata({ params }: { params: Promise<{ uid: string }> }) {
   const { uid } = await params;
   let seller: SellerProfile | null = null;
+  let listingCount: number | null = null;
   let fetchFailed = false;
   try {
-    seller = await getSeller(uid);
+    // Seller + active-listing count in parallel; the count shares the
+    // 60s 'use cache' window with the page body's own reads.
+    const [s, c] = await Promise.all([
+      getSeller(uid),
+      fetchSellerListingCount(uid).catch((): number | null => null),
+    ]);
+    seller = s;
+    listingCount = c;
   } catch {
     // Transient fetch failure — noindex fallback; the page body renders the
     // in-page error view at HTTP 200 (never a 404 for a failed fetch).
@@ -37,10 +54,52 @@ export async function generateMetadata({ params }: { params: Promise<{ uid: stri
   }
   if (!seller && !fetchFailed) notFound();
   if (!seller) return { title: 'DLALA', robots: { index: false, follow: false } };
+  const name = seller.name || seller.storeName || 'Seller';
+  const url = 'https://www.dzdlala.com/seller/' + encodeURIComponent(uid);
+  const title = `DLALA — ${name}`;
+  const description =
+    listingCount == null
+      ? `إعلانات ${name} على موقع دلالة`
+      : `إعلانات ${name} على موقع دلالة — ${adsCountText(listingCount)}`;
+  const rawPhoto = seller.photoUrl || seller.storeLogoUrl || '';
+  const ogImage = rawPhoto.startsWith('http')
+    ? rawPhoto
+    : 'https://www.dzdlala.com/icon-512.png';
   return {
-    title: `DLALA — ${seller.name || 'Seller'}`,
-    alternates: { canonical: 'https://www.dzdlala.com/seller/' + encodeURIComponent(uid) },
+    title,
+    description,
+    alternates: {
+      canonical: url,
+      languages: {
+        ar: url,
+        'x-default': url,
+      },
+    },
+    openGraph: {
+      type: 'profile',
+      siteName: 'DLALA',
+      title,
+      description,
+      url,
+      images: [ogImage],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImage],
+    },
   };
+}
+
+// R13 AX-F3: Arabic plural for the meta description's listing count
+// (viewsText pattern, src/lib/firestore.ts).
+function adsCountText(n: number): string {
+  if (n === 0) return 'لا إعلانات منشورة';
+  if (n === 1) return 'إعلان واحد منشور';
+  if (n === 2) return 'إعلانان منشوران';
+  if (n <= 10) return `${n} إعلانات منشورة`;
+  return `${n} إعلانًا منشورًا`;
 }
 
 import { Suspense, cache } from 'react';
@@ -49,6 +108,7 @@ import { notFound } from 'next/navigation';
 import SellerPage from '@/components/SellerPage';
 import {
   fetchSeller,
+  fetchSellerListingCount,
   fetchSellerListings,
   fetchSellerRatings,
   SELLER_LISTINGS_PAGE_SIZE,

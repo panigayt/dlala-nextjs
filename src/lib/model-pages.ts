@@ -232,7 +232,9 @@ export function buildModelPage(modelInfo: CarModel, items: ModelCardItem[], lang
     '@type': 'ListItem',
     position: i + 1,
     item: {
-      '@type': 'Product',
+      // R13 AX-F2 (18 Oct 2026): 'Car' — matches the R8 wilaya/category
+      // standardization (wilaya-pages.ts); model pages emitted 'Product'.
+      '@type': 'Car',
       name: it.title,
       url: `${SITE}/listing/${encodeURIComponent(it.id)}`,
     },

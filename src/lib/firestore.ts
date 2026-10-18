@@ -413,6 +413,68 @@ export async function fetchSellerListings(
   return rawDocs.map(restDocToObj);
 }
 
+// R13 AX-F3 (18 Oct 2026): exact count of a seller's ACTIVE listings
+// (same sellerId + status semantics as fetchSellerListings) for the
+// seller-page meta description. Server-side count aggregation — no docs
+// fetched. Fail-soft: null on error (metadata falls back gracefully).
+export async function fetchSellerListingCount(
+  uid: string
+): Promise<number | null> {
+  try {
+    const url =
+      FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+    const structuredQuery = {
+      from: [{ collectionId: 'listings' }],
+      where: {
+        compositeFilter: {
+          op: 'AND',
+          filters: [
+            {
+              fieldFilter: {
+                field: { fieldPath: 'sellerId' },
+                op: 'EQUAL',
+                value: { stringValue: uid },
+              },
+            },
+            {
+              fieldFilter: {
+                field: { fieldPath: 'status' },
+                op: 'IN',
+                value: {
+                  arrayValue: {
+                    values: [
+                      { stringValue: 'available' },
+                      { stringValue: 'negotiating' },
+                    ],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery,
+        aggregations: [{ alias: 'total', count: {} }],
+      }),
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    const rows = Array.isArray(body) ? body : [];
+    const raw =
+      rows[0]?.result?.aggregateFields?.total?.integerValue ?? null;
+    const n = raw == null ? NaN : Number(raw);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+  } catch {
+    return null;
+  }
+}
+
 // js/listing.js — fetchListingRest (anonymous path; sold docs need auth
 // and are handled client-side — SSR renders the public view).
 export async function fetchListing(id: string): Promise<ListingDetail | null> {
@@ -785,6 +847,42 @@ export function normalizeCarBrand(v: unknown): string {
   return '';
 }
 
+// AZ-1 (18 Oct 2026): phone brand mapping, mirroring the car one above.
+// Phone answers.brand is stored as pb* keys (qPhoneBrand → 'brand'); the
+// facet select feeds exact keys, but free-text search (q=سامسونج, q=samsung)
+// had no map at all and silently returned zero. READ-ONLY normalization:
+// unknown values return '' (no guessing). Arabic keys are written in
+// alef-normalized form — the same normalization below folds أ/إ/آ→ا, so
+// آيفون/أوبو/إنفينيكس all match their single map entry.
+const LEGACY_PHONE_BRAND_MAP: Record<string, string> = {
+  samsung: 'pbSamsung', apple: 'pbApple', iphone: 'pbApple',
+  xiaomi: 'pbXiaomi', huawei: 'pbHuawei', oppo: 'pbOppo', realme: 'pbRealme',
+  honor: 'pbHonor', infinix: 'pbInfinix', tecno: 'pbTecno',
+  'سامسونج': 'pbSamsung',
+  'ابل': 'pbApple', 'ايفون': 'pbApple',
+  'شاومي': 'pbXiaomi',
+  'هواوي': 'pbHuawei',
+  'اوبو': 'pbOppo',
+  'ريلمي': 'pbRealme',
+  'هونر': 'pbHonor',
+  'انفينيكس': 'pbInfinix',
+  'تكنو': 'pbTecno',
+};
+
+export function normalizePhoneBrand(v: unknown): string {
+  if (v == null) return '';
+  const s = String(v).trim();
+  if (!s) return '';
+  if (s.startsWith('pb')) return FACET_PHONE_BRANDS.includes(s) ? s : '';
+  const latin = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (latin && LEGACY_PHONE_BRAND_MAP[latin]) return LEGACY_PHONE_BRAND_MAP[latin];
+  const ar = s.replace(/[ً-ٖ]/g, '').replace(/ـ/g, '')
+    .replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/\s+/g, '');
+  if (ar && LEGACY_PHONE_BRAND_MAP[ar]) return LEGACY_PHONE_BRAND_MAP[ar];
+  return '';
+}
+
 export function hasFacetFilter(f: SearchFilters): boolean {
   return !!(
     f.fOs || f.fBrand || f.fCarBrand || f.fFuel || f.fGear ||
@@ -841,7 +939,12 @@ function relevanceRank(docs: ListingCard[], q: string, brandKey = ''): ListingCa
     );
     const desc = normSearchText(d.description?.ar || '');
     const answers = (d.answers || {}) as Record<string, unknown>;
-    const brandHit = !!brandKey && normalizeCarBrand(answers.brand) === brandKey;
+    // R5-1 (18 Oct 2026): optional brandKey — docs whose answers.brand maps to
+    // it score 30 (title-contains tier) so pure brand queries (q=بيجو) don't
+    // all score zero. AZ-1 (18 Oct 2026): phone brandKey support — a pb*
+    // brand key matches via the phone map (answers.brand is stored pb*).
+    const brandHit = !!brandKey && (normalizeCarBrand(answers.brand) === brandKey ||
+      normalizePhoneBrand(answers.brand) === brandKey);
     const c = d.createdAt;
     decorated[i] = {
       d,
@@ -1249,12 +1352,14 @@ async function runSearchPipeline(
     let qBrand = '';
     const textTokens: string[] = [];
     for (const t of tokens) {
-      const b = !qBrand ? normalizeCarBrand(t) : '';
+      // AZ-1 (18 Oct 2026): phone brands had no mapping at all — try the
+      // phone map too (q=سامسونج / q=samsung / q=iphone).
+      const b = !qBrand ? (normalizeCarBrand(t) || normalizePhoneBrand(t)) : '';
       if (b) qBrand = b;
       else textTokens.push(t);
     }
     if (!qBrand) {
-      const b = normalizeCarBrand(f.q.trim());
+      const b = normalizeCarBrand(f.q.trim()) || normalizePhoneBrand(f.q.trim());
       if (b) qBrand = b;
     }
     const textQ = textTokens.join(' ');
@@ -1262,7 +1367,14 @@ async function runSearchPipeline(
     for (const d of docs) {
       if (matched.length >= SEARCH_MAX_MATCHES) break;
       const answers = (d.answers || {}) as Record<string, unknown>;
-      if (qBrand && normalizeCarBrand(answers.brand) !== qBrand) continue;
+      // AZ-1 (18 Oct 2026): the doc-side brand must use the same map family
+      // as the query key — pb* keys (phone brands) normalize via the phone
+      // map, cb* via the car map. Either map returns '' for the other
+      // family's values, so cross-category docs are correctly excluded.
+      const docBrand = qBrand.startsWith('pb')
+        ? normalizePhoneBrand(answers.brand)
+        : normalizeCarBrand(answers.brand);
+      if (qBrand && docBrand !== qBrand) continue;
       if (textQ) {
         const title = normSearchText(
           d.title && typeof d.title === 'object'

@@ -368,13 +368,11 @@ async function ListingContent({
   // the detail page — display-only, stays Arabic in FR/EN UI (Zak, 21 Sep
   // 2026). dzPriceWords returns '' for the 1-DZD no-price convention.
   const priceWords = dzPriceWords(l.price || 0);
-  // Per-listing JSON-LD (js/seo.js listingJsonLd parity). Rendered as a
-  // script tag — crawlers read JSON-LD anywhere in the HTML. '<' is
-  // escaped (\u003c) so user content can never break out of the script.
-  let jsonLdScript = '';
-  // 17 Oct 2026 (audit H2): the <title> metadata is static Arabic so it
-  // lands in <head>; the reader's localized SEO title (Round 133) is
-  // applied to the tab via <LocalizedDocTitle> below instead.
+  // R13 AX-F1 (18 Oct 2026): the JSON-LD <script> NO LONGER renders here.
+  // This component sits inside <Suspense> and Next.js PPR emitted its
+  // script tag twice (static shell + streamed segment, byte-identical).
+  // The script now renders exactly once in ListingPage's non-streamed
+  // shell below. This block only derives the localized tab title.
   let localizedTitle = 'DLALA';
   try {
     // Round 17 T7: reuse pageLang (same request, same cookie) instead of
@@ -382,12 +380,11 @@ async function ListingContent({
     // 16 Oct 2026: listingJsonLd returns null for no-real-price listings
     // (Google requires offers/review/aggregateRating on Product) — skip.
     const seo = seoForListing(l, id, pageLang);
-    if (seo.jsonLd) jsonLdScript = JSON.stringify(seo.jsonLd).replace(/</g, '\\u003c');
     if (typeof seo.metadata.title === 'string' && seo.metadata.title) {
       localizedTitle = seo.metadata.title;
     }
   } catch {
-    jsonLdScript = '';
+    /* keep default title */
   }
   // js/listing.js loadMatches parity:
   // - regular ads: similar ads (same category, max 12).
@@ -448,9 +445,11 @@ async function ListingContent({
         }}
         sellerId={l.sellerId}
       />
-      {/* R8-8 (18 Oct 2026): JSON-LD moved OUT of <main> — it sat between
-          Suspense boundaries and Next.js PPR streamed it twice (byte-identical
-          duplicate Product blocks live). Crawlers read JSON-LD anywhere. */}
+      {/* R13 AX-F1 (18 Oct 2026): the JSON-LD <script> used to render here
+          (R8-8 had moved it out of <main>), but this whole component sits
+          inside <Suspense> and PPR emitted the script twice — static shell
+          + streamed segment. It now renders exactly once in ListingPage's
+          non-streamed shell. Crawlers read JSON-LD anywhere. */}
       {/* Round 17 T3: manual preload set removed — the gallery's eager+high
           imgs and React 19's auto-preloads cover it. (Round 21: verified the
           Fizz auto-preloads match img URLs exactly and precede them in
@@ -504,7 +503,7 @@ async function ListingContent({
             popularity signal). Legacy markup:
             <div class="stat-row"><span>👁 viewsText(l.views)</span>
             <span>♥ favCount inFavorites</span></div>. */}
-        <StatRow views={l.views} favoriteCount={l.favoriteCount} />
+        <StatRow listingId={id} views={l.views} favoriteCount={l.favoriteCount} />
         {/* js/listing.js loadRateBox parity: the #rateBox sits directly under
             the stat-row in the detail card — rating entry point shown when I
             have a buyer-confirmed deal with this seller that I have not
@@ -596,12 +595,6 @@ async function ListingContent({
       )}
 
     </main>
-      {jsonLdScript && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLdScript }}
-        />
-      )}
     </>
   );
 }
@@ -643,8 +636,31 @@ export default async function ListingPage({
     );
   }
 
+  // R13 AX-F1 (18 Oct 2026): the per-listing JSON-LD <script> renders ONCE
+  // here, in the non-streamed page shell — NOT inside <Suspense>
+  // (ListingContent): PPR emitted that component's script twice
+  // (byte-identical duplicates live: one after static </main>, one inside
+  // the streamed <div hidden id="S:a">). '<' is escaped (\u003c) so user
+  // content can never break out of the script. 1-DZD no-price listings
+  // emit zero JSON-LD (seoForListing returns null jsonLd — rule holds).
+  const pageLang = await getServerLang();
+  let jsonLdScript = '';
+  try {
+    const seo = seoForListing(listing, id, pageLang);
+    if (seo.jsonLd)
+      jsonLdScript = JSON.stringify(seo.jsonLd).replace(/</g, '\\u003c');
+  } catch {
+    jsonLdScript = '';
+  }
+
   return (
     <ListingDir>
+      {jsonLdScript && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript }}
+        />
+      )}
       <Suspense fallback={<ListingSkeleton />}>
         <ListingContent params={params} listing={listing} />
       </Suspense>

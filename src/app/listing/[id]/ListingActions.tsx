@@ -43,6 +43,7 @@ import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { tasteNoteFav } from '@/lib/taste';
+import { emitFavChange } from './ListingShell';
 import { useLang } from '@/lib/i18n';
 
 // Report reasons — verbatim order from js/market.js REPORT_REASONS; labels
@@ -348,9 +349,11 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     if (favInFlight.current) return; // same class as M6 fix in toggleFavorite
     favInFlight.current = true;
     // v99 perf (js/listing.js): flip the heart on THIS frame; reconcile
-    // with the server after.
+    // with the server after. AY-1: emit so the StatRow count pill moves
+    // optimistically too (feed card parity).
     const wasOn = !!fav;
     setFav(!wasOn);
+    emitFavChange(listingId, !wasOn);
     const { db, fsMod } = client;
     try {
       const favRef = fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`);
@@ -380,7 +383,9 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
       }
       await withTimeout(batch.commit(), 15000);
       const added = !snap.exists();
+      // AY-1: reconcile the StatRow count with the server truth.
       if (mounted.current) setFav(added);
+      emitFavChange(listingId, added);
       // 11 Oct 2026: only on ADD — recording on remove pollutes taste.
       if (added) {
         try {
@@ -399,9 +404,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
           fsMod.getDoc(fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`)),
           8000
         );
+        // AY-1: a failed optimistic flip must not stick on the StatRow count.
         if (mounted.current) setFav(truth.exists());
+        emitFavChange(listingId, truth.exists());
       } catch {
         if (mounted.current) setFav(wasOn);
+        emitFavChange(listingId, wasOn);
       }
       showToast(setToast, t('errorGeneric'), toastTimer);
     } finally {

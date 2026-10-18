@@ -9,6 +9,7 @@
 // uses (server snapshot 'ar', client re-render on hydration).
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useLang, type Lang } from '@/lib/i18n';
 import { WILAYAS } from '@/lib/wilayas';
 import { dzPriceWords } from '@/lib/dz-price';
@@ -139,19 +140,58 @@ export function MetaGrid({
 }
 
 // js/app.js FIX-WEB-025 stat-row parity.
+// AY-1 (18 Oct 2026): favorite-toggle event bridge. The heart button lives
+// in ListingActions (lazy chunk, ListingActions.tsx), the count pill here —
+// both would otherwise disagree until reload. The toggle emits this window
+// event on every optimistic flip AND on every server reconcile, so the StatRow
+// count moves on tap exactly like the feed card's FavoriteToggle (optimistic
+// ±1), and can never stick on a failed optimistic flip.
+export const FAV_CHANGE_EVENT = 'dlala:favchange';
+export function emitFavChange(listingId: string, fav: boolean) {
+  try {
+    window.dispatchEvent(
+      new CustomEvent(FAV_CHANGE_EVENT, { detail: { listingId, fav } })
+    );
+  } catch {
+    /* non-fatal */
+  }
+}
+
 export function StatRow({
+  listingId,
   views,
   favoriteCount,
 }: {
+  listingId?: string;
   views?: number | null;
   favoriteCount?: number | null;
 }) {
   const { t, lang } = useLang();
+  // AY-1: optimistic count. base = SSR server count; the latest favchange
+  // event for this listing adds/removes the viewer's own favorite (±1).
+  // null = no toggle yet this session → show the server count as-is.
+  const base = Math.max(0, Number(favoriteCount) || 0);
+  const [favOn, setFavOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!listingId) return;
+    const onFav = (e: Event) => {
+      const d = (e as CustomEvent).detail as
+        | { listingId?: string; fav?: boolean }
+        | undefined;
+      if (d && d.listingId === listingId) setFavOn(!!d.fav);
+    };
+    window.addEventListener(FAV_CHANGE_EVENT, onFav);
+    return () => window.removeEventListener(FAV_CHANGE_EVENT, onFav);
+  }, [listingId]);
+  const count = Math.max(
+    0,
+    base + (favOn === true ? 1 : favOn === false ? -1 : 0)
+  );
   return (
     <div className="mt-2.5 flex flex-wrap gap-x-[18px] gap-y-1 text-[13px] text-zinc-500">
       <span>👁 {viewsText(views, lang)}</span>
       <span>
-        ♥ {Math.max(0, Number(favoriteCount) || 0)} {t('inFavorites')}
+        ♥ {count} {t('inFavorites')}
       </span>
     </div>
   );

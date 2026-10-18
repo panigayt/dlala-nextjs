@@ -108,6 +108,7 @@ interface FreshListing {
   categoryId?: string;
   wilayaCode?: number;
   isWanted?: boolean;
+  status?: unknown;
   createdAt?: unknown;
   photoUrls?: string[];
   photo_thumbs?: (string | null)[];
@@ -201,27 +202,17 @@ interface Notif {
 
 // Resolve a notification's navigation target — mirrors alerts.js
 // notifTarget(). Returns a relative in-app URL or null.
+// R13 AW-D3 (18 Oct 2026): dead types REMOVED — new_message, message,
+// phone_request, deal_confirmed, new_favorite, saved_search_match have no
+// writer in the Next.js repo or either functions package (verified), so
+// their branches could never fire. Live: price_drop (publish page),
+// follow (FollowButton), favorite/priceDrop/savedSearch (legacy
+// camelCase variants of still-possible docs).
 function notifTarget(n: Notif): string | null {
   if (!n || typeof n !== 'object') return null;
   const d = n.data || {};
-  if (
-    (n.type === 'new_message' ||
-      n.type === 'phone_request' ||
-      n.type === 'deal_confirmed') &&
-    d.conversationId
-  ) {
-    return '/chat/' + encodeURIComponent(d.conversationId);
-  }
-  if (
-    (n.type === 'saved_search_match' ||
-      n.type === 'price_drop' ||
-      n.type === 'new_favorite') &&
-    d.listingId
-  ) {
+  if (n.type === 'price_drop' && d.listingId) {
     return '/listing/' + encodeURIComponent(d.listingId);
-  }
-  if (n.type === 'message' && d.conversationId) {
-    return '/chat/' + encodeURIComponent(d.conversationId);
   }
   if (
     (n.type === 'favorite' || n.type === 'priceDrop' || n.type === 'savedSearch') &&
@@ -256,33 +247,8 @@ function notifTitle(n: Notif, t: (k: string) => string, lang: Lang = 'ar'): stri
       .split('{newPrice}')
       .join(formatPrice(Number(d.newPrice) || 0, lang));
   }
-  // 11 Oct 2026: message/new_message — legacy writer stores title:''.
-  // Construct from sender name in data, fallback to non-empty.
-  if (n.type === 'message' || n.type === 'new_message') {
-    const d = (n.data || {}) as Record<string, unknown>;
-    const sender = String(d.senderName || d.sender || '');
-    if (sender) return sender;
-    // Fallback: use non-empty title so the UI never shows blank.
-    return t('newMessage');
-  }
-  // 11 Oct 2026: 4 missing templates — were falling back to "new message".
-  const d = (n.data || {}) as Record<string, unknown>;
-  const str = (v: unknown) => String(v == null ? '' : v);
-  if (n.type === 'saved_search_match') {
-    return t('notifSavedSearchMatch')
-      .split('{title}').join(str(d.title))
-      .split('{price}').join(formatPrice(Number(d.price) || 0, lang))
-      .split('{wilaya}').join(str(d.wilaya));
-  }
-  if (n.type === 'new_favorite') {
-    return t('notifNewFavorite').split('{title}').join(str(d.title));
-  }
-  if (n.type === 'phone_request') {
-    return t('notifPhoneRequest').split('{listingTitle}').join(str(d.listingTitle));
-  }
-  if (n.type === 'deal_confirmed') {
-    return t('notifDealConfirmed').split('{name}').join(str(d.name));
-  }
+  // R13 AW-D3: dead-type branches (message/new_message, saved_search_match,
+  // new_favorite, phone_request, deal_confirmed) removed — no writer exists.
   // 11 Oct 2026: Final fallback — NEVER return blank.
   // Some legacy notifications have empty title and unhandled type.
   const title = n.title || '';
@@ -366,6 +332,10 @@ export default function AlertsPage() {
         const matchGroups: { search: SavedSearch; hits: FreshListing[] }[] = [];
         let freshForSnap: FreshListing[] = [];
         if (active.length) {
+          // R13 AW-D2: the missing-index fallback below fetches without a
+          // status filter — client-filter here so sold/archived listings
+          // never appear as "New matches" (primary-query semantics).
+          let fallbackNoStatusFilter = false;
           const lSnap = await fsMod
             .getDocs(
               fsMod.query(
@@ -375,15 +345,21 @@ export default function AlertsPage() {
                 fsMod.limit(60)
               )
             )
-            .catch(() =>
+            .catch(() => {
               // No composite index: unordered fallback, client-sorted
-              fsMod.getDocs(
+              fallbackNoStatusFilter = true;
+              return fsMod.getDocs(
                 fsMod.query(fsMod.collection(db, 'listings'), fsMod.limit(60))
-              )
-            );
-          const fresh: FreshListing[] = lSnap.docs.map(
+              );
+            });
+          const freshAll: FreshListing[] = lSnap.docs.map(
             (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as FreshListing
           );
+          const fresh = fallbackNoStatusFilter
+            ? freshAll.filter(
+                (l) => l.status === 'available' || l.status === 'negotiating'
+              )
+            : freshAll;
           freshForSnap = fresh;
           const seenKey = `dlala_seen_${user.uid}`;
           let seen: Record<string, number> = {};
@@ -663,14 +639,26 @@ export default function AlertsPage() {
     const client = clientRef.current;
     const user = userRef.current;
     if (!client || !user) return;
-    const unread = notifs.filter((n) => !n.read);
-    if (!unread.length) return;
     try {
       const { db, fsMod } = client;
-      const batch = fsMod.writeBatch(db);
-      const col = fsMod.collection(db, `users/${user.uid}/notifications`);
-      unread.forEach((n) => batch.update(fsMod.doc(col, n.id), { read: true }));
-      await batch.commit();
+      // R13 AW-D1: query ALL unread docs — the list state only holds the
+      // newest 30, so iterating it left older unread forever and the bell
+      // badge never cleared. Chunked batches (500 writes/batch cap).
+      const qSnap = await fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, `users/${user.uid}/notifications`),
+          fsMod.where('read', '==', false)
+        )
+      );
+      if (qSnap.empty) return;
+      const docs = qSnap.docs;
+      for (let i = 0; i < docs.length; i += 500) {
+        const batch = fsMod.writeBatch(db);
+        docs
+          .slice(i, i + 500)
+          .forEach((d) => batch.update(d.ref, { read: true }));
+        await batch.commit();
+      }
       await loadAll(client, user);
       // 12 Oct 2026: notify SiteChrome to refresh badge (was stale until reload).
       window.dispatchEvent(new CustomEvent('dlala:alerts-read'));

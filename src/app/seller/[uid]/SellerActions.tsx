@@ -36,9 +36,10 @@ const TOGGLE_BLOCK_URL =
 // parity) — verbatim keys from js/i18n.{ar,fr,en}.js. The STR const is
 // gone; call sites use t('key') directly.
 
-// Canonical store share URL — verbatim js/market.js storeShareUrl.
+// Canonical store share URL — /seller/<uid> on the Next.js site (legacy
+// seller.html?uid= returns 404 — fixed Round 15).
 const storeShareUrl = (uid: string) =>
-  'https://www.dzdlala.com/seller.html?uid=' + encodeURIComponent(uid);
+  'https://www.dzdlala.com/seller/' + encodeURIComponent(uid);
 
 // Icon-only store share button (0.0.0.39 .share-icon-btn parity, 0.0.0.1o):
 // Web Share API when available, else the WhatsApp / Facebook / copy-link
