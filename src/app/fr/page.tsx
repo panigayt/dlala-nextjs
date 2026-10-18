@@ -54,8 +54,33 @@ export default async function HomeFr() {
     error = e instanceof Error ? e.message : 'feed-error';
   }
 
+  // D1 (SEO audit 18 Oct 2026): WebSite + Organization structured data on the
+  // localized homepages too (same @graph as the Arabic homepage in
+  // src/app/page.tsx, with the locale-appropriate inLanguage).
+  const homeJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        name: 'Dlala',
+        url: 'https://www.dzdlala.com',
+        inLanguage: LANG,
+      },
+      {
+        '@type': 'Organization',
+        name: 'Dlala',
+        url: 'https://www.dzdlala.com',
+        logo: 'https://www.dzdlala.com/icon-512.png',
+      },
+    ],
+  }).replace(/</g, '\\u003c');
+
   return (
     <div lang="fr" dir="ltr">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: homeJsonLd }}
+      />
       {/* Same preload-hint bands as src/app/page.tsx (Round 20 T4/T11). */}
       <FeedPreloadHints cards={feed ? feed.cards.slice(4, 6) : []} />
       <FeedPreloadHints cards={feed ? feed.cards.slice(6, 12) : []} priority="low" />
