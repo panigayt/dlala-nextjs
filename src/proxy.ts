@@ -130,6 +130,18 @@ export async function proxy(req: NextRequest) {
       if (check === 'missing') {
         return trilingual404(locale);
       }
+      // R19 BC-1 (18 Oct 2026): detail pages are single-locale — there are
+      // no /fr/listing/<id> or /en/listing/<id> routes (they 404 by design,
+      // see src/app/listing/[id]/page.tsx). So an EXISTING (or
+      // check-failed) doc under a locale prefix falls through to the app's
+      // not-found.tsx. Hand it the pathname via x-pathname so it renders
+      // the French/English variant instead of defaulting to Arabic (the
+      // design not-found.tsx's getLocale() expects).
+      if (urlLocale) {
+        const reqHeaders = new Headers(req.headers);
+        reqHeaders.set('x-pathname', req.nextUrl.pathname);
+        return NextResponse.next({ request: { headers: reqHeaders } });
+      }
       // Round 196 (F5): legacy "{id}.html" URLs serve the listing with a
       // self-canonical to the .html URL — a duplicate-content pair with the
       // clean canonical URL. 301 the .html form to the clean URL for existing
@@ -205,6 +217,17 @@ export const config = {
     '/listing/:id*',
     '/seller/:uid*',
     '/announcement/:id*',
+    // R19 BC-1 (18 Oct 2026): the matcher is a literal-prefix match — the
+    // unprefixed entries above NEVER match /fr/listing/<id> or
+    // /en/listing/<id>. The (fr|en) capture inside the body regex was dead
+    // code on every deploy because the middleware was never invoked for
+    // these paths. These entries make the locale-aware 404 real.
+    '/fr/listing/:id*',
+    '/en/listing/:id*',
+    '/fr/seller/:uid*',
+    '/en/seller/:uid*',
+    '/fr/announcement/:id*',
+    '/en/announcement/:id*',
     // 17 Oct 2026 (speed fix): homepage needs the proxy to set browser
     // cache headers (max-age=60 instead of Next's default max-age=0).
     // Exact matches only — no sub-routes exist under these paths.
