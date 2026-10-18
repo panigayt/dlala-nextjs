@@ -25,9 +25,9 @@
 // user-doc batch settles, closing the tab-close race that orphaned Auth
 // accounts.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 // Lazy: the Firebase SDK is heavy — it is only loaded inside auth
 // handlers/effects via getFirebaseCdn(). The type imports below are
 // erased at compile time.
@@ -35,6 +35,10 @@ import type {
   CompatUser,
   FirebaseClient,
 } from '@/lib/firebase';
+// LoadingSpinner is a value import — src/lib/firebase has no top-level
+// Firebase SDK import (the SDK loads lazily inside getFirebaseCdn()), so
+// this adds no bundle weight.
+import { LoadingSpinner } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 import { authReturnTarget } from '../../lib/auth-return';
 import { useLang } from '../../lib/i18n';
@@ -163,23 +167,24 @@ type Mode = 'login' | 'signup' | 'reset' | 'verify';
 // create the exact user doc on the next sign-in (P2 orphan heal).
 const PENDING_KEY = 'dlala_pending_profile';
 
-export default function AuthPage() {
+function AuthPageInner() {
   const router = useRouter();
+  // B2 fix: mode comes from useSearchParams() (SSR-safe — the Suspense
+  // boundary in the default export below means this component never renders
+  // on the server, so the initial state always reflects the real ?mode=
+  // query with no hydration mismatch). The old window.location.search lazy
+  // initializer defaulted to 'login' during SSR and flipped to signup only
+  // after hydration.
+  const params = useSearchParams();
+  const initialMode: Mode =
+    params.get('mode') === 'signup' ? 'signup' : 'login';
   // Round 110: all user-facing strings come from the shared i18n store
   // (js/i18n.js setLang parity) — the header language switcher
   // re-renders this page in the chosen language.
   const { t, lang } = useLang();
   // js/auth.js boot parity: ?mode=signup starts guests on the signup form
-  // (lazy init — no setState-in-effect).
-  const [mode, setMode] = useState<Mode>(() => {
-    try {
-      return new URLSearchParams(window.location.search).get('mode') === 'signup'
-        ? 'signup'
-        : 'login';
-    } catch {
-      return 'login';
-    }
-  });
+  // (initial state from useSearchParams — no setState-in-effect).
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -951,5 +956,16 @@ export default function AuthPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Suspense boundary (auth-action/publish/chat parity): useSearchParams()
+// must not render during prerender — the fallback streams on the server
+// and the inner component renders on the client with the real ?mode=.
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <AuthPageInner />
+    </Suspense>
   );
 }
