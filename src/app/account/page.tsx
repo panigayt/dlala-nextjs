@@ -223,19 +223,25 @@ function AccountContent({ user }: { user: CompatUser }) {
       const displayName = (user.displayName || candidate).slice(0, 40);
       const batch = fsMod.writeBatch(db);
       const userRef = fsMod.doc(db, 'users/' + user.uid);
+      // E1 (18 Oct 2026): private fields (isAdmin, boostCredits) live ONLY
+      // in the owner-only usersPrivate/{uid} doc — never on the public
+      // profile (unauthenticated GET would expose them). phone is never
+      // stored on the user doc at all (consented number goes to
+      // reveals/{convId}, parties-only).
       batch.set(userRef, {
         name: displayName,
         username: candidate,
         verified: false,
-        isAdmin: false,
         emailVerified: false,
         rating: 0,
         ratingCount: 0,
         confirmedDeals: 0,
-        boostCredits: 0,
-        phone: '',
         termsAcceptedAt: fsMod.serverTimestamp(),
         createdAt: fsMod.serverTimestamp(),
+      });
+      batch.set(fsMod.doc(db, 'usersPrivate/' + user.uid), {
+        isAdmin: false,
+        boostCredits: 0,
       });
       batch.set(fsMod.doc(db, 'usernames/' + candidate), { userId: user.uid });
       await withTimeout(batch.commit(), 20000);

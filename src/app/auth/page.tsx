@@ -77,9 +77,14 @@ function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: str
 
 // --- Firestore helpers (js/auth.js parity) ---
 
-// Atomic batch: users/{uid} profile doc + usernames/{lower} registry.
+// Atomic batch: users/{uid} public profile doc + usersPrivate/{uid}
+// owner-only doc + usernames/{lower} registry.
 // Mirrors js/auth.js ensureUserDoc() — rules-compliant create with every
 // required field (termsAcceptedAt = one-time acceptance, legal evidence).
+// E1 (18 Oct 2026): isAdmin/boostCredits live ONLY in the owner-only
+// usersPrivate/{uid} doc — never on the public profile (unauthenticated
+// GET would expose them). phone is never stored on the user doc at all —
+// the consented number lives in reveals/{convId}, parties-only.
 async function ensureUserDoc(fc: FirebaseClient, uid: string, name: string, username: string): Promise<void> {
   const { db, fsMod, auth, authMod } = fc;
   // Round 22 T6 — root cause of the fresh-signup "Missing or insufficient
@@ -105,15 +110,17 @@ async function ensureUserDoc(fc: FirebaseClient, uid: string, name: string, user
     name: name || '',
     username: username || '',
     verified: false,
-    isAdmin: false,
     emailVerified: false,
     rating: 0,
     ratingCount: 0,
     confirmedDeals: 0,
-    boostCredits: 0,
-    phone: '',
     termsAcceptedAt: fsMod.serverTimestamp(),
     createdAt: fsMod.serverTimestamp(),
+  });
+  // E1 (18 Oct 2026): private fields — owner-only, never on the public doc.
+  batch.set(fsMod.doc(db, 'usersPrivate/' + uid), {
+    isAdmin: false,
+    boostCredits: 0,
   });
   batch.set(fsMod.doc(db, 'usernames/' + username.toLowerCase()), { userId: uid });
   await withTimeout(batch.commit());
