@@ -588,6 +588,7 @@ export function trimSimilarCard(l: ListingCard): ListingCard {
     id: l.id,
     title: l.title,
     price: l.price,
+    negotiable: !!l.negotiable, // R58-FY1 (18 Oct 2026): badge needs this on SSR
     photo_thumbs: Array.isArray(l.photo_thumbs) && l.photo_thumbs[0] ? [l.photo_thumbs[0]] : [],
     photoUrls: Array.isArray(l.photoUrls) && l.photoUrls[0] ? [l.photoUrls[0]] : [],
     thumbUrls: Array.isArray(l.thumbUrls) && l.thumbUrls[0] ? [l.thumbUrls[0]] : [],
@@ -629,6 +630,7 @@ export function trimFeedCard(l: ListingCard): ListingCard {
     id: l.id,
     title: l.title,
     price: l.price,
+    negotiable: !!l.negotiable, // R58-FY1 (18 Oct 2026): SSR badge on priced-negotiable cards
     wilayaCode: l.wilayaCode,
     createdAt: l.createdAt,
     sellerId: l.sellerId,
