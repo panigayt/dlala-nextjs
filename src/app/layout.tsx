@@ -140,8 +140,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         {/* K-C1 (audit round 2, 18 Oct 2026): ChromeWithLang wraps SiteChrome
             in ForcedLang when the URL has a /fr or /en prefix, so the
-            header/footer SSR in the correct language instead of Arabic. */}
-        <ChromeWithLang>{children}</ChromeWithLang>
+            header/footer SSR in the correct language instead of Arabic.
+            Suspense: usePathname() is a client hook unavailable during static
+            prerender — the fallback renders the default (Arabic) chrome,
+            which the client then corrects on hydration for /fr|en paths. */}
+        <Suspense fallback={<SiteChrome>{children}</SiteChrome>}>
+          <ChromeWithLang>{children}</ChromeWithLang>
+        </Suspense>
         {/* R3 (Zak ordered): applies a pending favorite saved before login —
             js/app.js:132 onAuthStateChanged hook parity */}
         <PendingActionApplier />
