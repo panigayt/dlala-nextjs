@@ -1588,13 +1588,8 @@ export function cardImage(l: ListingCard): string {
 
 export function formatPrice(n: number, lang: string = 'ar'): string {
   if (!isFinite(n)) return '';
-  // CL-1 (18 Oct 2026): Zak confirmed 1 DZD = negotiable. Never render the
-  // literal "1 دج" on feed cards — show the negotiable label instead.
-  if (n <= 1) {
-    if (lang === 'fr') return 'Négociable';
-    if (lang === 'en') return 'Negotiable';
-    return 'قابل للتفاوض';
-  }
+  // Zak 18 Oct 2026 (correction): ALWAYS show the literal price, even 1 DZD.
+  // The negotiable badge is rendered separately by the UI components.
   // 0.0.0.39 fmtPrice parity: LTR digits with COMMA thousand separators.
   // Currency localized: 'دج' for AR, 'DZD' for FR/EN.
   const currency = lang === 'ar' ? 'دج' : 'DZD';

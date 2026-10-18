@@ -798,16 +798,11 @@ export default function AlertsPage() {
                             {localizedTitle(h.title, lang)}
                           </div>
                           <div className="text-sm font-bold text-emerald-700">
-                            {/* Zak 18 Oct 2026: price + negotiable badge together; 1-DZD = text only. */}
-                            {Number(h.price) <= 1 ? (
-                              <span>{t('negotiable')}</span>
-                            ) : (
-                              <>
-                                <span dir="ltr">{formatPrice(h.price || 0, lang)}</span>
-                                {h.negotiable && (
-                                  <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
-                                )}
-                              </>
+                            {/* Zak 18 Oct 2026 (correction): ALWAYS show the price (even 1 دج);
+                                badge when negotiable OR price<=1 (1 DZD = negotiable). */}
+                            <span dir="ltr">{formatPrice(h.price || 0, lang)}</span>
+                            {(h.negotiable || Number(h.price) <= 1) && (
+                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
                             )}
                           </div>
                         </div>

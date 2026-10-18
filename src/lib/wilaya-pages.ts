@@ -176,15 +176,13 @@ type Lang = 'ar' | 'fr' | 'en';
 
 function fmtPriceFr(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '';
-  // CM-2 (18 Oct 2026): 1 DZD = negotiable per Zak.
-  if (n <= 1) return 'Négociable';
+  // Zak 18 Oct 2026 (correction): ALWAYS show the literal price, even 1 DZD.
   return n.toLocaleString('fr-FR').replace(/\u202f/g, ' ') + ' DZD';
 }
 
 function fmtPriceEn(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '';
-  // CM-2 (18 Oct 2026): 1 DZD = negotiable per Zak.
-  if (n <= 1) return 'Negotiable';
+  // Zak 18 Oct 2026 (correction): ALWAYS show the literal price, even 1 DZD.
   return n.toLocaleString('en-US') + ' DZD';
 }
 

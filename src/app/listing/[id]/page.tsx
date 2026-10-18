@@ -485,17 +485,14 @@ async function ListingContent({
               "1 دج" as the giant price — buyers read it as a real price.
               Render the localized negotiable text instead; numeric price
               logic (SEO, JSON-LD, cards) untouched. */}
-          {Number(l.price) <= 1 ? (
-            <span>{t('negotiable', pageLang)}</span>
-          ) : (
-            <>
-              <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
-              {/* Zak 18 Oct 2026: show price + negotiable badge together. */}
-              {(l as { negotiable?: boolean }).negotiable && (
-                <span className="ms-2 text-sm font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-3 py-1">{t('negotiable', pageLang)}</span>
-              )}
-            </>
-          )}
+          <>
+            <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
+            {/* Zak 18 Oct 2026 (correction): ALWAYS show the price (even 1 دج);
+                badge when negotiable OR price<=1 (1 DZD = negotiable). */}
+            {((l as { negotiable?: boolean }).negotiable || Number(l.price) <= 1) && (
+              <span className="ms-2 text-sm font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-3 py-1">{t('negotiable', pageLang)}</span>
+            )}
+          </>
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
           {(l as { priceReduced?: boolean }).priceReduced && (
             <PriceReducedBadge />

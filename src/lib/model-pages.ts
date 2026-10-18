@@ -39,13 +39,8 @@ export function titleOf(t: unknown): string {
 export function fmtPrice(p: unknown, lang: string = 'ar'): string {
   const n = Number(p);
   if (!Number.isFinite(n)) return '';
-  // CM-2 (18 Oct 2026): Zak confirmed 1 DZD = negotiable. Never render the
-  // literal "1 دج" — show the negotiable label instead.
-  if (n <= 1) {
-    if (lang === 'fr') return 'Négociable';
-    if (lang === 'en') return 'Negotiable';
-    return 'قابل للتفاوض';
-  }
+  // Zak 18 Oct 2026 (correction): ALWAYS show the literal price, even 1 DZD.
+  // The negotiable badge is rendered separately by the UI components.
   // R8-1 (18 Oct 2026): locale-correct currency label — was hardcoded ' دج'
   // for every locale, so /fr|/en category cards showed Arabic دج.
   const label = lang === 'fr' || lang === 'en' ? 'DZD' : 'دج';
