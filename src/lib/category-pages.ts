@@ -346,6 +346,46 @@ ${subSections}
 </html>`;
 }
 
+// R53 Team B (18 Oct 2026): single-category live count for the category
+// page header/description. Separate 'use cache' entry from categoryCounts()
+// (the sitemap batch helper) — one cheap aggregation POST instead of 22,
+// and an independent cache key.
+export async function categoryCount(categoryId: string): Promise<number> {
+  'use cache';
+  cacheLife('hours');
+  const url = FIRESTORE_REST_BASE + ':runAggregationQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const body = {
+    structuredAggregationQuery: {
+      aggregations: [{ alias: 'count', count: {} }],
+      structuredQuery: {
+        from: [{ collectionId: 'listings' }],
+        where: {
+          compositeFilter: {
+            op: 'AND',
+            filters: [
+              { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'available' } } },
+              { fieldFilter: { field: { fieldPath: 'categoryId' }, op: 'EQUAL', value: { stringValue: categoryId } } },
+            ],
+          },
+        },
+      },
+    },
+  };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+    if (!res.ok) return 0;
+    const data = await res.json().catch(() => null);
+    return Number(data?.[0]?.result?.aggregateFields?.count?.integerValue ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 // Cached per-category count (for sitemap).
 // CM-1 fix (Round 30): use server-side aggregation counts per category.
 // The old approach counted from fetchAvailableListings()'s 500-newest window,
