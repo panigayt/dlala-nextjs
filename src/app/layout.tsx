@@ -59,6 +59,17 @@ export const metadata: Metadata = {
   icons: {
     apple: "/icon-512.png",
   },
+  // R53 Team C (18 Oct 2026, Zak): PWA completeness — fullscreen launch from
+  // the home screen. capable=true emits <meta name="apple-mobile-web-app-capable"
+  // content="yes"> (iOS standalone); the modern "mobile-web-app-capable" is
+  // added via `other` below. title="دلالة" sets the home-screen app label;
+  // statusBarStyle="default" matches the white background_color. Pure metadata
+  // — zero behavioral impact, root layout stays sync + fully static.
+  appleWebApp: {
+    capable: true,
+    title: "دلالة",
+    statusBarStyle: "default",
+  },
   // Round 45 (15 Oct 2026): build/deploy marker. Lets the audit loop (and
   // Zak) tell a stale deployment from a fresh one: fetch any page, read
   // <meta name="dlala-build">, compare against the latest main commit.
@@ -69,6 +80,9 @@ export const metadata: Metadata = {
   other: {
     "dlala-build":
       (process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 7),
+    // R53 Team C (18 Oct 2026, Zak): modern standard fullscreen meta for
+    // installed PWAs (pairs with appleWebApp.capable above).
+    "mobile-web-app-capable": "yes",
   },
 };
 
