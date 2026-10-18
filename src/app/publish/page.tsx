@@ -566,11 +566,10 @@ function PublishForm({
     return initialMode === 'wanted' ? '0' : '';
   });
   // 13 Oct 2026 (Round 16, T7b): wanted mode always carries wilaya '0'
-  // ("all wilayas", legacy js/publish.js parity). DERIVED, not synced —
-  // a setState-in-effect guard here triggered react-hooks/set-state-in-effect
-  // (cascading renders). Covers stale drafts saved with wilaya='' in wanted
-  // mode and any path that enables wanted without touching wilaya.
-  const effectiveWilaya = isWanted ? '0' : wilaya;
+  // ("all wilayas", legacy js/publish.js parity) for NEW publishes. In
+  // EDIT mode the stored wilaya is used instead (R52-B2: jobSeeker wanted
+  // ads may carry a concrete wilaya per CF W-02 — forcing '0' silently
+  // wiped it on every edit save).
   const [price, setPrice] = useState(() => readDraft(user.uid)?.price || '');
   const [condition, setCondition] = useState(() => readDraft(user.uid)?.condition || '');
   const [qty, setQty] = useState(() => readDraft(user.uid)?.qty || '1');
@@ -602,6 +601,23 @@ function PublishForm({
         if (v === 'osAndroid' && b === 'pbApple') delete next['qPhoneBrand'];
         if (v === 'osIos' && b && b !== 'pbApple') delete next['qPhoneBrand'];
       }
+      // R52-B3 (18 Oct 2026): clear stale dependent-branch answers on
+      // select switches — the hidden branch's fields stayed in `answers`
+      // and were saved into the payload (e.g. rooms=4 on a LAND ad,
+      // contract/salary on a jobSeeker ad, batteryRange on a manual
+      // trottinette). Same class as DE-3/AT-7 above.
+      if (k === 'qPropertyType' && v === 'reLand') delete next['qRooms'];
+      if (k === 'qJobType') {
+        if (v === 'jobSeeker') {
+          delete next['qJobTitle']; delete next['qContract'];
+          delete next['qSalary']; delete next['qSector'];
+        } else if (v === 'jobOffer') {
+          delete next['qProfession']; delete next['qExperience'];
+          delete next['qAvailability'];
+        }
+      }
+      if (k === 'qVeloType' && v !== 'veloElectric') delete next['qBatteryRange'];
+      if (k === 'qTrotType' && v !== 'trotElectric') delete next['qBatteryRange'];
       return next;
     });
   }, []);
@@ -875,8 +891,8 @@ function PublishForm({
     // centime-exact arithmetic once money moves.
     if (!isJobsCat && !Number.isInteger(priceNum)) { fail(t('errorPriceInteger')); return false; }
     if (!isJobsCat && priceNum > 100000000) { fail(t('errorPriceTooHigh')); return false; }
-    // Wanted mode always carries wilaya '0' via effectiveWilaya (derived, not
-    // synced) — no check needed; the value cannot be stale by construction.
+    // Wanted publishes always carry wilaya 0 (forced at save) — no check
+    // needed; the value cannot be stale by construction.
     if (!isWanted && !(Number(wilaya) >= 1)) { fail(t('errorRequired')); return false; }
     // Category questions: required ones
     const requiredByCat: Record<string, string[]> = {
@@ -1140,9 +1156,14 @@ function PublishForm({
       const priceNum = price.trim() === '' ? 0 : Number(price);
       const effPrice = cat === 'jobs' ? 0 : priceNum;
       // wanted → 0 ("all wilayas"); job seekers (form isWanted=false) keep
-      // their concrete wilaya. effectiveWilaya is derived so wanted can
-      // never carry a stale raw value.
-      const wilayaCode = Number(effectiveWilaya || 16);
+      // their concrete wilaya.
+      // R52-B2 (18 Oct 2026): a wanted EDIT keeps its stored wilaya — the
+      // wilaya select is hidden in wanted mode, and jobSeeker ads may
+      // carry a concrete wilaya (CF W-02: 0..69 allowed). Forcing 0 here
+      // silently reset it to "all wilayas" on every edit save.
+      const wilayaCode = isWanted
+        ? (editId ? Number(wilaya || '0') : 0)
+        : Number(wilaya || 16);
       const idToken = await authMod.getIdToken(user);
 
       if (editId) {
@@ -1504,7 +1525,11 @@ function PublishForm({
             <div className="flex gap-2 mb-4">
               <button
                 type="button"
-                onClick={() => setIsWanted(false)}
+                // R52-B1 (18 Oct 2026): leaving wanted mode resets wilaya —
+                // the wanted toggle set it to '0' ("all wilayas", no such
+                // sale option), leaving the select blank and validate()
+                // failing with a generic "fill required fields" error.
+                onClick={() => { setIsWanted(false); setWilaya(''); }}
                 className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition-colors ${
                   !isWanted ? 'bg-emerald-700 text-white' : 'bg-zinc-100 text-zinc-600'
                 }`}
