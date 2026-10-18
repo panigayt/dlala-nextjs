@@ -657,7 +657,9 @@ export default async function ListingPage({
 
   return (
     <>
-      <ListingJsonLd json={jsonLdScript} />
+      <Suspense fallback={null}>
+        <ListingJsonLd json={jsonLdScript} />
+      </Suspense>
       <ListingDir>
         <Suspense fallback={<ListingSkeleton />}>
           <ListingContent params={params} listing={listing} />
