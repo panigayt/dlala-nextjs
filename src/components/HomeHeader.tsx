@@ -116,7 +116,7 @@ function CategoryChips({
     });
   const chip = (active: boolean) =>
     // Round 6 (18 Oct 2026): min-h/w 44px touch target (was ~36px).
-    `whitespace-nowrap rounded-full border px-4 py-2 text-sm min-h-[44px] min-w-[44px] inline-flex items-center justify-center ${
+    `whitespace-nowrap shrink-0 rounded-full border px-4 py-2 text-sm min-h-[44px] min-w-[44px] inline-flex items-center justify-center ${
       active
         ? 'border-emerald-700 bg-emerald-700 font-bold text-white'
         : 'border-zinc-300 bg-white text-zinc-800 hover:border-emerald-600'
