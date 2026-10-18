@@ -131,9 +131,9 @@ export function MetaGrid({
           <b>{catName(categoryId, lang)}</b>
         </div>
       )}
-      {/* CA-D1 (Round 23, 18 Oct 2026): 1-DZD "no price" convention —
-          treat price <= 1 as negotiable (hero already does this since
-          Round 205), so the row never renders a literal "1 DZD". */}
+      {/* Zak 18 Oct 2026 (explicit order, overriding CA-D1): ALWAYS show the
+          price (even "1 دج") + badge when negotiable OR price <= 1
+          (1 DZD = negotiable). */}
       <div>
         <span className="text-zinc-500">{t('price')}: </span>
         {/* Zak 18 Oct 2026: ALWAYS show the price (even "1 دج") + badge. */}

@@ -1186,6 +1186,7 @@ function PublishForm({
         // Only touch photos when the user changed them (picked new or removed existing)
         if (photos.length || existingDirty) {
           updateDoc.photoUrls = mergedUrls;
+          updateDoc.photoCount = mergedUrls.length;
           updateDoc.photoHashes = mergedHashes.slice(0, mergedUrls.length);
           updateDoc.photo_thumbs = mergedThumbs.slice(0, mergedUrls.length);
           // 12 Oct 2026 (v124 live): clear a stale photoVariants flag when
@@ -1388,7 +1389,7 @@ function PublishForm({
       // return with ?newListing=<id> inserted before any #fragment.
       const retParam = new URLSearchParams(window.location.search).get('return') || '';
       let dest = `/listing/${finalId}`;
-      if (retParam && /^\/[a-z0-9\-_./]*$/i.test(retParam) && !retParam.includes('..')) {
+      if (retParam && !retParam.startsWith('//') && /^\/[a-z0-9\-_./]*$/i.test(retParam) && !retParam.includes('..')) {
         const hi = retParam.indexOf('#');
         const base = hi >= 0 ? retParam.slice(0, hi) : retParam;
         const hash = hi >= 0 ? retParam.slice(hi) : '';
