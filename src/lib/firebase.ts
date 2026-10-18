@@ -175,21 +175,28 @@ async function buildClient(load: () => Promise<PathModules>): Promise<FirebaseCl
 // Serves today's 23 firebase-compat users.
 let bundledP: Promise<FirebaseClient> | null = null;
 export function getFirebaseBundled(): Promise<FirebaseClient> {
-  if (bundledP) return bundledP;
-  bundledP = buildClient(async () => {
-    const [appMod, authMod, fsMod, storageMod] = await Promise.all([
-      import('firebase/app'),
-      import('firebase/auth'),
-      import('firebase/firestore'),
-      import('firebase/storage'),
-    ]);
-    return { appMod, authMod, fsMod, storageMod };
-  }).catch((e: unknown) => {
-    // Reset on failure so the next call retries (don't cache rejections).
-    bundledP = null;
-    throw e;
+  if (!bundledP) {
+    bundledP = buildClient(async () => {
+      const [appMod, authMod, fsMod, storageMod] = await Promise.all([
+        import('firebase/app'),
+        import('firebase/auth'),
+        import('firebase/firestore'),
+        import('firebase/storage'),
+      ]);
+      return { appMod, authMod, fsMod, storageMod };
+    }).catch((e: unknown) => {
+      // Reset on failure so the next call retries (don't cache rejections).
+      bundledP = null;
+      throw e;
+    });
+  }
+  // R52: re-apply the UI language on every acquisition — the user may have
+  // switched language after the Auth instance was created; auth emails
+  // (verification / password reset) must follow the current UI language.
+  return bundledP.then((c) => {
+    applyAuthLanguage(c.auth);
+    return c;
   });
-  return bundledP;
 }
 
 // CDN path: modular ESM from gstatic. `webpackIgnore: true` is
@@ -198,21 +205,50 @@ export function getFirebaseBundled(): Promise<FirebaseClient> {
 // Serves today's 26 firebase-client users.
 let cdnP: Promise<FirebaseClient> | null = null;
 export function getFirebaseCdn(): Promise<FirebaseClient> {
-  if (cdnP) return cdnP;
-  cdnP = buildClient(async () => {
-    const [appMod, authMod, fsMod, storageMod] = await Promise.all([
-      import(/* webpackIgnore: true */ CDN_BASE + 'firebase-app.js') as Promise<PathModules['appMod']>,
-      import(/* webpackIgnore: true */ CDN_BASE + 'firebase-auth.js') as Promise<FirebaseModules['auth']>,
-      import(/* webpackIgnore: true */ CDN_BASE + 'firebase-firestore.js') as Promise<FirebaseModules['fs']>,
-      import(/* webpackIgnore: true */ CDN_BASE + 'firebase-storage.js') as Promise<FirebaseModules['storage']>,
-    ]);
-    return { appMod, authMod, fsMod, storageMod };
-  }).catch((e: unknown) => {
-    // Reset on failure so the next call retries (don't cache rejections).
-    cdnP = null;
-    throw e;
+  if (!cdnP) {
+    cdnP = buildClient(async () => {
+      const [appMod, authMod, fsMod, storageMod] = await Promise.all([
+        import(/* webpackIgnore: true */ CDN_BASE + 'firebase-app.js') as Promise<PathModules['appMod']>,
+        import(/* webpackIgnore: true */ CDN_BASE + 'firebase-auth.js') as Promise<FirebaseModules['auth']>,
+        import(/* webpackIgnore: true */ CDN_BASE + 'firebase-firestore.js') as Promise<FirebaseModules['fs']>,
+        import(/* webpackIgnore: true */ CDN_BASE + 'firebase-storage.js') as Promise<FirebaseModules['storage']>,
+      ]);
+      return { appMod, authMod, fsMod, storageMod };
+    }).catch((e: unknown) => {
+      // Reset on failure so the next call retries (don't cache rejections).
+      cdnP = null;
+      throw e;
+    });
+  }
+  // R52: re-apply the UI language on every acquisition — the user may have
+  // switched language after the Auth instance was created; auth emails
+  // (verification / password reset) must follow the current UI language.
+  return cdnP.then((c) => {
+    applyAuthLanguage(c.auth);
+    return c;
   });
-  return cdnP;
+}
+
+// R52 (18 Oct 2026): Firebase Auth email language.
+//
+// The Firebase SDK sends account emails (verification, password reset) in
+// English unless auth.languageCode is set. Dlala is AR/FR/EN — the email
+// must follow the user's UI language (the `dlala_lang` value, default 'ar';
+// Firebase's built-in localized templates support ar/fr/en). Re-applied on
+// every getFirebaseCdn()/getFirebaseBundled() acquisition, so a language
+// switch after Auth init is picked up before the next email send. If the
+// console templates were ever customized, Firebase ignores languageCode —
+// so this is a safe no-op in that case, never a regression.
+export function applyAuthLanguage(auth: Auth): void {
+  try {
+    const l =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('dlala_lang')
+        : null;
+    auth.languageCode = l === 'fr' ? 'fr' : l === 'en' ? 'en' : 'ar';
+  } catch {
+    // localStorage unavailable (SSR/private mode) — keep SDK default.
+  }
 }
 
 // ---- Resilience helpers (same semantics/timeouts as firebase-compat) ----
