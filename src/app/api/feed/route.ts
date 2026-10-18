@@ -84,8 +84,12 @@ export async function GET(req: NextRequest) {
     const regular = docs
       .filter((d) => !d.isWanted)
       .map(withW320Thumbs);
+    // BH-obs1 (R17): compute hasMore on the wanted-FILTERED array — the
+    // client only ever consumes `regular`, so pre-filter `docs.length` could
+    // claim more pages while the filtered list was exhausted (e.g. a page
+    // that happened to be all-wanted).
     return NextResponse.json(
-      { regular, hasMore: docs.length >= limit },
+      { regular, hasMore: regular.length >= limit },
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
   } catch {

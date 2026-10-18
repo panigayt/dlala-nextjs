@@ -377,6 +377,9 @@ export default function FeedWithLoadMore({
         }
       }
     } catch (e) {
+      // BH-obs2 (R17, 18 Oct 2026): raw tokens stay in the console — the
+      // user-visible box shows only the localized message (11 Oct policy).
+      console.error('feed loadMore failed:', e);
       setError(e instanceof Error ? e.message : 'feed-error');
     } finally {
       setLoading(false);
@@ -484,7 +487,7 @@ export default function FeedWithLoadMore({
       </div>
       {error && (
         <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4 text-center text-red-700 text-sm">
-          {t('loadMoreFailed')} ({error}).{' '}
+          {t('loadMoreFailed')}{' '}
           <button
             type="button"
             onClick={loadMore}

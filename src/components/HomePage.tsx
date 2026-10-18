@@ -218,6 +218,9 @@ export default function HomePage({
       })
       .catch((e) => {
         if (reqId.current !== id) return;
+        // BH-obs2 (R17, 18 Oct 2026): raw token in console only — the
+        // user-visible box shows just the localized message (11 Oct policy).
+        console.error('feed filter failed:', e);
         setFilterError(e instanceof Error ? e.message : 'feed-error');
       })
       .finally(() => {
@@ -282,7 +285,7 @@ export default function HomePage({
           </div>
         ) : filterError && !filtered ? (
           <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center text-red-700">
-            ⚠️ {t('errorGeneric')} ({filterError}){' '}
+            ⚠️ {t('errorGeneric')}{' '}
             <button
               type="button"
               onClick={() => applyFilters(filters)}

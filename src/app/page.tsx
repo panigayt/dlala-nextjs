@@ -94,12 +94,15 @@ async function getFeed(): Promise<HomeFeedData> {
   // serialized too and re-interleaved client-side on "load more").
   const cards = interleaveWanted(regular, wantedPool).map(trimFeedCard);
   const wantedOffset = cards.filter((c) => c.isWanted).length;
+  // BH-obs1 (R17): hasMore is computed on the wanted-FILTERED array, like
+  // /api/feed — the client only consumes `regular`, so pre-filter docs
+  // could claim more pages while the filtered list was exhausted.
   return {
     cards,
     wantedPool: wantedPool.map(trimFeedCard),
     regularOffset: PAGE_SIZE,
     wantedOffset,
-    hasMore: docs.length >= PAGE_SIZE,
+    hasMore: regular.length >= PAGE_SIZE,
   };
 }
 
