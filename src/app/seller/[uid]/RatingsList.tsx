@@ -56,17 +56,28 @@ export default function RatingsList({
     setReporting(rating.id);
     try {
       // Lazy-load the Firebase SDK — keeps it off the initial page chunk.
-      const { db, fsMod, auth } = await getFirebaseCdn();
-      // Use the existing /reports collection (targetType='review').
-      // Rules: only the reviewed user may report; shape validated server-side.
-      // 11 Oct 2026: deterministic ID — prevents duplicate reports on retry/reload.
-      const reportId = `${currentUid}_review_${rating.id}`;
+      const { db, fsMod, auth, authMod } = await getFirebaseCdn();
       const user = auth.currentUser;
-      // 11 Oct 2026: 15s timeout — prevents browser hang if Firestore stalls.
+      // R55-D1 (18 Oct 2026): verified-email gate — matches ListingActions /
+      // ReportUserButton. Without it the create is denied by rules and the
+      // permission-denied branch mislabels it t('reportExists')
+      // ("already reported"). Reload for a fresh emailVerified — the cached
+      // user object stays stale after clicking the link in another tab.
+      try {
+        if (user) await authMod.reload(user);
+      } catch {
+        /* offline — use cached */
+      }
+      if (!user || !user.emailVerified) {
+        setMessage(t('verifyToReport'));
+        setMessageIsError(true);
+        return;
+      }
+      const reportId = `${currentUid}_review_${rating.id}`;
       await withTimeout(
         fsMod.setDoc(fsMod.doc(db, `reports/${reportId}`), {
           reporterId: currentUid,
-          reporterName: user?.displayName || '',
+          reporterName: user.displayName || '',
           targetType: 'review',
           targetId: rating.id,
           targetTitle: `Review by ${rating.raterName || 'user'}`,
