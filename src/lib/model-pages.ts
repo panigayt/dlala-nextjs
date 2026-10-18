@@ -448,7 +448,7 @@ function decodeRestValue(v: unknown): unknown {
 }
 
 const MODEL_CAR_FIELDS = [
-  'title', 'price', 'wilayaCode',
+  'title', 'price', 'negotiable', 'wilayaCode',
   'photo_thumbs', 'thumbUrls', 'photoUrls', 'photos',
   'answers', 'categoryId', 'status', 'hidden', 'createdAt',
 ];

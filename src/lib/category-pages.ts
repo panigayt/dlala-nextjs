@@ -351,7 +351,7 @@ export async function fetchAvailableListings(categoryId?: string): Promise<Model
   cacheLife('hours');
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const fields = [
-    'title', 'price', 'wilayaCode',
+    'title', 'price', 'negotiable', 'wilayaCode',
     'photo_thumbs', 'thumbUrls', 'photoUrls', 'photos',
     'answers', 'categoryId', 'status', 'hidden', 'createdAt',
   ];
