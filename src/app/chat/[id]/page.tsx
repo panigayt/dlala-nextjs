@@ -442,18 +442,44 @@ function ChatInner() {
   //   messages (up to the 100 query limit; Firestore batches allow 500).
   // - D3: callers re-run markRead on new incoming messages (debounced)
   //   and on tab-visibility return, so readAt/unread never go stale.
-  function markRead(client: FirebaseClient, data: ConvData, uid: string) {
+  // FIX-ROUND-37 M2 (18 Oct 2026): the old code only fetched the newest
+  // 100 messages — older unread messages kept single ✓ forever. Now
+  // paginates through all messages (100/batch, up to 10 batches) using
+  // the document-ID tiebreaker, marking every unread message from the
+  // other participant. Uses only the single-field 'at' index (no new
+  // composite index required).
+  async function markRead(client: FirebaseClient, data: ConvData, uid: string) {
     const { db, fsMod } = client;
-    fsMod
-      .getDocs(
-        fsMod.query(
-          fsMod.collection(db, 'conversations', data.id, 'messages'),
-          fsMod.orderBy('at', 'desc'),
-          fsMod.limit(100)
-        )
-      )
-      .then((snap) => {
-        const other = (data.participants || []).find((p) => p !== uid) || '';
+    const other = (data.participants || []).find((p) => p !== uid) || '';
+    const colRef = fsMod.collection(db, 'conversations', data.id, 'messages');
+    let totalMarked = 0;
+    try {
+      let lastAt: unknown = null;
+      let lastId: string | null = null;
+      // Paginate until a short batch (< 100) or the 10-batch safety cap.
+      for (let page = 0; page < 10; page++) {
+        // Build the query conditionally to keep types simple.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q: any;
+        if (lastAt !== null && lastId !== null) {
+          q = fsMod.query(
+            colRef,
+            fsMod.orderBy('at', 'desc'),
+            fsMod.orderBy(fsMod.documentId(), 'desc'),
+            fsMod.startAfter(lastAt, lastId),
+            fsMod.limit(100)
+          );
+        } else {
+          q = fsMod.query(
+            colRef,
+            fsMod.orderBy('at', 'desc'),
+            fsMod.orderBy(fsMod.documentId(), 'desc'),
+            fsMod.limit(100)
+          );
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const snap: any = await fsMod.getDocs(q);
+        if (!snap.docs.length) break;
         const batch = fsMod.writeBatch(db);
         let n = 0;
         for (const d of snap.docs) {
@@ -463,26 +489,37 @@ function ChatInner() {
               readAt: fsMod.serverTimestamp(),
             });
             n++;
+            if (n >= 500) break; // Firestore batch limit
           }
         }
-        const done = () => {
-          // D4: reset the counter only after readAt commits, so a
-          // message landing mid-flight doesn't get clobbered.
-          try {
-            fsMod
-              .updateDoc(fsMod.doc(db, `conversations/${data.id}`), {
-                [`unread.${uid}`]: 0,
-                [`lastReadAt.${uid}`]: fsMod.serverTimestamp(),
-              })
-              .catch(() => {});
-          } catch {
-            /* best-effort */
-          }
-        };
-        if (n) batch.commit().then(done).catch(done);
-        else done();
-      })
-      .catch(() => {});
+        if (n) {
+          await batch.commit().catch(() => {});
+          totalMarked += n;
+        }
+        if (snap.docs.length < 100) break;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const lastDoc: any = snap.docs[snap.docs.length - 1];
+        lastAt = (lastDoc.data() || {} as Record<string, unknown>).at;
+        lastId = lastDoc.id;
+      }
+    } catch {
+      /* best-effort */
+    }
+    // D4: reset the counter only after readAt commits, so a
+    // message landing mid-flight doesn't get clobbered.
+    const done = () => {
+      try {
+        fsMod
+          .updateDoc(fsMod.doc(db, `conversations/${data.id}`), {
+            [`unread.${uid}`]: 0,
+            [`lastReadAt.${uid}`]: fsMod.serverTimestamp(),
+          })
+          .catch(() => {});
+      } catch {
+        /* best-effort */
+      }
+    };
+    done();
   }
 
   // D3: debounced re-mark for messages arriving while the thread is open.
@@ -498,15 +535,27 @@ function ChatInner() {
   }
 
   // D12 (R12, 18 Oct 2026): load messages older than the live newest-100
-  // window. Uses startAfter on the oldest known message timestamp.
+  // window.
+  // FIX-ROUND-37 M1 (18 Oct 2026): the old code used startAfter on a bare
+  // timestamp value — all docs sharing the boundary timestamp beyond the
+  // 100-window were skipped forever. Now uses a document-ID tiebreaker:
+  // orderBy('at', 'desc') + orderBy(documentId(), 'desc'), with
+  // startAfter(oldestAt, oldestId). The boundary is the oldest SERVER
+  // message (skips optimistic _sending rows whose temp IDs aren't
+  // Firestore document IDs).
   async function loadOlderMessages() {
     const client = clientRef.current;
     if (!client || loadingOlder || !hasOlder) return;
     const { db, fsMod } = client;
     const all = [...olderMsgs, ...msgsRef.current];
     if (!all.length) return;
-    // Oldest by `at` (Firestore Timestamp or number for optimistic rows).
-    const oldest = all.reduce((a, b) => {
+    // Oldest SERVER message by `at` (skip optimistic _sending rows —
+    // their temp IDs are not Firestore document IDs and can't be used
+    // as a __name__ tiebreaker).
+    const serverMsgs = all.filter((m) => !m._sending && m.id && !m.id.startsWith('m_'));
+    const pool = serverMsgs.length ? serverMsgs : all.filter((m) => m.id);
+    if (!pool.length) return;
+    const oldest = pool.reduce((a, b) => {
       const ta = a.at as unknown;
       const tb = b.at as unknown;
       const na =
@@ -520,12 +569,14 @@ function ChatInner() {
       return na <= nb ? a : b;
     });
     const oldestAt = oldest.at as unknown;
+    const oldestId = oldest.id;
     setLoadingOlder(true);
     try {
       const q = fsMod.query(
         fsMod.collection(db, 'conversations', convId, 'messages'),
         fsMod.orderBy('at', 'desc'),
-        fsMod.startAfter(oldestAt),
+        fsMod.orderBy(fsMod.documentId(), 'desc'),
+        fsMod.startAfter(oldestAt, oldestId),
         fsMod.limit(100)
       );
       const snap = await fsMod.getDocs(q);
@@ -894,7 +945,17 @@ function ChatInner() {
     // re-attach another conversation's photo key.
     if (opts.imageUrl) {
       const expectedPrefix = `/chat/${convId}/${user.uid}/`;
-      if (!opts.imageUrl.includes(expectedPrefix)) {
+      // FIX-ROUND-37 L3 (18 Oct 2026): parse the URL and check the
+      // pathname with startsWith instead of a bare .includes() on the
+      // full URL string (which could match a query param or fragment).
+      let pathOk = false;
+      try {
+        const u = new URL(opts.imageUrl);
+        pathOk = u.pathname.startsWith(expectedPrefix);
+      } catch {
+        pathOk = false;
+      }
+      if (!pathOk) {
         showToast(st('imageSendError'));
         return null;
       }
@@ -1228,6 +1289,7 @@ function ChatInner() {
   ): Promise<void> {
     const client = clientRef.current;
     const user = userRef.current;
+    const c = convRef.current;
     if (!client || !user) return;
     const { db, fsMod } = client;
     const batch = fsMod.writeBatch(db);
@@ -1242,9 +1304,43 @@ function ChatInner() {
         ...(Object.keys(args).length ? { systemArgs: args } : {}),
       }
     );
-    batch.update(fsMod.doc(db, `conversations/${convId}`), {
+    // FIX-ROUND-37 M3 (18 Oct 2026): system messages now update
+    // lastMessage and bump the peer's unread counter, like regular
+    // messages do. Previously only updatedAt was touched, so the
+    // conversation-list preview showed stale text and no unread badge
+    // appeared for phone requests/shares.
+    // The preview text is rendered in the sender's current language via
+    // the shared systemText() helper; the conversation list displays
+    // lastMessage.text directly.
+    const oUid = (c?.participants || []).find((p) => p !== user.uid) || '';
+    const hasPeer = !!oUid && oUid !== 'support' && oUid !== 'announcements';
+    const sysPreview = systemText(
+      {
+        id: '',
+        senderId: user.uid,
+        text: '',
+        at: null,
+        isSystem: true,
+        systemKind: kind,
+        systemArgs: args,
+      },
+      lang
+    );
+    const convUpdate: Record<string, unknown> = {
       updatedAt: fsMod.serverTimestamp(),
-    });
+      lastMessage: {
+        text: sysPreview.slice(0, 500),
+        isSystem: true,
+        systemKind: kind,
+        senderId: user.uid,
+        at: fsMod.serverTimestamp(),
+      },
+    };
+    if (hasPeer) {
+      convUpdate[`unread.${oUid}`] = fsMod.increment(1);
+      convUpdate.hiddenFor = fsMod.arrayRemove(oUid);
+    }
+    batch.update(fsMod.doc(db, `conversations/${convId}`), convUpdate);
     // 11 Oct 2026: timeout — prevents hang.
     await withTimeout(batch.commit(), 15000);
   }
@@ -1338,14 +1434,21 @@ function ChatInner() {
       return;
     }
     try {
-      await fsMod.setDoc(fsMod.doc(db, `reveals/${convId}`), {
-        conversationId: convId,
-        requesterId: c.phoneRequestBy || '',
-        ownerId: user.uid,
-        status: 'accepted',
-        sharedPhone: normalized,
-        updatedAt: fsMod.serverTimestamp(),
-      });
+      // FIX-ROUND-37 L4 (18 Oct 2026): merge:true — a second reveal
+      // (e.g. re-share after decline) must not wipe the first doc's
+      // fields.
+      await fsMod.setDoc(
+        fsMod.doc(db, `reveals/${convId}`),
+        {
+          conversationId: convId,
+          requesterId: c.phoneRequestBy || '',
+          ownerId: user.uid,
+          status: 'accepted',
+          sharedPhone: normalized,
+          updatedAt: fsMod.serverTimestamp(),
+        },
+        { merge: true }
+      );
       await appendSystem('phone_shared', {});
       const id = await sendChatMessage({ text: normalized });
       if (!id) throw new Error('phone message not sent');
@@ -1507,7 +1610,7 @@ function ChatInner() {
 
   if (fatal) {
     return (
-      <div className="min-h-screen bg-zinc-50" dir="rtl">
+      <div className="min-h-screen bg-zinc-50" dir={dir}>
         <main id="main-content" className="max-w-2xl mx-auto px-4 py-16 text-center">
           <h1 className="text-lg font-bold text-zinc-900 mb-5">{fatal}</h1>
           <div className="flex gap-2 justify-center">
@@ -1850,7 +1953,7 @@ function ChatInner() {
   });
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col" dir="rtl">
+    <div className="min-h-screen bg-zinc-50 flex flex-col" dir={dir}>
       {/* header */}
       <header className="sticky top-0 z-10 bg-emerald-700 text-white shadow">
         <div className="max-w-2xl mx-auto px-3 py-2.5 flex items-center gap-2">

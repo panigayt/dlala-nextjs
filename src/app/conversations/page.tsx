@@ -300,14 +300,17 @@ export default function ConversationsPage() {
       const onErr = () => {
         setError(convSt(lang, 'errorGeneric'));
       };
-      // Round 153: removed Firestore orderBy('updatedAt') — it requires a
-      // composite index (participants array-contains + updatedAt desc) that
-      // may not exist, causing the list to appear empty. onSnap already
-      // sorts client-side via tsMs(), so the server-side orderBy is redundant.
+      // FIX-ROUND-37 H1 (18 Oct 2026): restored server-side
+      // orderBy('updatedAt', 'desc'). Without it, limit(60) returns an
+      // arbitrary 60 and users with >60 conversations can lose recent
+      // threads. Requires the composite index
+      // conversations: participants [CONTAINS] + updatedAt [DESCENDING]
+      // (declared in dlala-app/firebase/firestore.indexes.json).
       unsubRef.current = fsMod.onSnapshot(
         fsMod.query(
           fsMod.collection(db, 'conversations'),
           fsMod.where('participants', 'array-contains', uid),
+          fsMod.orderBy('updatedAt', 'desc'),
           fsMod.limit(60)
         ),
         onSnap,

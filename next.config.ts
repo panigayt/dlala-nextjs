@@ -21,6 +21,16 @@ const nextConfig: NextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 31536000, // 1 year — images are content-hashed
+    // FIX-ROUND-37 C1 (18 Oct 2026, CRITICAL): chat photos were broken —
+    // next/image with R2 URLs returned 400 "url parameter is not allowed"
+    // because remotePatterns was empty. Allowlist the R2 image hosts
+    // (custom domain + R2 public bucket wildcard) and the legacy
+    // Firebase Storage host so next/image can optimize them.
+    remotePatterns: [
+      { protocol: 'https', hostname: 'img.dzdlala.com' },
+      { protocol: 'https', hostname: '*.r2.dev' },
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
+    ],
   },
   // Compress responses (gzip/brotli) — critical for slow connections.
   compress: true,
