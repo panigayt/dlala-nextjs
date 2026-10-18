@@ -18,12 +18,22 @@ export async function GET(req: NextRequest) {
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
   }
-  const stores = await fetchVerifiedStores();
-  const matched = matchVerifiedStores(stores, q, 3);
-  return Response.json(
-    { stores: matched },
-    { headers: { 'Cache-Control': 'public, max-age=60' } }
-  );
+  // Round 26 (BH-3): wrap in try/catch — an unwrapped upstream failure
+  // returned Next.js's default 500 HTML instead of JSON. Fails closed
+  // with { stores: [] } so the results grid is unaffected.
+  try {
+    const stores = await fetchVerifiedStores();
+    const matched = matchVerifiedStores(stores, q, 3);
+    return Response.json(
+      { stores: matched },
+      { headers: { 'Cache-Control': 'public, max-age=60' } }
+    );
+  } catch {
+    return Response.json(
+      { stores: [] },
+      { headers: { 'Cache-Control': 'public, max-age=60' } }
+    );
+  }
 }
 
 // Round 6 (18 Oct 2026): 405 with Allow header for wrong methods.

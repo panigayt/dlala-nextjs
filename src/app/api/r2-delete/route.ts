@@ -27,8 +27,14 @@ import {
   keyFromUrlOrKey,
   variantKeysFor,
 } from '@/lib/r2';
+import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 const MAX_KEYS = 100;
+
+// Round 26 (BH-6): per-instance burst guard. 30 calls/min/IP; each call
+// can delete up to 100 keys (+variants), so legitimate use never hits it.
+const DELETE_LIMIT = 30;
+const DELETE_WINDOW_MS = 60 * 1000;
 
 async function verifyUid(idToken: string): Promise<string | null> {
   // Public Firebase web key (same as the upload routes; public by design).
@@ -62,6 +68,14 @@ type Result = {
 };
 
 export async function POST(req: NextRequest) {
+  const rl = checkRateLimit(`r2-delete:${clientIp(req)}`, DELETE_LIMIT, DELETE_WINDOW_MS);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'rate-limited' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
+    );
+  }
+
   let body: { keys?: unknown };
   try {
     body = await req.json();
@@ -71,16 +85,9 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(body.keys)) {
     return NextResponse.json({ error: 'keys-required' }, { status: 400 });
   }
-  const raw: string[] = body.keys.filter(
-    (k): k is string => typeof k === 'string'
-  );
-  if (!raw.length) {
-    return NextResponse.json({ results: [] });
-  }
-  if (raw.length > MAX_KEYS) {
-    return NextResponse.json({ error: 'too-many-keys' }, { status: 400 });
-  }
-
+  // Round 26 (BH-5): auth BEFORE the empty-keys early return — an
+  // unauthenticated POST with {"keys":[]} previously returned 200
+  // instead of 401.
   const authHeader = req.headers.get('authorization') || '';
   const m = authHeader.match(/^Bearer (.+)$/);
   if (!m) {
@@ -89,6 +96,15 @@ export async function POST(req: NextRequest) {
   const uid = await verifyUid(m[1]);
   if (!uid) {
     return NextResponse.json({ error: 'invalid-token' }, { status: 401 });
+  }
+  const raw: string[] = body.keys.filter(
+    (k): k is string => typeof k === 'string'
+  );
+  if (!raw.length) {
+    return NextResponse.json({ results: [] });
+  }
+  if (raw.length > MAX_KEYS) {
+    return NextResponse.json({ error: 'too-many-keys' }, { status: 400 });
   }
 
   const results: Result[] = [];

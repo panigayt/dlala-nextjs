@@ -11,6 +11,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { presignedUploadUrl, publicUrlFor } from '@/lib/r2';
+import { checkRateLimit, clientIp } from '@/lib/rate-limit';
+
+// Round 26 (BH-6): per-instance burst guard on minting. 30 mints/min/IP.
+const MINT_LIMIT = 30;
+const MINT_WINDOW_MS = 60 * 1000;
 
 function isValidChatKey(key: string): boolean {
   if (!key || key.includes('..') || key.startsWith('/')) return false;
@@ -22,6 +27,14 @@ function isValidChatKey(key: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const rl = checkRateLimit(`chat-upload-url:${clientIp(req)}`, MINT_LIMIT, MINT_WINDOW_MS);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'rate-limited' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
+    );
+  }
+
   let body: { key?: string; contentType?: string; size?: number };
   try {
     body = await req.json();
@@ -62,6 +75,9 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
+        // Round 26 (BH-2): timeout — a stalled identitytoolkit hung the
+        // route until platform timeout. Matches r2-delete's verifyUid.
+        signal: AbortSignal.timeout(8000),
       }
     );
     if (!verifyRes.ok) {
@@ -72,6 +88,12 @@ export async function POST(req: NextRequest) {
     const uid = user?.localId;
     if (!uid || uid !== keyUid) {
       return NextResponse.json({ error: 'uid-mismatch' }, { status: 403 });
+    }
+    // Round 26 (BH-1): reject disabled accounts. A Firebase ID token stays
+    // valid up to ~1h after disable; without this check a disabled user
+    // could still mint presigned upload URLs in that window.
+    if (user.disabled) {
+      return NextResponse.json({ error: 'account-disabled' }, { status: 403 });
     }
     if (!user?.emailVerified) {
       return NextResponse.json({ error: 'email-not-verified' }, { status: 403 });

@@ -19,9 +19,12 @@ export async function GET() {
       { showcases },
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
-  } catch (e) {
+  } catch {
+    // Round 26 (BH-4): stable error code — echoing e.message leaked
+    // internal identifiers (vitrine-registry-<status>). Matches
+    // feed ('feed-unavailable') / search ('search-failed') convention.
     return NextResponse.json(
-      { showcases: [], error: e instanceof Error ? e.message : 'vitrine-error' },
+      { showcases: [], error: 'vitrine-error' },
       { status: 200 } // 200 with empty list: never break the feed
     );
   }

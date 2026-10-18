@@ -35,9 +35,12 @@ export async function GET(
       { listings },
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
-  } catch (e) {
+  } catch {
+    // Round 26 (BH-4): stable error code — echoing e.message leaked
+    // internal identifiers (seller-listings-rest-<status>). Matches
+    // feed ('feed-unavailable') / search ('search-failed') convention.
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'seller-listings-error' },
+      { error: 'seller-listings-error' },
       { status: 500 }
     );
   }
