@@ -165,8 +165,11 @@ export async function proxy(req: NextRequest) {
     // K-M1 (audit round 2, 18 Oct 2026): listing bodies render in the
     // dlala_lang cookie language (ar/fr/en). Without Vary: Cookie, the
     // edge cache serves whichever language rendered first to all users.
-    // Vary by Cookie so each language gets its own cached variant.
-    res.headers.set('Vary', 'Cookie');
+    // NOTE: setting Vary here does NOT survive — Next.js App Router
+    // overwrites it with its own (rsc, next-router-*) values after the
+    // proxy runs (verified live 18 Oct 2026). The working fix is in
+    // vercel.json headers, applied at the edge AFTER the origin response,
+    // with the full value: Cookie + Next.js's own Vary tokens.
   } else if (/^\/(seller|announcement)\/[^/]+\/?$/.test(p)) {
     res.headers.set(
       'Cache-Control',
