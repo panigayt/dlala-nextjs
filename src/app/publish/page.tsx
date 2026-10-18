@@ -677,6 +677,28 @@ function PublishForm({
           if (raw.propertyType && !raw.qPropertyType) mapped.qPropertyType = raw.propertyType;
           if (raw.area && !raw.qArea) mapped.qArea = raw.area;
           if (raw.pricing && !raw.qPricing) mapped.qPricing = raw.pricing;
+          // DK-1 (R36, 18 Oct 2026): edit-mode prefill omitted required
+          // category answers — jobs (qJobTitle, qContract, qProfession,
+          // qExperience, qAvailability), realestate (qRooms), velos/trott
+          // (qBatteryRange). Fill ALL remaining form fields too so no
+          // category opens edit mode with empty required fields.
+          if (raw.jobTitle && !raw.qJobTitle) mapped.qJobTitle = raw.jobTitle;
+          if (raw.contract && !raw.qContract) mapped.qContract = raw.contract;
+          if (raw.profession && !raw.qProfession) mapped.qProfession = raw.profession;
+          if (raw.experience && !raw.qExperience) mapped.qExperience = raw.experience;
+          if (raw.availability && !raw.qAvailability) mapped.qAvailability = raw.availability;
+          if (raw.salary && !raw.qSalary) mapped.qSalary = raw.salary;
+          if (raw.sector && !raw.qSector) mapped.qSector = raw.sector;
+          if (raw.rooms && !raw.qRooms) mapped.qRooms = raw.rooms;
+          if (raw.batteryRange && !raw.qBatteryRange) mapped.qBatteryRange = raw.batteryRange;
+          if (raw.battery && !raw.qBattery) mapped.qBattery = raw.battery;
+          if (raw.model && !raw.qCarModel) mapped.qCarModel = raw.model;
+          if (raw.year && !raw.qMachineYear) mapped.qMachineYear = raw.year;
+          if (raw.compatibleModel && !raw.qSpareModel) mapped.qSpareModel = raw.compatibleModel;
+          if (raw.volume && !raw.qVolume) mapped.qVolume = raw.volume;
+          if (raw.wheelSize && !raw.qWheelSize) mapped.qWheelSize = raw.wheelSize;
+          if (raw.brand && !raw.qMachineBrand) mapped.qMachineBrand = raw.brand;
+          if (raw.brand && !raw.qTrotBrand) mapped.qTrotBrand = raw.brand;
           setAnswers(mapped);
         }
         // Fix 7: load existing photos with hashes + thumbs (legacy editListing.photoUrls)
@@ -905,10 +927,19 @@ function PublishForm({
     if (cat === 'cars' && answers['qFuel'] !== 'fuelElectric' && !answers['qGear']) {
       fail(t('errorRequired')); return false;
     }
+    // DK-4 (R36, 18 Oct 2026): client-side non-negative salary check —
+    // a negative salary passed the client and the CF rejected it with a
+    // raw English message.
+    if (cat === 'jobs' && answers['qSalary'] !== undefined && answers['qSalary'] !== '' && Number(answers['qSalary']) < 0) {
+      fail(t('errSalaryNegative')); return false;
+    }
     // Year range validation (1990–currentYear+1)
     const curYear = new Date().getFullYear() + 1;
     if (cat === 'cars' && answers['qYear']) {
       const y = Number(answers['qYear']);
+      // DK-3 (R36, 18 Oct 2026): client-side integer check — 2019.5 passed
+      // the client while the CF rejected it with raw English.
+      if (!Number.isInteger(y)) { fail(t('errYearInteger')); return false; }
       if (!(y >= 1990 && y <= curYear)) {
         fail(t('errYearRange').replace('{min}', '1990').replace('{max}', String(curYear)));
         return false;
@@ -916,6 +947,8 @@ function PublishForm({
     }
     if (cat === 'machines' && answers['qMachineYear']) {
       const y = Number(answers['qMachineYear']);
+      // DK-3 (R36, 18 Oct 2026): same integer check for the machine year.
+      if (!Number.isInteger(y)) { fail(t('errYearInteger')); return false; }
       if (!(y >= 1990 && y <= curYear)) {
         fail(t('errYearRange').replace('{min}', '1990').replace('{max}', String(curYear)));
         return false;
@@ -1178,10 +1211,15 @@ function PublishForm({
           qTrotType: 'trotType', qVeloType: 'veloType', qVolume: 'volume',
           qWheelSize: 'wheelSize', qYear: 'year',
         };
-        const canonAnswers: Record<string, string> = {};
+        const NUMERIC_ANSWERS_EDIT = new Set(['year', 'mileage', 'rooms', 'area', 'salary', 'experience']);
+        const canonAnswers: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(answers)) {
           const short = Q_TO_SHORT_EDIT[k] || k;
-          canonAnswers[short] = v as string;
+          // DK-2 (R36, 18 Oct 2026): same numeric coercion as the publish
+          // path — year/mileage/rooms/area/salary/experience must be sent as
+          // numbers, not strings, or they drift permanently vs publish.
+          canonAnswers[short] =
+            NUMERIC_ANSWERS_EDIT.has(short) && v !== '' && v != null ? Number(v) : (v as string);
         }
         const updateDoc: Record<string, unknown> = {
           // BE-2 (R16, 18 Oct 2026): preserve existing fr/en translations.

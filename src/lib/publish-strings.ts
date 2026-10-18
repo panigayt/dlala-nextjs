@@ -29,6 +29,11 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   editError: { ar: "تعذّر حفظ التعديلات — حاول مجدداً", fr: "Impossible d'enregistrer les modifications — réessayez", en: "Could not save the changes — try again" },
   editLoadError: { ar: "تعذّر تحميل الإعلان.", fr: "Impossible de charger l'annonce.", en: "Could not load the listing." },
   errYearRange: { ar: "السنة يجب أن تكون بين {min} و {max}.", fr: "L'année doit être comprise entre {min} et {max}.", en: "The year must be between {min} and {max}." },
+  // DK-3 (R36, 18 Oct 2026): client-side integer check for the year field —
+  // 2019.5 passed the client while the CF rejected it with raw English.
+  errYearInteger: { ar: "السنة يجب أن تكون عدداً صحيحاً (بدون كسور).", fr: "L'année doit être un nombre entier (sans décimales).", en: "The year must be a whole number (no decimals)." },
+  // DK-4 (R36, 18 Oct 2026): client-side non-negative salary check.
+  errSalaryNegative: { ar: "الراتب لا يمكن أن يكون سالباً.", fr: "Le salaire ne peut pas être négatif.", en: "The salary cannot be negative." },
   errorCatRequired: { ar: "يرجى اختيار الفئة.", fr: "Veuillez choisir une catégorie.", en: "Please choose a category." },
   errorDescRequired: { ar: "يرجى إدخال وصف الإعلان.", fr: "Veuillez saisir la description de l'annonce.", en: "Please enter the listing description." },
   errorDescTooLong: { ar: "وصف الإعلان طويل جداً (الحد 2000 حرف).", fr: "La description de l'annonce est trop longue (2000 caractères maximum).", en: "The listing description is too long (2000 characters max)." },
