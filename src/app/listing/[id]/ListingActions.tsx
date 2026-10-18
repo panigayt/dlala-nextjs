@@ -11,12 +11,11 @@
 //   conversation opens with ?offer=<amt> (URL param + sessionStorage
 //   fallback — the chat page pre-fills the proposal, never auto-sends).
 //   Buyer-only (hidden for owner); disabled on sold listings (LIS-1).
-// - Share button (verbatim js/market.js shareListing): canonical
-//   dzdlala.com/listing.html?id= URL (works in browsers, the Android app's
-//   deep-link routing, and iOS Safari). navigator.share when available,
-//   otherwise a WhatsApp / Facebook / copy-link dialog. Visible to everyone,
-//   including the owner (legacy parity: owners hide favorite/contact/report
-//   but keep share).
+// - Share button: canonical dzdlala.com/listing/<id> URL (works in
+//   browsers, the Android app's deep-link routing, and iOS Safari).
+//   navigator.share when available, otherwise a WhatsApp / Facebook /
+//   copy-link dialog. Visible to everyone, including the owner (legacy
+//   parity: owners hide favorite/contact/report but keep share).
 // - Report ad button (js/listing.js onReportAd + js/market.js
 //   openReportDialog): guest nudge first (LIS-4), then the verified-email
 //   gate (requireVerified inside openReportDialog), then a dialog with a
@@ -54,11 +53,12 @@ function reasonLabel(id: string, t: (k: string) => string): string {
   return t('reason' + id[0].toUpperCase() + id.slice(1));
 }
 
-// Canonical share URL — verbatim js/market.js shareListing (the '?id=' form
-// is routed by the Android app AND served by hosting, so one URL works in
-// browsers, the app, and iOS Safari).
+// Canonical share URL — dzdlala.com/listing/<id> (served by the App Router
+// /listing/[id] route plus the proxy's legacy {id}.html rewrite; the
+// Android app's deep-link routing handles the same canonical form). One
+// URL works in browsers, the app, and iOS Safari.
 const shareUrlFor = (listingId: string) =>
-  'https://www.dzdlala.com/listing.html?id=' + listingId;
+  'https://www.dzdlala.com/listing/' + listingId;
 
 function Modal({
   title,
