@@ -56,7 +56,19 @@ function MiniProduct({ p }: { p: ListingCard }) {
       </Link>
       <div className="vitrine-mini-info">
         {p.price != null && p.price !== 0 && (
-          <span className="vitrine-mini-price">{formatPrice(p.price, lang)}</span>
+          <>
+            {/* Zak 18 Oct 2026: price + negotiable badge together; 1-DZD = text only. */}
+            {Number(p.price) <= 1 ? (
+              <span className="vitrine-mini-price">{t('negotiable')}</span>
+            ) : (
+              <>
+                <span className="vitrine-mini-price">{formatPrice(p.price, lang)}</span>
+                {p.negotiable && (
+                  <span className="ms-1 text-[10px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-0.5">{t('negotiable')}</span>
+                )}
+              </>
+            )}
+          </>
         )}
         {(cond || p.createdAt) && (
           <span className="vitrine-mini-meta">

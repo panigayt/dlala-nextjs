@@ -136,7 +136,20 @@ export function MetaGrid({
           Round 205), so the row never renders a literal "1 DZD". */}
       <div>
         <span className="text-zinc-500">{t('price')}: </span>
-        <b>{negotiable || Number(price) <= 1 ? t('negotiable') : formatPrice(price || 0, lang)}</b>
+        {/* Zak 18 Oct 2026: show price + negotiable badge together when both
+            are present; 1-DZD = negotiable text only. */}
+        <b>
+          {Number(price) <= 1 ? (
+            t('negotiable')
+          ) : (
+            <>
+              <span dir="ltr">{formatPrice(price || 0, lang)}</span>
+              {negotiable && (
+                <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
+              )}
+            </>
+          )}
+        </b>
       </div>
     </div>
   );
@@ -351,7 +364,7 @@ export function AnswersBox({
 
 // Similar-ads card (client — needs useLang for wilaya/timeago/dir).
 function SimilarCard({ l }: { l: ListingCard }) {
-  const { lang } = useLang();
+  const { t, lang } = useLang();
   const img = cardImage(l);
   // 11 Oct 2026: pass lang — titles were always Arabic.
   const title = cardTitle(l, lang);
@@ -383,8 +396,18 @@ function SimilarCard({ l }: { l: ListingCard }) {
       </div>
       <div className="p-3">
         <p className="font-bold text-emerald-700 text-lg">
-          <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
-          {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
+          {/* Zak 18 Oct 2026: price + negotiable badge together; 1-DZD = text only. */}
+          {Number(l.price) <= 1 ? (
+            <span>{t('negotiable')}</span>
+          ) : (
+            <>
+              <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+              {l.negotiable && (
+                <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
+              )}
+            </>
+          )}
+          {words && Number(l.price) > 1 && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
         </p>
         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
           {title}

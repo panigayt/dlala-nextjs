@@ -488,7 +488,13 @@ async function ListingContent({
           {Number(l.price) <= 1 ? (
             <span>{t('negotiable', pageLang)}</span>
           ) : (
-            <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
+            <>
+              <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
+              {/* Zak 18 Oct 2026: show price + negotiable badge together. */}
+              {(l as { negotiable?: boolean }).negotiable && (
+                <span className="ms-2 text-sm font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-3 py-1">{t('negotiable', pageLang)}</span>
+              )}
+            </>
           )}
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
           {(l as { priceReduced?: boolean }).priceReduced && (

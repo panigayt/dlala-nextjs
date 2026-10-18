@@ -28,6 +28,7 @@ interface OwnListing {
   id: string;
   title?: Record<string, string> | string;
   price?: number;
+  negotiable?: boolean;
   // 11 Oct 2026: answers for job salary display (was 0 DZD on job cards).
   answers?: { jobType?: string; salary?: number };
   photoUrls?: string[];
@@ -440,8 +441,17 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                       <p className="font-bold text-emerald-700">
                         {l.answers?.jobType === 'jobOffer' && typeof l.answers?.salary === 'number' ? (
                           <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
+                        ) : Number(l.price) <= 1 ? (
+                          /* Zak 18 Oct 2026: 1-DZD = negotiable text only. */
+                          <span>{t('negotiable')}</span>
                         ) : (
-                          <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+                          <>
+                            <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+                            {/* Zak 18 Oct 2026: price + negotiable badge together. */}
+                            {l.negotiable && (
+                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{t('negotiable')}</span>
+                            )}
+                          </>
                         )}
                       </p>
                       <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(l, lang)}</h3>
