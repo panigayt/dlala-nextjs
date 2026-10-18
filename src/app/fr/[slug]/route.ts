@@ -5,6 +5,8 @@ import {
   notFoundPage,
   fetchAvailableListings,
   CATEGORY_MIN_LISTINGS,
+  categoryCounts,
+  categorySubLinks,
 } from '@/lib/category-pages';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
@@ -35,7 +37,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
         headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
       });
     }
-    const html = buildCategoryPage(cat, items, total, 'fr');
+    // R53 Team B (18 Oct 2026): the 500-doc fetch window capped the count
+    // shown in title/description (live "500" vs 1,287 real cars). Use the
+    // server-side aggregation for the displayed total; the thin-content
+    // guard keeps using the visible window count.
+    const counts = await categoryCounts().catch(() => null);
+    const displayTotal = counts && counts[cat.id] > 0 ? counts[cat.id] : total;
+    // R53 Team B (18 Oct 2026): internal-link fix — the category hub
+    // now cross-links its model/wilaya sub-landing pages (cars only).
+    const sub = categorySubLinks(listings, 'fr');
+    const html = buildCategoryPage(cat, items, displayTotal, 'fr', sub);
     return new Response(html, {
       status: 200,
       headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=3600, s-maxage=3600' },

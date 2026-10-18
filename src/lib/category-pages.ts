@@ -21,9 +21,13 @@ import {
   ctaTopHtml,
   notFoundPage,
   wilayaName,
+  qualifyingModelUrls,
+  MODEL_BY_SLUG,
+  MIN_LISTINGS,
   type ModelCardItem,
   type ModelListingSummary,
 } from './model-pages';
+import { popularWilayas, wilayaDisplayName } from './wilaya-pages';
 
 export { notFoundPage };
 
@@ -104,6 +108,43 @@ export function filterCategoryItems(
 // Trilingual copy
 // ---------------------------------------------------------------------------
 
+export interface CategorySubLink {
+  label: string;
+  href: string;
+}
+
+export interface CategorySubLinks {
+  models: CategorySubLink[];
+  wilayas: CategorySubLink[];
+}
+
+// R53 Team B (18 Oct 2026): the category hub linked to ZERO model/wilaya
+// sub-landing pages (model pages and wilaya pages cross-link, but the hub
+// didn't link down). Emit "popular models" + "popular wilayas" sections.
+// Only the cars category has sub-pages — qualifyingModelUrls/popularWilayas
+// both filter categoryId === 'cars', so other categories get empty lists.
+export function categorySubLinks(
+  listings: ModelListingSummary[],
+  lang: Lang,
+): CategorySubLinks {
+  const prefix = lang === 'ar' ? SITE : `${SITE}/${lang}`;
+  const models = qualifyingModelUrls(listings, MIN_LISTINGS)
+    .map((p) => {
+      const slug = p.split('/').pop() || '';
+      const m = MODEL_BY_SLUG[slug];
+      if (!m) return null;
+      const label = lang === 'ar' ? m.ar : `${m.brand} ${m.model}`;
+      return { label, href: `${prefix}${p}` };
+    })
+    .filter((x): x is CategorySubLink => !!x)
+    .slice(0, 12);
+  const wilayas = popularWilayas(listings, 0, 8).map((w) => ({
+    label: wilayaDisplayName(w, lang),
+    href: `${prefix}/voitures/wilaya/${w.slug}`,
+  }));
+  return { models, wilayas };
+}
+
 type Lang = 'ar' | 'fr' | 'en';
 
 function pageTitle(c: Category, lang: Lang): string {
@@ -119,11 +160,17 @@ function pageDescription(c: Category, items: CategoryCardItem[], total: number, 
     .slice(0, 3)
     .map((it) => (it.rawPrice > 1 ? `${it.title} (${it.price})` : it.title))
     .join(lang === 'ar' ? '، ' : ', ');
-  if (lang === 'fr')
-    return `${total} ${name.toLowerCase()} à vendre en Algérie : ${samples}. Contact direct avec les vendeurs sur DLALA.`;
-  if (lang === 'en')
-    return `${total} ${name.toLowerCase()} for sale in Algeria: ${samples}. Contact sellers directly on DLALA.`;
-  return `${total} ${name} للبيع في الجزائر: ${samples}. تواصل مباشر مع البائعين على دلالة.`;
+  const d =
+    lang === 'fr'
+      ? `${total} ${name.toLowerCase()} à vendre en Algérie : ${samples}. Contact direct avec les vendeurs sur DLALA.`
+      : lang === 'en'
+        ? `${total} ${name.toLowerCase()} for sale in Algeria: ${samples}. Contact sellers directly on DLALA.`
+        : `${total} ${name} للبيع في الجزائر: ${samples}. تواصل مباشر مع البائعين على دلالة.`;
+  // R53 Team B (18 Oct 2026): hard cap at 160 chars — wilaya pages got this
+  // (SEO audit FIX #5, 17 Oct) but category pages shipped uncapped (live
+  // /voitures AR description measured 180 chars).
+  if (d.length > 160) return d.slice(0, 157).trimEnd() + '…';
+  return d;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +182,7 @@ export function buildCategoryPage(
   items: CategoryCardItem[],
   total: number,
   lang: Lang,
+  sub?: CategorySubLinks,
 ): string {
   const isAr = lang === 'ar';
   const dir = isAr ? 'rtl' : 'ltr';
@@ -219,6 +267,28 @@ export function buildCategoryPage(
   const slug = catSlugFr(c);
   const hreflangs = `<link rel="alternate" hreflang="ar" href="${escHtml(`${SITE}/${slug}`)}">\n<link rel="alternate" hreflang="fr" href="${escHtml(`${SITE}/fr/${slug}`)}">\n<link rel="alternate" hreflang="en" href="${escHtml(`${SITE}/en/${slug}`)}">\n<link rel="alternate" hreflang="x-default" href="${escHtml(`${SITE}/${slug}`)}">`;
 
+  // R53 Team B (18 Oct 2026): internal-link fix — cross-link the hub to its
+  // model/wilaya sub-landing pages (mirrors the .pop section on wilaya
+  // pages). Renders only for categories that have sub-pages (cars).
+  const linkList = (ls: CategorySubLink[]): string =>
+    ls.map((l) => `<a href="${escHtml(l.href)}">${escHtml(l.label)}</a>`).join(' · ');
+  const modelsHead =
+    lang === 'fr' ? 'Modèles populaires' : lang === 'en' ? 'Popular models' : 'موديلات شائعة';
+  const wilayasHead =
+    lang === 'fr' ? 'Parcourir par wilaya' : lang === 'en' ? 'Browse by wilaya' : 'تصفح حسب الولاية';
+  const subSections =
+    sub && (sub.models.length > 0 || sub.wilayas.length > 0)
+      ? `<div class="pop">${
+          sub.models.length > 0
+            ? `<div><strong>${escHtml(modelsHead)}:</strong> ${linkList(sub.models)}</div>`
+            : ''
+        }${
+          sub.wilayas.length > 0
+            ? `<div><strong>${escHtml(wilayasHead)}:</strong> ${linkList(sub.wilayas)}</div>`
+            : ''
+        }</div>`
+      : '';
+
   // 17 Oct 2026 (SEO audit FIX #3): full OG + Twitter cards, mirroring the
   // listing-page pattern. og:image = first card photo (absolute URL),
   // site icon as fallback.
@@ -258,6 +328,8 @@ body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:1
 .cta{display:inline-block;background:#0d7a4f;color:#fff!important;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;margin:16px 0;font-size:16px}
 nav.breadcrumb{font-size:13px;color:#666;margin-bottom:8px}
 nav.breadcrumb a{color:#0d7a4f}
+.pop{margin:18px 0;font-size:14px}
+.pop div{margin:6px 0}
 </style>
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>
 </head>
@@ -269,6 +341,7 @@ nav.breadcrumb a{color:#0d7a4f}
 ${ctaTopHtml(lang)}
 <div class="grid">${cards}</div>
 <p style="text-align:center"><a class="cta" href="${SITE}/">${escHtml(viewAllBtn(lang))}</a></p>
+${subSections}
 </body>
 </html>`;
 }

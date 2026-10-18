@@ -9,6 +9,12 @@ import {
   MIN_LISTINGS,
 } from '@/lib/model-pages';
 import { qualifyingWilayaUrls, WILAYA_MIN_LISTINGS } from '@/lib/wilaya-pages';
+import {
+  categoryCounts,
+  catSlugFr,
+  CATEGORY_MIN_LISTINGS,
+} from '@/lib/category-pages';
+import { CATEGORIES } from '@/lib/categories';
 
 const BASE = 'https://www.dzdlala.com';
 
@@ -54,7 +60,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // lists the guide articles weekly/0.7; the index pages are real crawlable
     // routes served by the production guides function, included here).
     // Round 130: the dynamic live price guide (S-17/S-18/S-25) — the slug
-    // rolls with the year; the model/category landing pages are still open.
+    // rolls with the year. R53 Team B (18 Oct 2026): the category landing
+    // pages are now emitted below (was "still open").
     { url: `${BASE}/guides`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE}/fr/guides`, changeFrequency: 'weekly', priority: 0.7 },
     // 12 Oct 2026: English guides (Round 8) — same weekly/0.7 as AR/FR.
@@ -150,7 +157,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     } catch {
       // Firestore unreachable for the counts — skip both
     }
-    return [...staticRoutes, ...listingUrls, ...modelUrls, ...wilayaUrls];
+    // R53 Team B (18 Oct 2026): category SEO landing pages
+    // (/{slug}, /fr/{slug}, /en/{slug}) — the main SEO landing pages were
+    // invisible to crawlers (reachable only via internal links). Emit
+    // qualifying categories (server-side aggregation count >=
+    // CATEGORY_MIN_LISTINGS, matching the page's thin-content guard),
+    // weekly/0.7 like the model/wilaya landing pages. Arabic default stays
+    // unprefixed — no /ar/ variant, by design.
+    let categoryUrls: MetadataRoute.Sitemap = [];
+    try {
+      const counts = await categoryCounts();
+      categoryUrls = CATEGORIES.filter(
+        (c) => (counts[c.id] || 0) >= CATEGORY_MIN_LISTINGS,
+      ).flatMap((c) => {
+        const slug = catSlugFr(c);
+        return [
+          { url: `${BASE}/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+          { url: `${BASE}/fr/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+          { url: `${BASE}/en/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+        ];
+      });
+    } catch {
+      // Firestore unreachable for the counts — skip category landings
+    }
+    return [...staticRoutes, ...listingUrls, ...modelUrls, ...wilayaUrls, ...categoryUrls];
   } catch {
     // Firestore unreachable — return static routes only
     return staticRoutes;
