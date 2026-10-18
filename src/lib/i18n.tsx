@@ -62,6 +62,17 @@ function readStoredLang(): Lang {
     if (m) return m[1] as Lang;
     const l = window.localStorage.getItem('dlala_lang');
     if (l === 'fr' || l === 'en' || l === 'ar') return l;
+    // Round 205 (audit R1, A1): first-visit /fr + /en — no cookie or
+    // localStorage yet, so the URL path is the only language signal. Sniff
+    // the /fr or /en prefix before falling back to 'ar', mirroring the
+    // pre-paint script in layout.tsx (which already sniffs the path).
+    try {
+      const p = window.location.pathname;
+      if (p === '/fr' || p.startsWith('/fr/')) return 'fr';
+      if (p === '/en' || p.startsWith('/en/')) return 'en';
+    } catch {
+      // ignore — corrupted location keeps the default
+    }
   } catch {
     // ignore — corrupted storage keeps the default
   }
