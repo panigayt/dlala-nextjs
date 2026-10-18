@@ -192,15 +192,28 @@ function sampleLine(it: WilayaCardItem, lang: Lang): string {
   return price ? `${it.title} (${price})` : it.title;
 }
 
+// 18 Oct 2026 (audit R41 WD-1): wilaya 16's Arabic registry name (الجزائر)
+// equals the country's name, so the AR title template rendered byte-identical
+// to the national /voitures page title. Disambiguate Algiers in all 3
+// locales — other wilayas keep their Zak-approved indexed titles unchanged.
+function wilayaTitleName(w: WilayaInfo, lang: Lang): string {
+  if (w.code === 16) {
+    if (lang === 'fr') return "la wilaya d'Alger";
+    if (lang === 'en') return 'Algiers Province';
+    return 'ولاية الجزائر';
+  }
+  return wilayaDisplayName(w, lang);
+}
+
 function pageTitle(w: WilayaInfo, lang: Lang): string {
-  const name = wilayaDisplayName(w, lang);
+  const name = wilayaTitleName(w, lang);
   if (lang === 'fr') return `Voitures à vendre à ${name} - DLALA`;
   if (lang === 'en') return `Cars for sale in ${name} - DLALA`;
   return `سيارات للبيع في ${name} - دلالة`;
 }
 
 function pageDescription(w: WilayaInfo, items: WilayaCardItem[], total: number, lang: Lang): string {
-  const name = wilayaDisplayName(w, lang);
+  const name = wilayaTitleName(w, lang);
   const samples = items.slice(0, 3).map((it) => sampleLine(it, lang)).join(lang === 'ar' ? '، ' : ', ');
   // 17 Oct 2026 (SEO audit FIX #5): keep the template lean — taglines
   // shortened to a single brand word so even 3 samples rarely exceed
@@ -291,12 +304,15 @@ export function buildWilayaPage(
 
   // "View all listings" button — links to the main site homepage (Zak 14 Oct 2026).
   // No numbers on the button (Zak 14 Oct 2026).
+  // NOTE (18 Oct 2026, audit R41 WD-2): wilaya pages intentionally carry NO FAQ
+  // section — Zak explicitly ordered its removal on 14 Oct 2026 (final mockup
+  // approval). Do NOT re-add without his order.
   const viewAllBtn = (l: Lang): string =>
     l === 'fr' ? 'Voir toutes les annonces' : l === 'en' ? 'View all listings' : 'عرض كل الإعلانات';
 
   const homeLabel = lang === 'fr' ? 'Accueil' : lang === 'en' ? 'Home' : 'الرئيسية';
   const carsLabel = lang === 'fr' ? 'Voitures' : lang === 'en' ? 'Cars' : 'سيارات';
-  const h1 = isAr ? `سيارات للبيع في ${name}` : lang === 'fr' ? `Voitures à vendre à ${name}` : `Cars for sale in ${name}`;
+  const h1 = isAr ? `سيارات للبيع في ${wilayaTitleName(w, lang)}` : lang === 'fr' ? `Voitures à vendre à ${wilayaTitleName(w, lang)}` : `Cars for sale in ${wilayaTitleName(w, lang)}`;
   // Zak 14 Oct 2026: keep ONLY this single intro sentence (no counts, no model lists).
   const intro =
     lang === 'fr'
