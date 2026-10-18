@@ -76,6 +76,19 @@ function tsMs(v: unknown): number {
   return 0;
 }
 
+// BF-4 (R16, 18 Oct 2026): deterministic chronological order. The message
+// queries are orderBy('at','desc') + reverse(), but equal `at` timestamps
+// (same-ms serverTimestamp, optimistic Date.now() collisions) had
+// undefined order — two rapid messages could flip. Secondary sort by
+// message id (unique, deterministic).
+function sortMsgsChronological(list: Msg[]): Msg[] {
+  return [...list].sort((a, b) => {
+    const d = tsMs(a.at) - tsMs(b.at);
+    if (d !== 0) return d;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
 function cleanText(s: string): string {
   let out = String(s || '').replace(/[‪-‮⁦-⁩]/g, '');
   if (out.length > 2000) out = out.slice(0, 2000);
@@ -353,10 +366,13 @@ function ChatInner() {
             fsMod.limit(100)
           ),
             (snap2) => {
-              // desc → reverse for chronological display (legacy parity).
-              const list: Msg[] = snap2.docs
-                .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg)
-                .reverse();
+              // desc → chronological display (legacy parity) + BF-4
+              // deterministic tiebreak on equal `at` (sort by id).
+              const list: Msg[] = sortMsgsChronological(
+                snap2.docs.map(
+                  (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
+                )
+              );
               const prevIds = new Set(msgsRef.current.map((m) => m.id));
               const hasNew = list.some((m) => !prevIds.has(m.id));
               msgsRef.current = list;
@@ -513,9 +529,12 @@ function ChatInner() {
         fsMod.limit(100)
       );
       const snap = await fsMod.getDocs(q);
-      const list: Msg[] = snap.docs
-        .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg)
-        .reverse();
+      // BF-4: same deterministic chronological order as the live window.
+      const list: Msg[] = sortMsgsChronological(
+        snap.docs.map(
+          (d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg
+        )
+      );
       // Dedupe against already-loaded IDs (overlap at the boundary).
       const seen = new Set(all.map((m) => m.id));
       const fresh = list.filter((m) => !seen.has(m.id));
@@ -1059,6 +1078,22 @@ function ChatInner() {
     if (blockedSendGuard()) return;
     if (!file.type || !file.type.startsWith('image/')) {
       showToast(st('imageSendError'));
+      return;
+    }
+    // BF-1 (R16, 18 Oct 2026): reject HEIC/HEIF upfront — Image() cannot
+    // decode them, so they failed later with a generic error. Same
+    // dedicated message as publish (photoHeic).
+    if (/heic|heif/i.test(file.type) || /\.hei(c|f)$/i.test(file.name || '')) {
+      showToast(st('photoHeic').replace('{name}', file.name || '?'));
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    // BF-2 (R16, 18 Oct 2026): reject GIFs — they were silently flattened
+    // to a JPEG first frame with no notice that the animation was lost.
+    // Rejecting with a clear message is the smaller, safer fix.
+    if (file.type === 'image/gif' || /\.gif$/i.test(file.name || '')) {
+      showToast(st('photoGif'));
+      if (fileRef.current) fileRef.current.value = '';
       return;
     }
     if (file.size > 15 * 1024 * 1024) {
@@ -1802,7 +1837,11 @@ function ChatInner() {
             }`}
           >
             {ts > 0 && <span>{fmtChatTime(ts)}</span>}
-            {mine && m.readAt ? <span>✓✓</span> : null}
+            {/* BF-3 (R16, 18 Oct 2026): sent indicator — single ✓ once the
+                message is on the server (the onSnapshot echo replaces the
+                _sending optimistic row), ✓✓ when read. Rows still sending
+                show no check. */}
+            {mine && (m.readAt ? <span>✓✓</span> : m._sending ? null : <span>✓</span>)}
           </div>
         </div>
       </div>
@@ -2026,7 +2065,7 @@ function ChatInner() {
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

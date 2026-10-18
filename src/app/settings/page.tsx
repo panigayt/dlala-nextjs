@@ -275,44 +275,78 @@ function SettingsContent({ user }: { user: CompatUser }) {
         20000
       );
       // Best-effort pre-wipe of own listings (batches of 5).
-      const snap = await withTimeout(
-        fsMod.getDocs(
-          fsMod.query(
-            fsMod.collection(db, 'listings'),
-            fsMod.where('sellerId', '==', user.uid),
-            fsMod.limit(100)
-          )
-        ),
-        20000
-      );
-      // Collect R2 photo URLs before the docs are gone.
+      // BG-2 (R16, 18 Oct 2026): paginate — the old limit(100) left users
+      // with >100 listings relying solely on the CF. Re-query after each
+      // page (deleted docs drop out); 20-page safety cap — the CF finisher
+      // remains authoritative for anything beyond.
       const r2Urls: string[] = [];
-      for (const d of snap.docs) {
-        try {
-          const data = d.data();
-          for (const k of ['photoUrls', 'photo_thumbs', 'thumbUrls'] as const) {
-            const arr = data[k];
-            if (Array.isArray(arr)) {
-              for (const u of arr) {
-                if (typeof u === 'string' && u) r2Urls.push(u);
+      for (let page = 0; page < 20; page++) {
+        const snap = await withTimeout(
+          fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'listings'),
+              fsMod.where('sellerId', '==', user.uid),
+              fsMod.limit(100)
+            )
+          ),
+          20000
+        );
+        if (snap.empty) break;
+        // Collect R2 photo URLs before the docs are gone.
+        for (const d of snap.docs) {
+          try {
+            const data = d.data();
+            for (const k of ['photoUrls', 'photo_thumbs', 'thumbUrls'] as const) {
+              const arr = data[k];
+              if (Array.isArray(arr)) {
+                for (const u of arr) {
+                  if (typeof u === 'string' && u) r2Urls.push(u);
+                }
               }
             }
+          } catch {
+            // best-effort
           }
-        } catch {
-          // best-effort
         }
+        const ids = snap.docs.map((d) => d.id);
+        for (let i = 0; i < ids.length; i += 5) {
+          await Promise.all(
+            ids.slice(i, i + 5).map(async (id) => {
+              try {
+                await withTimeout(fsMod.deleteDoc(fsMod.doc(db, 'listings/' + id)), 15000);
+              } catch {
+                // best-effort
+              }
+            })
+          );
+        }
+        if (snap.docs.length < 100) break; // last page
       }
-      const ids = snap.docs.map((d) => d.id);
-      for (let i = 0; i < ids.length; i += 5) {
-        await Promise.all(
-          ids.slice(i, i + 5).map(async (id) => {
-            try {
-              await withTimeout(fsMod.deleteDoc(fsMod.doc(db, 'listings/' + id)), 15000);
-            } catch {
-              // best-effort
-            }
-          })
+      // BG-1 (R16, 18 Oct 2026): release the username reservation
+      // client-side. Rules permit the owner to delete their own
+      // usernames/{handle} (resource.data.userId == uid); the CF finisher
+      // remains authoritative — deleteDoc on an already-deleted doc is a
+      // silent no-op, so a CF/client race is harmless. usersPrivate/{uid}
+      // CANNOT be client-deleted (rules: allow delete: if false) — left
+      // to the CF (flagged for Zak to verify the finisher deletes it).
+      try {
+        const profSnap = await withTimeout(
+          fsMod.getDoc(fsMod.doc(db, 'users/' + user.uid)),
+          15000
         );
+        const handle = profSnap.exists()
+          ? String(
+              (profSnap.data() as { username?: unknown } | undefined)?.username || ''
+            ).toLowerCase()
+          : '';
+        if (handle) {
+          await withTimeout(
+            fsMod.deleteDoc(fsMod.doc(db, 'usernames/' + handle)),
+            15000
+          );
+        }
+      } catch {
+        // best-effort — the CF finisher is authoritative
       }
       // R2 photo cleanup (best-effort) — the server skips non-R2 values and
       // enforces uid ownership; unstored variants are derived server-side.

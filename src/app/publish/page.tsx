@@ -535,10 +535,14 @@ function PublishForm({
   const { lang } = useLang();
   const t = useCallback((k: string) => pubT(k, lang), [lang]);
   // Draft restore — read once via lazy initializer (client-only, no effect)
-  const readDraft = () => {
+  // BE-4 (R16, 18 Oct 2026): the draft key includes the user UID — the
+  // unkeyed key leaked one user's title/desc/price/answers to the next
+  // user on a shared device/browser (and survived account deletion).
+  const draftKey = (uid: string) => `dlala_publish_draft_${uid}`;
+  const readDraft = (uid: string) => {
     if (editId || typeof window === 'undefined') return null;
     try {
-      const d = JSON.parse(localStorage.getItem('dlala_publish_draft') || 'null');
+      const d = JSON.parse(localStorage.getItem(draftKey(uid)) || 'null');
       // 11 Oct 2026: 7-day TTL — stale drafts must not resurrect.
       if (!d || (d.ts && Date.now() - d.ts > 7 * 24 * 3600 * 1000)) return null;
       return d;
@@ -546,17 +550,17 @@ function PublishForm({
       return null;
     }
   };
-  const [isWanted, setIsWanted] = useState(() => readDraft()?.isWanted ?? initialMode === 'wanted');
+  const [isWanted, setIsWanted] = useState(() => readDraft(user.uid)?.isWanted ?? initialMode === 'wanted');
   const router = useRouter();
-  const [title, setTitle] = useState(() => readDraft()?.title || '');
-  const [cat, setCat] = useState(() => readDraft()?.cat || '');
+  const [title, setTitle] = useState(() => readDraft(user.uid)?.title || '');
+  const [cat, setCat] = useState(() => readDraft(user.uid)?.cat || '');
   // 13 Oct 2026 (Round 16, BUG 4): wanted mode stores wilayaCode 0
   // ("all wilayas") — the legacy js/publish.js parity value. Opening
   // /publish?mode=wanted left wilaya='' with the select hidden, so
   // validate() always failed wantedWilayaAutoError. Default to '0' for
   // wanted initial mode (no draft).
   const [wilaya, setWilaya] = useState(() => {
-    const d = readDraft();
+    const d = readDraft(user.uid);
     if (d?.wilaya) return d.wilaya;
     if (d) return ''; // draft without wilaya — keep as-is
     return initialMode === 'wanted' ? '0' : '';
@@ -567,12 +571,12 @@ function PublishForm({
   // (cascading renders). Covers stale drafts saved with wilaya='' in wanted
   // mode and any path that enables wanted without touching wilaya.
   const effectiveWilaya = isWanted ? '0' : wilaya;
-  const [price, setPrice] = useState(() => readDraft()?.price || '');
-  const [condition, setCondition] = useState(() => readDraft()?.condition || '');
-  const [qty, setQty] = useState(() => readDraft()?.qty || '1');
-  const [negotiable, setNegotiable] = useState(() => readDraft()?.negotiable || false);
-  const [desc, setDesc] = useState(() => readDraft()?.desc || '');
-  const [answers, setAnswers] = useState<Record<string, string>>(() => readDraft()?.answers || {});
+  const [price, setPrice] = useState(() => readDraft(user.uid)?.price || '');
+  const [condition, setCondition] = useState(() => readDraft(user.uid)?.condition || '');
+  const [qty, setQty] = useState(() => readDraft(user.uid)?.qty || '1');
+  const [negotiable, setNegotiable] = useState(() => readDraft(user.uid)?.negotiable || false);
+  const [desc, setDesc] = useState(() => readDraft(user.uid)?.desc || '');
+  const [answers, setAnswers] = useState<Record<string, string>>(() => readDraft(user.uid)?.answers || {});
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<{ url: string; hash: string; thumb: string | null }[]>([]);
   const [removedExisting, setRemovedExisting] = useState<string[]>([]);
@@ -600,14 +604,14 @@ function PublishForm({
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(
-          'dlala_publish_draft',
+          draftKey(user.uid),
           // 11 Oct 2026: save all fields + TTL (was dropping condition/isWanted).
           JSON.stringify({ title, cat, wilaya, price, desc, answers, condition, qty, negotiable, isWanted, ts: Date.now() })
         );
       } catch { /* ignore */ }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [title, cat, wilaya, price, desc, answers, condition, qty, negotiable, isWanted, editId]);
+  }, [title, cat, wilaya, price, desc, answers, condition, qty, negotiable, isWanted, editId, user.uid]);
 
   // Edit mode: load existing listing
   useEffect(() => {
@@ -829,7 +833,9 @@ function PublishForm({
     if (!cat) { fail(t('errorCatRequired')); return false; }
     const isJobsCat = cat === 'jobs';
     const priceNum = price.trim() === '' ? NaN : Number(price);
-    if (!isJobsCat && !(priceNum >= 0)) { fail(t('errorPrice')); return false; }
+    // BE-5 (R16, 18 Oct 2026): 0 DZD is not a valid price — the
+    // negotiable convention is 1 DZD (Ouedkniss pipeline rule).
+    if (!isJobsCat && !(priceNum >= 1)) { fail(t('errorPriceMin')); return false; }
     if (!isJobsCat && priceNum > 100000000) { fail(t('errorPriceTooHigh')); return false; }
     // Wanted mode always carries wilaya '0' via effectiveWilaya (derived, not
     // synced) — no check needed; the value cannot be stale by construction.
@@ -901,7 +907,18 @@ function PublishForm({
     }
     // AT-1 (R12, 18 Oct 2026): server F-14 rejects sale ads with zero
     // photos AFTER the upload progress — block client-side for good UX.
-    if (!isWanted && totalPhotos === 0) { fail(t('errorPhotoRequired')); return false; }
+    // BE-1 (R16, 18 Oct 2026): the default-image fallback at submit (app
+    // parity) injects a server-allowlisted dzdlala.com image for jobs
+    // seeker/offer and wanted ads — those ads legitimately publish with
+    // 0 picked photos, so exempt them here. Before this, AT-1 fired first
+    // and the seeker/offer branches were unreachable dead code (also
+    // wrongly blocked editing a job-offer ad that carries the default
+    // image, since edit prefill filters default_ads URLs out of
+    // existingPhotos).
+    const jtBE1 = answers['qJobType'];
+    const getsDefaultImage =
+      (cat === 'jobs' && (jtBE1 === 'jobSeeker' || jtBE1 === 'jobOffer')) || isWanted;
+    if (!isWanted && totalPhotos === 0 && !getsDefaultImage) { fail(t('errorPhotoRequired')); return false; }
     return true;
   };
 
@@ -1120,8 +1137,20 @@ function PublishForm({
           canonAnswers[short] = v as string;
         }
         const updateDoc: Record<string, unknown> = {
-          title: { ar: title.trim() },
-          description: { ar: desc.trim() },
+          // BE-2 (R16, 18 Oct 2026): preserve existing fr/en translations.
+          // The form only edits the Arabic text; spreading the stored
+          // object keeps fr/en (and any other keys) instead of deleting
+          // them. Legacy string titles fall back to {} — ar-only write.
+          title: {
+            ...((cur.title && typeof cur.title === 'object')
+              ? (cur.title as Record<string, string>) : {}),
+            ar: title.trim(),
+          },
+          description: {
+            ...((cur.description && typeof cur.description === 'object')
+              ? (cur.description as Record<string, string>) : {}),
+            ar: desc.trim(),
+          },
           price: effPrice,
           // AT-11 (R12, 18 Oct 2026): categoryId removed from edit payload —
           // server handleEdit rejects category changes; the rules allowlist
@@ -1223,7 +1252,7 @@ function PublishForm({
             // best-effort — notification failed, price change kept
           }
         }
-        try { localStorage.removeItem('dlala_publish_draft'); } catch { /* ignore */ }
+        try { localStorage.removeItem(draftKey(user.uid)); } catch { /* ignore */ }
         router.push(`/listing/${editId}`);
         return;
       }
@@ -1339,7 +1368,7 @@ function PublishForm({
       const finalId = fnBody.result?.listingId || listingId;
       try {
         localStorage.setItem('dlala_last_publish', String(Date.now()));
-        localStorage.removeItem('dlala_publish_draft');
+        localStorage.removeItem(draftKey(user.uid));
       } catch { /* ignore */ }
       // ?return= support: pro vitrine picker's "+ منتج جديد" links here;
       // return with ?newListing=<id> inserted before any #fragment.
@@ -1430,8 +1459,14 @@ function PublishForm({
               <label htmlFor="pCat" className={lblCls}>{t('category')}</label>
               <select
                 id="pCat"
-                className={inputCls}
+                className={inputCls + (editId ? ' opacity-60' : '')}
                 value={cat}
+                // BE-3 (R16, 18 Oct 2026): category is immutable after
+                // publish (AT-11: the edit payload excludes categoryId and
+                // the server rejects changes). Disable the select in edit
+                // mode with an explanatory note instead of letting the user
+                // change it and silently not saving.
+                disabled={!!editId}
                 onChange={(e) => { setCat(e.target.value); setAnswers({}); }}
               >
                 <option value="">—</option>
@@ -1439,6 +1474,9 @@ function PublishForm({
                   <option key={c.id} value={c.id}>{c[lang]}</option>
                 ))}
               </select>
+              {!!editId && (
+                <p className="text-xs text-zinc-500 mt-1">{t('editCatLocked')}</p>
+              )}
             </div>
             {!isWanted && (
               <div>
@@ -1479,7 +1517,7 @@ function PublishForm({
                 <input
                   id="pPrice"
                   type="number"
-                  min="0"
+                  min="1"
                   dir="ltr"
                   className={inputCls + ' text-left'}
                   value={price}
