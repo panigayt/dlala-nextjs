@@ -127,14 +127,17 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
               </p>
             ) : (
               <>
-                <p className="flex items-center gap-1 flex-wrap">
-                  <span className="whitespace-nowrap font-extrabold"><bdi>{formatPrice(l.price || 0, lang)}</bdi></span>
-                  {(l.negotiable || Number(l.price) <= 1) && (
-                    <span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
-                  )}
-                </p>
+                <p className="whitespace-nowrap font-extrabold"><bdi>{formatPrice(l.price || 0, lang)}</bdi></p>
                 {words && Number(l.price) > 1 && (
-                  <p className="text-xs font-normal text-zinc-500">({words})</p>
+                  <p className="flex items-center gap-1 text-xs font-normal text-zinc-500">
+                    <span>({words})</span>
+                    {(l.negotiable || Number(l.price) <= 1) && (
+                      <span className="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
+                    )}
+                  </p>
+                )}
+                {!(words && Number(l.price) > 1) && (l.negotiable || Number(l.price) <= 1) && (
+                  <p><span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></p>
                 )}
               </>
             )}
