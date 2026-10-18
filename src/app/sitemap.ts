@@ -103,7 +103,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const listingUrls: MetadataRoute.Sitemap = listings.flatMap((l) => {
       const entry = (url: string): MetadataRoute.Sitemap[number] => ({
         url,
-        lastModified: l.createdAt || undefined,
+        // R15b BB-1: use updatedAt when present (post-edit), else createdAt.
+        lastModified: l.updatedAt || l.createdAt || undefined,
         changeFrequency: 'daily' as const,
         priority: 0.9,
       });

@@ -144,7 +144,7 @@ function CategoryChips({
       ))}
       <Link
         href="/wanted"
-        className="whitespace-nowrap rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-800 hover:border-emerald-600"
+        className="whitespace-nowrap shrink-0 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-zinc-800 hover:border-emerald-600"
       >
         🔎 {t('wantedOnly')}
       </Link>

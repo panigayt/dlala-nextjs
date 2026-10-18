@@ -636,13 +636,13 @@ export default async function ListingPage({
     );
   }
 
-  // R13 AX-F1 (18 Oct 2026): the per-listing JSON-LD <script> renders ONCE
-  // here, in the non-streamed page shell — NOT inside <Suspense>
-  // (ListingContent): PPR emitted that component's script twice
-  // (byte-identical duplicates live: one after static </main>, one inside
-  // the streamed <div hidden id="S:a">). '<' is escaped (\u003c) so user
-  // content can never break out of the script. 1-DZD no-price listings
-  // emit zero JSON-LD (seoForListing returns null jsonLd — rule holds).
+  // R13 AX-F1 (18 Oct 2026), fixed R15b BB-2: the per-listing JSON-LD
+  // <script> renders ONCE here, in the non-streamed page shell — as a
+  // SIBLING of <ListingDir>, not a child. ListingDir is a client component
+  // (useLang); PPR streamed the script twice (byte-identical) when it was
+  // inside the client boundary. '<' is escaped (\u003c) so user content
+  // can never break out of the script. 1-DZD no-price listings emit zero
+  // JSON-LD (seoForListing returns null jsonLd — rule holds).
   const pageLang = await getServerLang();
   let jsonLdScript = '';
   try {
@@ -654,16 +654,18 @@ export default async function ListingPage({
   }
 
   return (
-    <ListingDir>
+    <>
       {jsonLdScript && (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: jsonLdScript }}
         />
       )}
-      <Suspense fallback={<ListingSkeleton />}>
-        <ListingContent params={params} listing={listing} />
-      </Suspense>
-    </ListingDir>
+      <ListingDir>
+        <Suspense fallback={<ListingSkeleton />}>
+          <ListingContent params={params} listing={listing} />
+        </Suspense>
+      </ListingDir>
+    </>
   );
 }

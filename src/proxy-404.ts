@@ -77,16 +77,50 @@ export async function checkDocExists(
   }
 }
 
-// Static 404 page mirroring src/app/not-found.tsx (no JS, no Tailwind —
-// the proxy returns raw HTML). Same emerald theme, same trilingual copy,
-// plus noindex so crawlers never index the 404 body.
-export const TRILINGUAL_404_HTML = `<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+// R15b BC-1 (18 Oct 2026): locale-aware 404. /fr/* and /en/* URLs get
+// the French/English variant (lang, dir, title, message order) instead
+// of always Arabic. The trilingual copy is preserved; the matching
+// language is listed first and gets the primary (solid) button.
+export function localized404Html(locale: 'ar' | 'fr' | 'en'): string {
+  const isAr = locale === 'ar';
+  const htmlLang = locale;
+  const dir = isAr ? 'rtl' : 'ltr';
+  const title =
+    locale === 'fr'
+      ? 'Page non trouvée | Dlala'
+      : locale === 'en'
+        ? 'Page not found | Dlala'
+        : 'صفحة غير موجودة | دلالة';
+
+  const msgs = {
+    ar: { text: 'عذراً، هذه الصفحة غير موجودة.', cta: 'العودة إلى الرئيسية', home: '/' },
+    fr: { text: "Désolé, cette page n'existe pas.", cta: "Retour à l'accueil", home: '/fr/' },
+    en: { text: 'Sorry, this page does not exist.', cta: 'Back to home', home: '/en/' },
+  };
+  const order: ('ar' | 'fr' | 'en')[] =
+    locale === 'fr' ? ['fr', 'ar', 'en'] : locale === 'en' ? ['en', 'ar', 'fr'] : ['ar', 'fr', 'en'];
+
+  const paragraphs = order
+    .map(
+      (l) =>
+        `<p lang="${l}" dir="${l === 'ar' ? 'rtl' : 'ltr'}">${msgs[l].text}</p>`
+    )
+    .join('\n');
+  const links = order
+    .map((l, i) =>
+      i === 0
+        ? `<a class="solid" href="${msgs[l].home}" lang="${l}" dir="${l === 'ar' ? 'rtl' : 'ltr'}">${msgs[l].cta}</a>`
+        : `<a class="ghost" href="${msgs[l].home}" lang="${l}" dir="${l === 'ar' ? 'rtl' : 'ltr'}">${msgs[l].cta}</a>`
+    )
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="${htmlLang}" dir="${dir}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>404 — Dlala</title>
+<title>${title}</title>
 <style>
 body{background:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;margin:0}
 main{max-width:36rem;margin:0 auto;padding:10vh 1.25rem;text-align:center}
@@ -103,15 +137,18 @@ a.ghost{background:#fff;color:#0b6b4f;border:2px solid #0b6b4f}
 <main>
 <div class="mark" aria-hidden="true">D</div>
 <h1>404</h1>
-<p lang="ar" dir="rtl">عذراً، هذه الصفحة غير موجودة.</p>
-<p lang="fr" dir="ltr">Désolé, cette page n&rsquo;existe pas.</p>
-<p lang="en" dir="ltr">Sorry, this page does not exist.</p>
+${paragraphs}
 <nav aria-label="التنقل الرئيسي / Navigation principale / Main navigation">
-<a class="solid" href="/" lang="ar" dir="rtl">العودة إلى الرئيسية</a>
-<a class="ghost" href="/" lang="fr" dir="ltr">Retour à l&rsquo;accueil</a>
-<a class="ghost" href="/" lang="en" dir="ltr">Back to home</a>
+${links}
 </nav>
 </main>
 </body>
 </html>
 `;
+}
+
+// Static 404 page mirroring src/app/not-found.tsx (no JS, no Tailwind —
+// the proxy returns raw HTML). Same emerald theme, same trilingual copy,
+// plus noindex so crawlers never index the 404 body.
+// (Kept for backward compat; new code should use localized404Html('ar').)
+export const TRILINGUAL_404_HTML = localized404Html('ar');

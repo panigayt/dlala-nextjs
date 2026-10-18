@@ -30,7 +30,7 @@ export const FIRESTORE_RESOURCE_BASE = FIRESTORE_REST_BASE.replace(
 const CARD_REST_FIELDS = [
   'title', 'description', 'price', 'previousPrice',
   'priceReduced', 'photoUrls', 'thumbUrls', 'photo_thumbs', 'categoryId', 'wilayaCode',
-  'createdAt', 'status', 'isWanted', 'isWholesale', 'sellerId', 'favoriteCount',
+  'createdAt', 'updatedAt', 'status', 'isWanted', 'isWholesale', 'sellerId', 'favoriteCount',
   'answers', 'condition', 'negotiable', 'views', 'photoVariants',
 ];
 
@@ -72,6 +72,7 @@ export interface ListingCard {
   categoryId?: string;
   wilayaCode?: number;
   createdAt?: Date;
+  updatedAt?: Date;
   status?: string;
   isWanted?: boolean;
   isWholesale?: boolean;
@@ -421,8 +422,10 @@ export async function fetchSellerListingCount(
   uid: string
 ): Promise<number | null> {
   try {
+    // Firestore aggregation lives on :runAggregationQuery (NOT :runQuery)
+    // with the query nested under structuredAggregationQuery.
     const url =
-      FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+      FIRESTORE_REST_BASE + ':runAggregationQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
     const structuredQuery = {
       from: [{ collectionId: 'listings' }],
       where: {
@@ -458,8 +461,10 @@ export async function fetchSellerListingCount(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        structuredQuery,
-        aggregations: [{ alias: 'total', count: {} }],
+        structuredAggregationQuery: {
+          structuredQuery,
+          aggregations: [{ alias: 'total', count: {} }],
+        },
       }),
       cache: 'no-store',
     });

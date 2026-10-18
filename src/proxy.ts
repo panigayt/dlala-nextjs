@@ -15,6 +15,7 @@ import {
   checkDocExists,
   stripHtmlSuffix,
   TRILINGUAL_404_HTML,
+  localized404Html,
 } from './proxy-404';
 
 // Round 14 (12 Oct 2026) — proxy-based REAL 404s (Zak: "نفذ 404 حقيقي").
@@ -35,10 +36,10 @@ import {
 // .next() — FAIL OPEN. Never 404 on a transient failure; the page's own
 // transient-error UI handles it at HTTP 200. Check code + timeout live
 // in src/proxy-404.ts (edge-safe, no React, no firebase libs).
-// The Zak-ordered trilingual 404 (Round 14). Built once per call — the
-// HTML string itself is a module-level constant in proxy-404.ts.
-function trilingual404(): NextResponse {
-  return new NextResponse(TRILINGUAL_404_HTML, {
+// The Zak-ordered trilingual 404 (Round 14). R15b BC-1: locale-aware —
+// /fr/* and /en/* URLs get the French/English variant.
+function trilingual404(locale: 'ar' | 'fr' | 'en' = 'ar'): NextResponse {
+  return new NextResponse(localized404Html(locale), {
     status: 404,
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });
@@ -100,10 +101,12 @@ export async function proxy(req: NextRequest) {
     // with one regex (result used only as a truthy test) and then re-split
     // the path to extract prefix/id. One capture does both.
     const detail = req.nextUrl.pathname.match(
-      /^\/(listing|seller|announcement)\/([^/]+)\/?$/,
+      /^\/(?:(fr|en)\/)?(listing|seller|announcement)\/([^/]+)\/?$/,
     );
     if (detail) {
-      const [, prefix, rawId] = detail;
+      const [, urlLocale, prefix, rawId] = detail;
+      const locale: 'ar' | 'fr' | 'en' =
+        urlLocale === 'fr' ? 'fr' : urlLocale === 'en' ? 'en' : 'ar';
       // Malformed percent-encoding (e.g. /listing/%zz) can never address
       // a real document — a literal % in a doc id is %25-encoded, which
       // decodes cleanly (verified: /listing/%25zz → check → 404). And
@@ -113,7 +116,7 @@ export async function proxy(req: NextRequest) {
       try {
         id = decodeURIComponent(rawId);
       } catch {
-        return trilingual404();
+        return trilingual404(locale);
       }
       let check: 'missing' | 'exists' | 'check-failed' = 'check-failed';
       if (prefix === 'listing') {
@@ -125,7 +128,7 @@ export async function proxy(req: NextRequest) {
         check = await checkDocExists('announcements', id, true);
       }
       if (check === 'missing') {
-        return trilingual404();
+        return trilingual404(locale);
       }
       // Round 196 (F5): legacy "{id}.html" URLs serve the listing with a
       // self-canonical to the .html URL — a duplicate-content pair with the
