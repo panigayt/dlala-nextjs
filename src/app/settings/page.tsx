@@ -459,7 +459,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
                   <button
                     onClick={() => unblock(u.uid)}
                     disabled={unblocking === u.uid}
-                    className="rounded-lg bg-white border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    className="rounded-lg bg-white border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   >
                     {t('unblock')}
                   </button>

@@ -1500,7 +1500,7 @@ function PublishForm({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={p.thumb || p.url} alt="" className="w-full h-full object-cover" />
                     {i === 0 && (
-                      <span className="absolute top-1 right-1 rounded bg-emerald-700 text-white text-[10px] px-1.5 py-0.5" title={t('coverPhoto')}>
+                      <span className="absolute top-1 right-1 rounded bg-emerald-700 text-white text-xs px-1.5 py-0.5" title={t('coverPhoto')}>
                         ★
                       </span>
                     )}
@@ -1586,7 +1586,7 @@ function PublishForm({
                   </button>
                 </div>
                 {i === 0 && (
-                  <span className="absolute top-1 right-1 rounded bg-emerald-700 text-white text-[10px] px-1.5 py-0.5">
+                  <span className="absolute top-1 right-1 rounded bg-emerald-700 text-white text-xs px-1.5 py-0.5">
                     {t('coverPhoto')}
                   </span>
                 )}

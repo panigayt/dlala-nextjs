@@ -22,7 +22,7 @@ export async function GET(
   const { slug } = await params;
   const wilaya = WILAYA_BY_SLUG[slug];
   if (!wilaya) {
-    return new Response(notFoundPage('wilaya'), {
+    return new Response(notFoundPage('wilaya', 'fr'), {
       status: 404,
       headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
     });
@@ -37,7 +37,7 @@ export async function GET(
       if (Number(l.wilayaCode) === wilaya.code) total++;
     }
     if (total < WILAYA_MIN_LISTINGS) {
-      return new Response(notFoundPage('thin'), {
+      return new Response(notFoundPage('thin', 'fr'), {
         status: 404,
         headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
       });

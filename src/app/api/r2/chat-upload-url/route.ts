@@ -89,3 +89,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: safe }, { status: 500 });
   }
 }
+
+// Round 6 (18 Oct 2026): 405 with Allow header for wrong methods.
+// Next.js auto-405 omits the Allow header; RFC 9110 requires it.
+const METHOD_NOT_ALLOWED_POST = () =>
+  NextResponse.json({ error: 'method-not-allowed' }, { status: 405, headers: { Allow: 'POST' } });
+export async function GET() { return METHOD_NOT_ALLOWED_POST(); }
+export async function PUT() { return METHOD_NOT_ALLOWED_POST(); }
+export async function DELETE() { return METHOD_NOT_ALLOWED_POST(); }
+export async function PATCH() { return METHOD_NOT_ALLOWED_POST(); }

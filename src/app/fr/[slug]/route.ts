@@ -14,7 +14,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   const { slug } = await ctx.params;
   const cat = findCategoryBySlug(slug);
   if (!cat) {
-    return new Response(notFoundPage('category'), {
+    return new Response(notFoundPage('category', 'fr'), {
       status: 404,
       headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
     });
@@ -30,7 +30,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
       total++;
     }
     if (total < CATEGORY_MIN_LISTINGS) {
-      return new Response(notFoundPage('thin'), {
+      return new Response(notFoundPage('thin', 'fr'), {
         status: 404,
         headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
       });

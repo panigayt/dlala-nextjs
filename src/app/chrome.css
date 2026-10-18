@@ -152,7 +152,7 @@ button.drawer-link:hover { background: #eef3f0; }
 /* nav unread badge */
 .nav-badge {
   background: #dc2626;
-  color: #fff; font-size: 11px; font-weight: 700;
+  color: #fff; font-size: 12px; font-weight: 700; /* Round 6 (18 Oct 2026): 12px min */
   min-width: 20px; height: 20px; border-radius: 10px;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0 5px; margin-inline-start: 4px; vertical-align: middle;
@@ -254,6 +254,8 @@ button.drawer-link:hover { background: #eef3f0; }
     padding: 5px 9px; font-size: 12px; font-weight: 700;
     border-radius: 8px; border: 1px solid rgba(255, 255, 255, .35);
     background: rgba(255, 255, 255, .12); color: #fff;
+    min-height: 44px; min-width: 44px; /* Round 6 (18 Oct 2026): 44px touch target */
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .lang-btn.active { background: #fff; color: var(--emerald); }
   .nav { display: none; }

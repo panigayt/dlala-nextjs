@@ -393,7 +393,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
                     onClick={() => unfollow(row.storeId)}
                     disabled={busy}
                     aria-pressed="true"
-                    className="shrink-0 rounded-lg bg-white border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    className="shrink-0 rounded-lg bg-white border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
                   >
                     ✓ {t('following')}
                   </button>

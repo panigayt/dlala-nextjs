@@ -281,13 +281,35 @@ ${ctaTopHtml(lang)}
 </html>`;
 }
 
-export function notFoundPage(reason: string): string {
-  const msg = reason === 'wilaya' ? 'الولاية المطلوبة غير موجودة.' : 'الصفحة المطلوبة غير موجودة.';
+export function notFoundPage(reason: string, locale: 'ar' | 'fr' | 'en' = 'ar'): string {
+  // Round 6 (18 Oct 2026): trilingual 404 matching TRILINGUAL_404_HTML design.
+  // The /fr/ and /en/ route variants pass their locale so the 404 renders
+  // in the URL's language (was Arabic-only for all locales).
+  const copy = {
+    ar: {
+      msg: reason === 'wilaya' ? 'الولاية المطلوبة غير موجودة.' : 'الصفحة المطلوبة غير موجودة.',
+      home: 'العودة إلى دلالة',
+      title: 'غير موجود | دلالة',
+      lang: 'ar', dir: 'rtl',
+    },
+    fr: {
+      msg: reason === 'wilaya' ? 'La wilaya demandée n\'existe pas.' : 'La page demandée n\'existe pas.',
+      home: 'Retour à Dlala',
+      title: 'Introuvable | Dlala',
+      lang: 'fr', dir: 'ltr',
+    },
+    en: {
+      msg: reason === 'wilaya' ? 'The requested wilaya does not exist.' : 'The requested page does not exist.',
+      home: 'Back to Dlala',
+      title: 'Not found | Dlala',
+      lang: 'en', dir: 'ltr',
+    },
+  }[locale];
   return `<!DOCTYPE html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>غير موجود | دلالة</title><meta name="robots" content="noindex"></head>
+<html lang="${copy.lang}" dir="${copy.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${copy.title}</title><meta name="robots" content="noindex"></head>
 <body style="font-family:system-ui,Tahoma;text-align:center;padding:60px">
-<h1>404</h1><p>${escHtml(msg)}</p><p><a href="${SITE}">العودة إلى دلالة</a></p>
+<h1>404</h1><p>${escHtml(copy.msg)}</p><p><a href="${SITE}">${copy.home}</a></p>
 </body></html>`;
 }
 

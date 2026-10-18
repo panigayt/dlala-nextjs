@@ -260,7 +260,8 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           aria-pressed={fav === true}
           aria-busy={fav === null}
           aria-label={t('favorites')}
-          className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/90 text-[15px] leading-none shadow-sm"
+          className="flex h-[44px] w-[44px] items-center justify-center rounded-full bg-white/90 text-[15px] leading-none shadow-sm"
+          // Round 6 (18 Oct 2026): 44px touch target (was 30px).
           style={{ color: fav === true ? '#e0245e' : '#666' }}
         >
           <span aria-hidden="true">{fav === true ? '♥' : '♡'}</span>

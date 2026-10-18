@@ -450,7 +450,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                   <div className="mt-2 flex gap-2">
                     <a
                       href={`/publish?edit=${encodeURIComponent(l.id)}`}
-                      className="flex-1 rounded-lg bg-white border border-zinc-300 px-2 py-2 text-xs font-medium text-zinc-700 text-center hover:bg-zinc-50"
+                      className="flex-1 rounded-lg bg-white border border-zinc-300 px-2 py-2 text-xs font-medium text-zinc-700 text-center hover:bg-zinc-50 min-h-[44px] flex items-center justify-center"
                     >
                       ✎ {t('edit')}
                     </a>
@@ -458,7 +458,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                       <button
                         onClick={() => markSold(l.id)}
                         disabled={busy}
-                        className="flex-1 rounded-lg bg-white border border-zinc-300 px-2 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                        className="flex-1 rounded-lg bg-white border border-zinc-300 px-2 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 min-h-[44px] flex items-center justify-center"
                       >
                         ✓ {t('markSold')}
                       </button>
@@ -466,7 +466,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                     <button
                       onClick={() => deleteAd(l.id)}
                       disabled={busy}
-                      className="flex-1 rounded-lg bg-red-600 px-2 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                      className="flex-1 rounded-lg bg-red-600 px-2 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 min-h-[44px] flex items-center justify-center"
                     >
                       ✕ {t('delete')}
                     </button>

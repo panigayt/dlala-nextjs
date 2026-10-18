@@ -25,7 +25,7 @@ export async function GET(
   const { slug } = await params;
   const model = MODEL_BY_SLUG[slug];
   if (!model) {
-    return new Response(notFoundPage('cat'), {
+    return new Response(notFoundPage('cat', 'en'), {
       status: 404,
       headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
     });
@@ -34,7 +34,7 @@ export async function GET(
     const listings = await fetchAvailableCars();
     const items = filterModelItems(listings, model);
     if (items.length < MIN_LISTINGS) {
-      return new Response(notFoundPage('thin'), {
+      return new Response(notFoundPage('thin', 'en'), {
         status: 404,
         headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
       });

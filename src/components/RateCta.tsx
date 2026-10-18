@@ -261,7 +261,8 @@ export default function RateCta({
                 onClick={() => setActive(null)}
                 aria-label={STR.close}
                 disabled={sending}
-                className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100"
+                // Round 6 (18 Oct 2026): 44px touch target (was ~24px).
+                className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 ✕
               </button>

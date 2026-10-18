@@ -96,7 +96,8 @@ function Modal({
             type="button"
             onClick={onClose}
             aria-label={t('close')}
-            className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100"
+            // Round 6 (18 Oct 2026): 44px touch target (was ~24px).
+            className="rounded px-2 py-1 text-xl leading-none text-zinc-500 hover:bg-zinc-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             ✕
           </button>
@@ -649,7 +650,8 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
   // bg + emerald text; fav.on -> solid emerald. Orders mirror the legacy
   // CSS (offer 1, contact 2, fav 3, share 4, report 5 full-width).
   const BTN_BASE =
-    'px-1 py-2 text-[12.5px] font-bold rounded-lg border-0 transition disabled:opacity-50 disabled:cursor-not-allowed ';
+    // Round 6 (18 Oct 2026): min-h 44px touch target (was ~35px).
+    'px-1 py-2 text-[12.5px] font-bold rounded-lg border-0 transition disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] ';
   const BTN_PRIMARY = 'bg-[#0b6b4f] text-white hover:bg-[#085c43] ';
   const BTN_SECONDARY = 'bg-[#eef4f1] text-[#0b6b4f] hover:bg-[#dfe9e4] ';
 
