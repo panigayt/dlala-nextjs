@@ -448,7 +448,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                       </p>
                       <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(l, lang)}</h3>
                       {(l.negotiable || Number(l.price) <= 1) && !(l.answers?.jobType === 'jobOffer') && (
-                        <p className="mt-1"><span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></p>
+                        <p className="mt-1"><span className="text-xs font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></p>
                       )}
                     </div>
                   </a>

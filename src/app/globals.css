@@ -45,7 +45,7 @@ body {
    overlaps the sold/wholesale/reduced badges (16 Sep 2026). */
 .badge {
   position: absolute; top: 8px; inset-inline-start: 8px;
-  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff;
+  font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff;
 }
 .badge-own { background: #0b6b4f; }
 .badge-own { inset-inline-start: auto; inset-inline-end: 8px; top: 34px; }
@@ -103,7 +103,8 @@ body {
 .tips-ticker:hover .tips-text,
 .tips-ticker:focus-within .tips-text { transition: none; }
 .tips-ticker:focus-visible { outline: 2px solid var(--emerald); outline-offset: 2px; }
-/* 0.0.0.40: tips pause button — prevent overlap with text on mobile */
+/* 0.0.0.40: tips pause button — prevent overlap with text on mobile.
+   Round 58 (18 Oct 2026): 44px min touch target (was ~22px). */
 .tips-pause-btn {
   flex-shrink: 0;
   margin-inline-start: 8px;
@@ -113,6 +114,11 @@ body {
   font-size: 14px;
   padding: 4px;
   color: inherit;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Royal Gold Boutique — Design A (0.0.0.39 js/seller.js renderStoreHero +
@@ -133,7 +139,7 @@ body {
 .bh-name { font-size: 19px; font-weight: 800; color: #2e2408; }
 .bh-sub { font-size: 12.5px; color: #8a6d2b; margin-top: 2px; }
 .pro-badge {
-  display: inline-block; font-size: 11px; font-weight: 700;
+  display: inline-block; font-size: 12px; font-weight: 700;
   color: #5c4510; background: linear-gradient(135deg, #f6e7bd, #e8c96a);
   border: 1px solid #d9b64a; border-radius: 12px;
   padding: 1px 8px; white-space: nowrap;

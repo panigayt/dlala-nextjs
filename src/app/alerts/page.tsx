@@ -858,7 +858,7 @@ export default function AlertsPage() {
                             <span dir="ltr">{formatPrice(h.price || 0, lang)}</span>
                           </div>
                           {(h.negotiable || Number(h.price) <= 1) && (
-                            <div className="mt-0.5"><span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></div>
+                            <div className="mt-0.5"><span className="text-xs font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></div>
                           )}
                         </div>
                       </a>

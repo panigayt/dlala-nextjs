@@ -36,7 +36,7 @@ a.vitrine-id { text-decoration: none; color: inherit; }
   color: #fff; background: #111; border: none;
   border-radius: 20px; padding: 3px 12px; margin-inline-start: 0;
 }
-.vitrine-sub { color: #888; font-size: 11px; }
+.vitrine-sub { color: #888; font-size: 12px; } /* Round 58 (18 Oct 2026): 12px min text */
 .vitrine-tag { display: none; }
 /* FINAL effective rules (css/style.css:1279-1291): the later unconditional
    block wins the cascade in 0.0.0.39 — the minis are a HORIZONTAL SCROLL
@@ -99,7 +99,7 @@ a.vitrine-id { text-decoration: none; color: inherit; }
    mini heart's corner — reproduced verbatim from 0.0.0.39. */
 .vitrine-card .badge {
   position: absolute; top: 8px; inset-inline-start: 8px;
-  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff;
+  font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; color: #fff;
 }
 .vitrine-card .badge-likes { background: rgba(0, 0, 0, .55); }
 /* Vitrine minis (css/style.css:1313-1326 verbatim). */
@@ -113,4 +113,4 @@ a.vitrine-id { text-decoration: none; color: inherit; }
 .vitrine-mini-price .price-num { font-weight: 800; }
 .vitrine-mini-cond { color: var(--muted); }
 .vitrine-mini-meta { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
-.vitrine-mini-date { color: var(--muted); font-size: 11px; }
+.vitrine-mini-date { color: var(--muted); font-size: 12px; } /* Round 58 (18 Oct 2026): 12px min text */

@@ -140,7 +140,7 @@ export function MetaGrid({
         <b className="whitespace-nowrap">
           <span dir="ltr">{formatPrice(price || 0, lang)}</span>
           {(negotiable || Number(price) <= 1) && (
-            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
+            <span className="ms-1 text-xs font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
           )}
         </b>
       </div>
@@ -269,18 +269,19 @@ export function SellerCardBody({
       {ratingRow && <p className="mt-1 text-sm text-zinc-500">{ratingRow}</p>}
       {/* Round 138: legacy .seller-card .btn parity — solid emerald
           view-store/page (flex:1), #eef4f1 report-user; 8px padding,
-          12.5px font, 8px radius (style-listing.css). */}
+          12.5px font, 8px radius (style-listing.css).
+          Round 58 (18 Oct 2026): 44px min touch target (was ~35px). */}
       <div className="mt-2 flex gap-2">
         <Link
           href={`/seller/${sellerId}`}
-          className="flex-1 rounded-lg bg-[#0b6b4f] px-2 py-2 text-[12.5px] font-bold text-white text-center hover:bg-[#085c43]"
+          className="flex-1 rounded-lg bg-[#0b6b4f] px-2 py-2 text-[12.5px] font-bold text-white text-center hover:bg-[#085c43] min-h-[44px] inline-flex items-center justify-center"
         >
           {isPro ? t('viewStore') : t('viewProfile')}
         </Link>
         <ReportUserButton
           uid={sellerId}
           targetTitle={displayName || ''}
-          className="flex-1 rounded-lg bg-[#eef4f1] px-2 py-2 text-[12.5px] font-bold text-[#0b6b4f] text-center hover:bg-[#dfe9e4]"
+          className="flex-1 rounded-lg bg-[#eef4f1] px-2 py-2 text-[12.5px] font-bold text-[#0b6b4f] text-center hover:bg-[#dfe9e4] min-h-[44px] inline-flex items-center justify-center"
         />
       </div>
     </>
@@ -423,7 +424,7 @@ function SimilarCard({ l }: { l: ListingCard }) {
             )}
           </p>
           {(l.negotiable || Number(l.price) <= 1) && (
-            <span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
+            <span className="text-xs font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
           )}
         </div>
       </div>

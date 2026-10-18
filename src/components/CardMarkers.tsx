@@ -7,7 +7,7 @@
 //   markOwnCards():   <span class="badge badge-own">✓ إعلانك</span> appended to
 //                     a.card when data-sid == viewer uid (idempotent; guests: 0).
 //   markProCards():   <span class="pro-badge">★ تاجر محترف</span> appended inside
-//                     .card-title for verified pro merchants (font-size:11px,
+//                     .card-title for verified pro merchants (font-size:12px,
 //                     margin-inline-start:6px on top of the .pro-badge base).
 //
 // Here the same end-state is React state: the own badge appears the moment
@@ -61,7 +61,7 @@ export function ProBadge({ sellerId }: { sellerId: string }) {
   const verdict = useProVerdict(sellerId);
   if (verdict !== true) return null;
   return (
-    <span className="pro-badge" style={{ fontSize: 11, marginInlineStart: 6 }}>
+    <span className="pro-badge" style={{ fontSize: 12, marginInlineStart: 6 }}>
       ★ {t('proMerchant')}
     </span>
   );
