@@ -455,7 +455,15 @@ async function ListingContent({
         <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
         {isWanted && !isSeeker && <WantedBadge />}
         <p className="mt-2 text-3xl font-bold text-emerald-700">
-          <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
+          {/* Round 205 (audit R1, A2): 1-DZD "no price" ads showed a literal
+              "1 دج" as the giant price — buyers read it as a real price.
+              Render the localized negotiable text instead; numeric price
+              logic (SEO, JSON-LD, cards) untouched. */}
+          {Number(l.price) <= 1 ? (
+            <span>{t('negotiable', pageLang)}</span>
+          ) : (
+            <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
+          )}
           {priceWords && <small className="ms-1 font-normal text-zinc-500">({priceWords})</small>}
           {(l as { priceReduced?: boolean }).priceReduced && (
             <PriceReducedBadge />
