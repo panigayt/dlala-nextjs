@@ -292,7 +292,7 @@ export default function SearchPage({
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         <h2 className="text-lg font-semibold text-zinc-800 mb-4">
           {filters.q ? `${t('searchResultsFor')}: "${filters.q}"` : t('searchTitle')}
         </h2>

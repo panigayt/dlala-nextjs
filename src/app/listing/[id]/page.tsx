@@ -8,6 +8,14 @@
 //   - The listing document is fetched server-side via Firestore REST.
 //   - Public view renders without auth; sold/hidden docs (403 anonymous)
 //     render the trilingual 404.
+//
+// I18N DESIGN (Round 4, 18 Oct 2026 — intentional, not a defect):
+//   Listing-detail pages are SINGLE-LOCALE. There are no /fr/listing/<id>
+//   or /en/listing/<id> routes (they 404 by design). The page language
+//   comes from the dlala_lang cookie (getServerLang), so one URL serves
+//   all three languages. This avoids duplicate-content SEO penalties and
+//   keeps the sitemap to canonical Arabic URLs (hreflang: ar + x-default).
+//   Do NOT create localized listing routes.
 
 import { Suspense, cache } from 'react';
 import { cacheLife } from 'next/cache';
@@ -309,8 +317,11 @@ async function TransientErrorView({ id }: { id: string }) {
 
 
 function ListingSkeleton() {
+  // Round 4 (18 Oct 2026, audit S-F2): was <main> — a loading skeleton is
+  // not a landmark. Using <div> avoids duplicate <main> in React Flight
+  // payloads (skeleton + content both serialize <main>).
   return (
-    <main className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto px-4 py-6" aria-hidden="true">
       <div className="rounded-xl bg-white shadow-sm overflow-hidden">
         <div className="w-full aspect-[4/3] bg-zinc-200 animate-pulse" />
       </div>
@@ -318,7 +329,7 @@ function ListingSkeleton() {
         <div className="h-8 bg-zinc-200 rounded animate-pulse w-3/4" />
         <div className="mt-2 h-10 bg-zinc-200 rounded animate-pulse w-1/3" />
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -413,7 +424,7 @@ async function ListingContent({
   ]);
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-6">
+    <main id="main-content" className="max-w-4xl mx-auto px-4 py-6">
       {/* 17 Oct 2026 (audit H2): static-Arabic <title> metadata lands in
           <head>; the reader's localized SEO title goes on the tab here
           (Round 133 behavior preserved). */}

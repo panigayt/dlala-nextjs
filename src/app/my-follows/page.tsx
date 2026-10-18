@@ -318,7 +318,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
 
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-4">{t('myFollows')}</h1>
 
         {error && (

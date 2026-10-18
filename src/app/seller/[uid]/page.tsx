@@ -76,7 +76,7 @@ async function getSellerListings(uid: string): Promise<ListingCard[]> {
 
 function SellerSkeleton() {
   return (
-    <main className="max-w-6xl mx-auto px-4 py-6" dir="rtl">
+    <main id="main-content" className="max-w-6xl mx-auto px-4 py-6" dir="rtl">
       <div className="rounded-xl bg-white shadow-sm p-6">
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-full bg-zinc-200 animate-pulse" />

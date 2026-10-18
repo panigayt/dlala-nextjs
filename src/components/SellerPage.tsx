@@ -315,7 +315,7 @@ export default function SellerPage({
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         {isPro ? (
           <StoreHero s={seller} uid={uid} />
         ) : (

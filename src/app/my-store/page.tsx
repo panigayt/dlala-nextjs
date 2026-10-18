@@ -412,7 +412,7 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-zinc-900 mb-4">{t('myStore')}</h1>
 
         {notice && (

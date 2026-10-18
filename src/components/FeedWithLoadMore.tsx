@@ -11,9 +11,11 @@
 // - "عرض المزيد" button (t('loadMore')) appears when moreAvailable.
 // - Wanted rotation continues across pages (wantedOffset tracks consumption).
 
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import ListingCardView from '@/components/ListingCardView';
-import VitrineShowcase from '@/components/VitrineShowcase';
+// Round 4 (18 Oct 2026, audit R-1): VitrineShowcase is below-fold and
+// conditional — lazy-load it to reduce home first-load JS.
+const VitrineShowcase = lazy(() => import('@/components/VitrineShowcase'));
 import { interleaveWanted, resultsCountText, cardImage, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
 // Round 12: this file is a firebase-compat user → bundled path. Type-only
@@ -472,7 +474,9 @@ export default function FeedWithLoadMore({
               />
             ) : (
               <div key={`vitrine-${item.showcase.seller.id}-${idx}`} className="col-span-full">
-                <VitrineShowcase showcase={item.showcase} uid={refreshedUid.current ?? undefined} />
+                <Suspense fallback={null}>
+                  <VitrineShowcase showcase={item.showcase} uid={refreshedUid.current ?? undefined} />
+                </Suspense>
               </div>
             )
           );

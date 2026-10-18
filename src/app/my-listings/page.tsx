@@ -342,7 +342,7 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         {showVerifyBanner && (
           <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 p-4">
             <p className="text-sm text-blue-900">{t('verifyEmailBody')}</p>

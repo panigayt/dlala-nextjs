@@ -132,7 +132,7 @@ async function WantedLoader({
 function WantedSkeleton({ dir }: { dir: 'rtl' | 'ltr' }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div

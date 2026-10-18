@@ -198,3 +198,12 @@ body {
 }
 .listing-follow-btn:hover { background: #095c43; }
 .listing-follow-btn.on { background: #e7f2ec; color: #0b6b4f; border: 1px solid #0b6b4f; }
+
+/* Round 4 (18 Oct 2026, audit S-F4): global keyboard-focus visibility.
+   No element-scoped :focus rules existed; everything fell back to browser
+   defaults. This ensures a consistent, visible focus indicator for
+   keyboard navigation across all interactive elements. */
+:focus-visible {
+  outline: 2px solid var(--emerald, #0b6b4f);
+  outline-offset: 2px;
+}

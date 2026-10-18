@@ -54,7 +54,7 @@ async function getResults(f: SearchFilters): Promise<SearchResult> {
 function ResultsSkeleton() {
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="rounded-xl bg-white shadow-sm overflow-hidden">

@@ -1064,6 +1064,12 @@ function ChatInner() {
   }
 
   async function requestPhone() {
+    // R5-4 (18 Oct 2026): the 3-decline permanent block is enforced
+    // SERVER-SIDE by Firestore rules (phoneRequestOk: filing denied when
+    // declinesByRequester[uid] >= 3). No client-side myBlocked check here
+    // is needed for security — a modified client cannot bypass the rules.
+    // The UI hides the button when pf.myBlocked (line ~1369); a stale-UI
+    // write attempt would simply be rejected by Firestore.
     const client = clientRef.current;
     const user = userRef.current;
     const c = convRef.current;
@@ -1309,7 +1315,7 @@ function ChatInner() {
   if (fatal) {
     return (
       <div className="min-h-screen bg-zinc-50" dir="rtl">
-        <main className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <main id="main-content" className="max-w-2xl mx-auto px-4 py-16 text-center">
           <h1 className="text-lg font-bold text-zinc-900 mb-5">{fatal}</h1>
           <div className="flex gap-2 justify-center">
             <button

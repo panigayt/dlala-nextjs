@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-white">
-      <main className="mx-auto max-w-xl px-5 py-[10vh] text-center">
+      <main id="main-content" className="mx-auto max-w-xl px-5 py-[10vh] text-center">
         <div
           aria-hidden="true"
           className="mx-auto mb-[18px] flex h-[84px] w-[84px] items-center justify-center rounded-[22px] bg-[#0b6b4f] text-[52px] font-extrabold text-white"

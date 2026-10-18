@@ -547,7 +547,7 @@ function AccountContent({ user }: { user: CompatUser }) {
   return (
     <div className="min-h-screen bg-zinc-50" dir={dir}>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <main id="main-content" className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {showVerifyBanner && (
           <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
             <p className="text-sm text-blue-900">{t('verifyEmailBody')}</p>

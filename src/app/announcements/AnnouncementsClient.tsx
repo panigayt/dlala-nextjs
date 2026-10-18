@@ -37,7 +37,7 @@ export default function AnnouncementsClient({
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main id="main-content" className="mx-auto max-w-3xl px-4 py-6">
         <h1 className="mb-4 text-xl font-bold text-zinc-900">{t('announcements')}</h1>
         {error ? (
           <div className="rounded-xl bg-white p-8 text-center text-zinc-600">

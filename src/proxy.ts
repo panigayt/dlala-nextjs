@@ -158,18 +158,17 @@ export async function proxy(req: NextRequest) {
   // (listing 300s, seller/announcement/home 60s).
   const p = req.nextUrl.pathname;
   if (/^\/(listing)\/[^/]+\/?$/.test(p)) {
-    res.headers.set(
-      'Cache-Control',
-      'public, s-maxage=300, max-age=60, stale-while-revalidate=300',
-    );
     // K-M1 (audit round 2, 18 Oct 2026): listing bodies render in the
     // dlala_lang cookie language (ar/fr/en). Without Vary: Cookie, the
     // edge cache serves whichever language rendered first to all users.
-    // NOTE: setting Vary here does NOT survive — Next.js App Router
-    // overwrites it with its own (rsc, next-router-*) values after the
-    // proxy runs (verified live 18 Oct 2026). The working fix is in
-    // vercel.json headers, applied at the edge AFTER the origin response,
-    // with the full value: Cookie + Next.js's own Vary tokens.
+    // Vary: Cookie was attempted via proxy.ts (overwritten by Next.js),
+    // vercel.json edge headers, and next.config.ts headers — none took
+    // effect live (verified 18 Oct 2026). FALLBACK: Cache-Control: private
+    // disables edge caching entirely for listings; every request hits the
+    // origin and renders in the user's cookie language. Correctness over
+    // edge-cache hits. Browsers may still cache (max-age=60).
+    // Round 4 (18 Oct 2026): fallback implemented per audit instruction.
+    res.headers.set('Cache-Control', 'private, max-age=60');
   } else if (/^\/(seller|announcement)\/[^/]+\/?$/.test(p)) {
     res.headers.set(
       'Cache-Control',

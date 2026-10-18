@@ -12,8 +12,30 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFeed } from '@/lib/firestore';
+import { variantUrlFor } from '@/lib/image-variants';
 
 const PAGE_SIZE = 24;
+
+// Round 4 (18 Oct 2026, audit R-5): the feed payload carried full-size
+// photoUrls (~10x the bytes needed). Clients render cards with thumbnails,
+// so rewrite to w320 variants here — saves ~30KB+ per 24-item page on weak
+// connections. Falls back to the original URL when no variant is derivable
+// (old listings without photoVariants).
+function withW320Thumbs<T extends { photoUrls?: unknown; photoVariants?: boolean }>(
+  doc: T
+): T {
+  const urls = (doc as { photoUrls?: string[] }).photoUrls;
+  if (!Array.isArray(urls) || !urls.length) return doc;
+  const w320 = urls.map((u) => {
+    if (!(doc as { photoVariants?: boolean }).photoVariants) return u;
+    try {
+      return variantUrlFor(String(u), 320) || u;
+    } catch {
+      return u;
+    }
+  });
+  return { ...doc, photoUrls: w320 };
+}
 
 export async function GET(req: NextRequest) {
   const offsetRaw = req.nextUrl.searchParams.get('offset');
@@ -32,7 +54,11 @@ export async function GET(req: NextRequest) {
     ]);
     // The feed query can return wanted docs mixed in (legacy splits them
     // client-side); the regular pool for pagination excludes them.
-    const regular = docs.filter((d) => !d.isWanted);
+    // Round 4 (18 Oct 2026): rewrite photoUrls to w320 thumbnails —
+    // the client renders cards, never full-size images.
+    const regular = docs
+      .filter((d) => !d.isWanted)
+      .map(withW320Thumbs);
     return NextResponse.json(
       { regular, hasMore: docs.length >= PAGE_SIZE },
       { headers: { 'Cache-Control': 'public, max-age=60' } }

@@ -447,10 +447,17 @@ export default function Gallery({
               {/* Round 21 (Zak: preview slow on ALL listings, 0.0.0.39 fine):
                   making strip EXACTLY like production — plain img, no
                   loading/fetchPriority/decoding hints. */}
+              {/* Round 4 (18 Oct 2026, audit R-6/S-F3): thumbnails are
+                  below-the-fold strip images — loading="lazy" saves bytes
+                  on weak connections; meaningful alt (was "") for
+                  screen readers (button already has aria-label, belt
+                  and suspenders). */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={thumbs[i] || p}
-                alt=""
+                alt={`${title} — ${t('photo')} ${i + 1}/${all.length}`}
+                loading="lazy"
+                decoding="async"
                 className="w-20 h-20 object-cover"
               />
             </button>

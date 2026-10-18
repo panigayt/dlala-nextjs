@@ -205,7 +205,7 @@ export default async function AnnouncementPage({ params }: { params: Promise<{ i
   if (error) {
     return (
       <div className="min-h-screen bg-zinc-50">
-        <main className="mx-auto max-w-3xl px-4 py-6">
+        <main id="main-content" className="mx-auto max-w-3xl px-4 py-6">
           <TransientErrorView id={id} />
         </main>
       </div>
@@ -214,7 +214,7 @@ export default async function AnnouncementPage({ params }: { params: Promise<{ i
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main id="main-content" className="mx-auto max-w-3xl px-4 py-6">
         <Suspense fallback={<DetailSkeleton />}>
           <AnnDetail ann={a} />
         </Suspense>

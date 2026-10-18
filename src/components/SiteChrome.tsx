@@ -141,7 +141,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   // FIX-WEB-015: the skip link must move keyboard focus to #main-content.
-  // Pages render their own <main>; ensure it carries the id.
+  // Pages render their own <main id="main-content">; ensure it carries the id.
   useEffect(() => {
     try {
       const main = document.querySelector('main');

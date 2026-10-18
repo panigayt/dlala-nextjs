@@ -379,7 +379,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         </div>
       )}
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <main id="main-content" className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Account */}
         <section className="rounded-xl bg-white shadow-sm overflow-hidden">
           <h2 className="px-4 pt-4 pb-2 font-bold text-zinc-900">{t('settingsAccount')}</h2>

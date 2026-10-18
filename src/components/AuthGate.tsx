@@ -151,7 +151,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     return (
       <div className="min-h-screen bg-zinc-50" dir={dir}>
         <PageHeader title="DLALA" />
-        <main className="max-w-2xl mx-auto px-4 py-10 text-center">
+        <main id="main-content" className="max-w-2xl mx-auto px-4 py-10 text-center">
           <p className="text-zinc-600 mb-4">{t('authConnectionProblem')}</p>
           <button
             onClick={() => window.location.reload()}
@@ -168,7 +168,7 @@ export default function AuthGate({ children }: AuthGateProps) {
     return (
       <div className="min-h-screen bg-zinc-50" dir={dir}>
         <PageHeader title="DLALA" />
-        <main className="max-w-2xl mx-auto px-4 py-10 text-center">
+        <main id="main-content" className="max-w-2xl mx-auto px-4 py-10 text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-700" />
           <p className="mt-3 text-zinc-600">{t('loading')}</p>
         </main>

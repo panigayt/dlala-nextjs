@@ -701,7 +701,7 @@ function AuthPageInner() {
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 py-10">
+      <main id="main-content" className="max-w-md mx-auto px-4 py-10">
         <div className="rounded-2xl bg-white shadow-sm p-6">
           {mode === 'login' && (
             <div>

@@ -245,7 +245,7 @@ export default function HomePage({
 
   return (
     <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
         {/* Round 152: visible tagline above tips — 0.0.0.39 index.html parity. */}
         <h1 className="sr-only">{t('tagline')}</h1>
         <p className="tagline" style={{ color: 'var(--muted, #6b7280)', marginBottom: '12px' }}>

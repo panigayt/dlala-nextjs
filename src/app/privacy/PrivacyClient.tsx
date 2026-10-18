@@ -64,7 +64,7 @@ export default function PrivacyClient() {
   const rtl = lang === 'ar';
   return (
     <div className="min-h-screen bg-zinc-50" dir={rtl ? 'rtl' : 'ltr'}>
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main id="main-content" className="mx-auto max-w-3xl px-4 py-6">
         <h1 className="sr-only">{H1[lang]}</h1>
         <div className="rounded-xl bg-white p-6 shadow-sm">
           <section lang={lang} dir={rtl ? 'rtl' : 'ltr'}>
