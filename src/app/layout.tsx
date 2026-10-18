@@ -80,9 +80,10 @@ export const metadata: Metadata = {
   other: {
     "dlala-build":
       (process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 7),
-    // R53 Team C (18 Oct 2026, Zak): modern standard fullscreen meta for
-    // installed PWAs (pairs with appleWebApp.capable above).
-    "mobile-web-app-capable": "yes",
+    // R53 Team C (18 Oct 2026, Zak): the modern "mobile-web-app-capable" is
+    // already emitted by appleWebApp.capable above — this is the legacy
+    // Apple-prefixed tag for older iOS Safari (fullscreen home-screen launch).
+    "apple-mobile-web-app-capable": "yes",
   },
 };
 
