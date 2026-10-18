@@ -446,8 +446,10 @@ function ChatInner() {
   // 100 messages — older unread messages kept single ✓ forever. Now
   // paginates through all messages (100/batch, up to 10 batches) using
   // the document-ID tiebreaker, marking every unread message from the
-  // other participant. Uses only the single-field 'at' index (no new
-  // composite index required).
+  // other participant. Requires the composite index
+  // messages: at [DESCENDING] + __name__ [DESCENDING] — two orderBys
+  // on different fields are never servable by single-field indexes.
+  // (Round 39, 18 Oct 2026: index verified live in production.)
   async function markRead(client: FirebaseClient, data: ConvData, uid: string) {
     const { db, fsMod } = client;
     const other = (data.participants || []).find((p) => p !== uid) || '';
