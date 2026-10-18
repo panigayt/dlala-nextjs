@@ -29,7 +29,7 @@ export async function GET(
   }
   try {
     const listings = await fetchAvailableCars();
-    const items = filterWilayaItems(listings, wilaya.code);
+    const items = filterWilayaItems(listings, wilaya.code, 'fr');
     let total = 0;
     for (const l of listings) {
       if (l.categoryId !== 'cars') continue;

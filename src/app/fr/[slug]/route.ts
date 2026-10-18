@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   }
   try {
     const listings = await fetchListings();
-    const items = filterCategoryItems(listings, cat.id);
+    const items = filterCategoryItems(listings, cat.id, 'fr');
     let total = 0;
     for (const l of listings) {
       const f = l as unknown as Record<string, unknown>;

@@ -77,6 +77,7 @@ export interface CategoryCardItem extends ModelCardItem {
 export function filterCategoryItems(
   listings: ModelListingSummary[],
   categoryId: string,
+  lang: string = 'ar',
 ): CategoryCardItem[] {
   const items: CategoryCardItem[] = [];
   for (const f0 of listings) {
@@ -89,7 +90,7 @@ export function filterCategoryItems(
     items.push({
       id: String(f.id || ''),
       title: titleOf(f.title) || String(f.id || ''),
-      price: fmtPrice(f.price),
+      price: fmtPrice(f.price, lang),
       wilayaCode: Number(f.wilayaCode) || 0,
       photo,
       rawPrice: Number.isFinite(rawPrice) ? rawPrice : 0,
@@ -143,12 +144,19 @@ export function buildCategoryPage(
 
   const cards = items.map((it, i) => cardHtml(it, i + 1, lang)).join('\n');
 
+  // R8-7 (18 Oct 2026): schema-type consistency — vehicle categories use
+  // Car (matching wilaya pages), all others use Product. Was Product for
+  // every category, so the same car listing emitted as Car on wilaya pages
+  // but Product on category pages.
+  const VEHICLE_CATS = new Set(['cars', 'moto', 'velos', 'trottinettes']);
+  const itemType = VEHICLE_CATS.has(c.id) ? 'Car' : 'Product';
+
   const listItems = items.map((it, i) => {
     const item: Record<string, unknown> = {
       '@type': 'ListItem',
       position: i + 1,
       item: {
-        '@type': 'Product',
+        '@type': itemType,
         name: it.title,
         url: `${SITE}/listing/${encodeURIComponent(it.id)}`,
       },

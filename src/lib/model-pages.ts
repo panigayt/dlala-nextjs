@@ -36,10 +36,13 @@ export function titleOf(t: unknown): string {
   return String(m.ar || m.fr || m.en || '');
 }
 
-export function fmtPrice(p: unknown): string {
+export function fmtPrice(p: unknown, lang: string = 'ar'): string {
   const n = Number(p);
   if (!Number.isFinite(n)) return '';
-  return n.toLocaleString('en-US') + ' دج';
+  // R8-1 (18 Oct 2026): locale-correct currency label — was hardcoded ' دج'
+  // for every locale, so /fr|/en category cards showed Arabic دج.
+  const label = lang === 'fr' || lang === 'en' ? 'DZD' : 'دج';
+  return n.toLocaleString('en-US') + ' ' + label;
 }
 
 const WILAYA_BY_CODE: Record<number, { ar: string; fr: string; en: string }> =
@@ -145,7 +148,8 @@ export function cardHtml(item: ModelCardItem, pos: number, lang: string): string
   const eager = pos <= 4;
   const img = item.photo
     ? `<img src="${escHtml(item.photo)}" alt="${escHtml(item.title)}" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''} width="300" height="300">`
-    : `<div class="noimg">دلالة</div>`;
+    // R8-2 (18 Oct 2026): was hardcoded Arabic دلالة on fr/en pages.
+    : `<div class="noimg">${lang === 'fr' || lang === 'en' ? 'Dlala' : 'دلالة'}</div>`;
   const href = `${SITE}/listing/${escHtml(item.id)}`;
   return `<article class="card">
   <a href="${href}">${img}</a>
@@ -337,7 +341,8 @@ export interface ModelListingSummary {
 
 export function filterModelItems(
   listings: ModelListingSummary[],
-  modelInfo: CarModel
+  modelInfo: CarModel,
+  lang: string = 'ar',
 ): ModelCardItem[] {
   const items: ModelCardItem[] = [];
   for (const f0 of listings) {
@@ -362,7 +367,7 @@ export function filterModelItems(
     items.push({
       id: String(f.id || ''),
       title: titleOf(f.title) || String(f.id || ''),
-      price: fmtPrice(f.price),
+      price: fmtPrice(f.price, lang),
       wilayaCode: Number(f.wilayaCode) || 0,
       photo,
     });

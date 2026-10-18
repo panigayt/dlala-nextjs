@@ -100,6 +100,7 @@ export interface WilayaCardItem extends ModelCardItem {
 export function filterWilayaItems(
   listings: ModelListingSummary[],
   code: number,
+  lang: string = 'ar',
 ): WilayaCardItem[] {
   const items: WilayaCardItem[] = [];
   for (const f0 of listings) {
@@ -112,7 +113,7 @@ export function filterWilayaItems(
     items.push({
       id: String(f.id || ''),
       title: titleOf(f.title) || String(f.id || ''),
-      price: fmtPrice(f.price),
+      price: fmtPrice(f.price, lang),
       wilayaCode: code,
       photo,
       rawPrice: Number.isFinite(rawPrice) ? rawPrice : 0,

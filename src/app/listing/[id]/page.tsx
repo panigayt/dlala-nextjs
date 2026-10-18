@@ -424,6 +424,7 @@ async function ListingContent({
   ]);
 
   return (
+    <>
     <main id="main-content" className="max-w-4xl mx-auto px-4 py-6">
       {/* 17 Oct 2026 (audit H2): static-Arabic <title> metadata lands in
           <head>; the reader's localized SEO title goes on the tab here
@@ -447,12 +448,9 @@ async function ListingContent({
         }}
         sellerId={l.sellerId}
       />
-      {jsonLdScript && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLdScript }}
-        />
-      )}
+      {/* R8-8 (18 Oct 2026): JSON-LD moved OUT of <main> — it sat between
+          Suspense boundaries and Next.js PPR streamed it twice (byte-identical
+          duplicate Product blocks live). Crawlers read JSON-LD anywhere. */}
       {/* Round 17 T3: manual preload set removed — the gallery's eager+high
           imgs and React 19's auto-preloads cover it. (Round 21: verified the
           Fizz auto-preloads match img URLs exactly and precede them in
@@ -598,6 +596,13 @@ async function ListingContent({
       )}
 
     </main>
+      {jsonLdScript && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLdScript }}
+        />
+      )}
+    </>
   );
 }
 

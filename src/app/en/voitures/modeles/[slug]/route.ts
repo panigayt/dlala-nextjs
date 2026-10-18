@@ -32,7 +32,7 @@ export async function GET(
   }
   try {
     const listings = await fetchAvailableCars();
-    const items = filterModelItems(listings, model);
+    const items = filterModelItems(listings, model, 'en');
     if (items.length < MIN_LISTINGS) {
       return new Response(notFoundPage('thin', 'en'), {
         status: 404,
