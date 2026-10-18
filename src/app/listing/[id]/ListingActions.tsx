@@ -785,7 +785,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             maxLength={1000}
             rows={3}
             placeholder={t('reportDetailsHint')}
-            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2"
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-base"
           />
           <label className="mt-3 block text-sm font-medium">{t('reportPhoto')}</label>
           <input
@@ -825,7 +825,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             onKeyDown={(e) => {
               if (e.key === 'Enter') onOfferGo();
             }}
-            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-left"
+            className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-left text-base"
             inputMode="numeric"
           />
           <p className="mt-2 text-[13px] text-zinc-500">{t('offerHint')}</p>

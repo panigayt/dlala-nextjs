@@ -44,6 +44,21 @@ function trilingual404(): NextResponse {
 }
 
 export async function proxy(req: NextRequest) {
+  // I-1 (audit round 2, 18 Oct 2026): non-canonical listing URLs must 301
+  // to the clean form. /listing/<id>/ (trailing slash) and //listing/<id>
+  // (double slash) were serving 200 with no canonical — duplicate content.
+  const rawPath = req.nextUrl.pathname;
+  if (rawPath.startsWith('//')) {
+    const url = req.nextUrl.clone();
+    url.pathname = rawPath.replace(/^\/+/, '/');
+    return NextResponse.redirect(url, 301);
+  }
+  const trailingSlash = rawPath.match(/^\/(listing|seller|announcement)\/([^/]+)\/$/);
+  if (trailingSlash) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/${trailingSlash[1]}/${trailingSlash[2]}`;
+    return NextResponse.redirect(url, 301);
+  }
   const m = req.nextUrl.pathname.match(
     /^\/(?:(fr|en)\/)?guides\/(prix-voitures-occasion-(\d{4}))$/,
   );

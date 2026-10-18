@@ -263,7 +263,7 @@ export function ListingDescription({
   return (
     <div className="mt-4 rounded-xl bg-white shadow-sm p-5">
       <ListingH2 k="description" />
-      <p className="whitespace-pre-wrap text-zinc-800">
+      <p className="whitespace-pre-wrap break-words text-zinc-800" style={{ overflowWrap: 'anywhere' }}>
         {lines.map((l, i) => (
           <span key={i}>
             {isPhoneLine(l) ? <bdi dir="ltr">{l}</bdi> : l}
