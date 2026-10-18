@@ -22,6 +22,7 @@ import { useEffect, useRef, useState } from 'react';
 import { WILAYAS } from '@/lib/wilayas';
 import { CATEGORIES } from '@/lib/categories';
 import { useLang } from '@/lib/i18n';
+import { trackEvent } from '@/lib/analytics';
 import {
   facetPhoneBrandsForOs,
   FACET_CAR_BRANDS,
@@ -69,6 +70,8 @@ function SearchBar({
       onSubmit={(e) => {
         e.preventDefault();
         if (timer.current) clearTimeout(timer.current);
+        // Round 19 BO-D2 (18 Oct 2026): GA4 search event (Enter submit).
+        if (q.trim()) trackEvent('search', { search_term: q.trim().slice(0, 100) });
         applyQ(q);
       }}
     >

@@ -40,6 +40,7 @@ import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { savePendingAction } from '@/lib/pending-action';
 
 import { useLang } from '@/lib/i18n';
+import { trackEvent } from '@/lib/analytics';
 
 interface Props {
   listingId: string;
@@ -195,6 +196,10 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         }
         await withTimeout(batch.commit(), 15000);
         const added = !snap.exists();
+        // Round 19 BO-D2 (18 Oct 2026): GA4 favorite events.
+        trackEvent(added ? 'add_to_favorites' : 'remove_from_favorites', {
+          item_id: listingId,
+        });
         if (mounted.current) {
           if (added !== optimisticOn) {
             // Server disagrees with the guess — correct the count too.

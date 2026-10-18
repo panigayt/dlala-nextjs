@@ -74,6 +74,7 @@ import {
   SimilarAds,
 } from './ListingShell';
 import Gallery from './Gallery';
+import TrackView from './TrackView';
 import { lqipUrlFor } from '@/lib/image-variants';
 import LocalizedDocTitle from '@/components/LocalizedDocTitle';
 
@@ -657,6 +658,7 @@ export default async function ListingPage({
 
   return (
     <>
+      <TrackView id={id} />
       <Suspense fallback={null}>
         <ListingJsonLd json={jsonLdScript} />
       </Suspense>

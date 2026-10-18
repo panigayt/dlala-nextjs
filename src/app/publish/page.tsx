@@ -836,6 +836,10 @@ function PublishForm({
     // BE-5 (R16, 18 Oct 2026): 0 DZD is not a valid price — the
     // negotiable convention is 1 DZD (Ouedkniss pipeline rule).
     if (!isJobsCat && !(priceNum >= 1)) { fail(t('errorPriceMin')); return false; }
+    // BN-1 (R19, 18 Oct 2026): DZD prices must be integers — a fraction
+    // (e.g. 99.5) would store as a Firestore doubleValue and break
+    // centime-exact arithmetic once money moves.
+    if (!isJobsCat && !Number.isInteger(priceNum)) { fail(t('errorPriceInteger')); return false; }
     if (!isJobsCat && priceNum > 100000000) { fail(t('errorPriceTooHigh')); return false; }
     // Wanted mode always carries wilaya '0' via effectiveWilaya (derived, not
     // synced) — no check needed; the value cannot be stale by construction.

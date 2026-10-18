@@ -36,6 +36,8 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   errorPrice: { ar: "السعر غير صالح.", fr: "Prix invalide.", en: "Invalid price." },
   errorPriceMin: { ar: "السعر يجب أن يكون 1 دج على الأقل (1 دج = قابل للتفاوض).", fr: "Le prix doit être d'au moins 1 DZD (1 DZD = négociable).", en: "Price must be at least 1 DZD (1 DZD = negotiable)." },
   errorPriceTooHigh: { ar: "السعر مرتفع جداً (الحد الأقصى 100,000,000 دج).", fr: "Le prix est trop élevé (maximum 100 000 000 DZD).", en: "The price is too high (max 100,000,000 DZD)." },
+  // BN-1 (R19, 18 Oct 2026): DZD prices must be whole numbers.
+  errorPriceInteger: { ar: "السعر يجب أن يكون عدداً صحيحاً (بدون كسور).", fr: "Le prix doit être un nombre entier (sans décimales).", en: "The price must be a whole number (no decimals)." },
   errorRequired: { ar: "يرجى ملء جميع الحقول المطلوبة.", fr: "Veuillez remplir tous les champs requis.", en: "Please fill in all required fields." },
   errorTitleRequired: { ar: "يرجى إدخال عنوان الإعلان.", fr: "Veuillez saisir le titre de l'annonce.", en: "Please enter the listing title." },
   errorTitleTooLong: { ar: "عنوان الإعلان طويل جداً (الحد 80 حرفاً).", fr: "Le titre de l'annonce est trop long (80 caractères maximum).", en: "The listing title is too long (80 characters max)." },

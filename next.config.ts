@@ -64,7 +64,12 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://*.googleapis.com https://apis.google.com",
+              // Round 19 BO-D1 (18 Oct 2026): GA4 allowlist. The gtag loader
+              // and its preload require googletagmanager.com in script-src;
+              // the /g/collect beacons require *.google-analytics.com in
+              // connect-src (+ img-src for the noscript/pixel fallback).
+              // Without these, browsers silently block all GA4 traffic.
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://*.googleapis.com https://apis.google.com https://www.googletagmanager.com",
               "style-src 'self' 'unsafe-inline'",
               // 17 Oct 2026 (audit: "CSP img-src wildcard" — reviewed, KEPT).
               // There is no open wildcard (`*` / bare `https:`); the two
@@ -78,8 +83,10 @@ const nextConfig: NextConfig = {
               // https://firebasestorage.googleapis.com covers legacy
               // listing photos; img.dzdlala.com / dzdlala.com are
               // first-party. Tightening further would break images.
-              "img-src 'self' data: blob: https://dzdlala.com https://img.dzdlala.com https://*.r2.dev https://firebasestorage.googleapis.com https://*.googleapis.com",
-              "connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.r2.dev https://*.r2.cloudflarestorage.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+              // Round 19 BO-D1 (18 Oct 2026): *.google-analytics.com for
+              // the GA4 pixel/noscript fallback beacons.
+              "img-src 'self' data: blob: https://dzdlala.com https://img.dzdlala.com https://*.r2.dev https://firebasestorage.googleapis.com https://*.googleapis.com https://*.google-analytics.com",
+              "connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.r2.dev https://*.r2.cloudflarestorage.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.google-analytics.com",
               "font-src 'self' data:",
               "frame-src 'self' https://dlala-85cea.firebaseapp.com", // 13 Oct 2026: allow Firebase Auth iframe (preventive; blocks popup/redirect flows otherwise).
               "frame-ancestors 'self'",
