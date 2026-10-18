@@ -147,6 +147,11 @@ export async function proxy(req: NextRequest) {
       'Cache-Control',
       'public, s-maxage=300, max-age=60, stale-while-revalidate=300',
     );
+    // K-M1 (audit round 2, 18 Oct 2026): listing bodies render in the
+    // dlala_lang cookie language (ar/fr/en). Without Vary: Cookie, the
+    // edge cache serves whichever language rendered first to all users.
+    // Vary by Cookie so each language gets its own cached variant.
+    res.headers.set('Vary', 'Cookie');
   } else if (/^\/(seller|announcement)\/[^/]+\/?$/.test(p)) {
     res.headers.set(
       'Cache-Control',

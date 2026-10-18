@@ -6,6 +6,7 @@ import "./chrome.css";
 import "./vitrine.css";
 import "./guides.css";
 import SiteChrome from "@/components/SiteChrome";
+import ChromeWithLang from "@/components/ChromeWithLang";
 import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
 import SwRegister from "@/components/SwRegister";
@@ -137,7 +138,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         })()}
       </head>
       <body className="min-h-screen antialiased">
-        <SiteChrome>{children}</SiteChrome>
+        {/* K-C1 (audit round 2, 18 Oct 2026): ChromeWithLang wraps SiteChrome
+            in ForcedLang when the URL has a /fr or /en prefix, so the
+            header/footer SSR in the correct language instead of Arabic. */}
+        <ChromeWithLang>{children}</ChromeWithLang>
         {/* R3 (Zak ordered): applies a pending favorite saved before login —
             js/app.js:132 onAuthStateChanged hook parity */}
         <PendingActionApplier />
