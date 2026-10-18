@@ -61,7 +61,7 @@ function MiniProduct({ p }: { p: ListingCard }) {
             {formatPrice(p.price, lang)}
           </span>
         )}
-        {(cond || p.createdAt || p.negotiable || Number(p.price) <= 1) && (
+        {(cond || p.createdAt) && (
           <span className="vitrine-mini-meta" style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'4px'}}>
             <span>
               {cond && <span className="vitrine-mini-cond">{cond}</span>}
@@ -72,9 +72,7 @@ function MiniProduct({ p }: { p: ListingCard }) {
                 </span>
               )}
             </span>
-            {(p.negotiable || Number(p.price) <= 1) && (
-              <span className="text-[10px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-1.5 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
-            )}
+            {/* Zak 18 Oct 2026: negotiable badge REMOVED from Vitrine — keeps the showcase compact. */}
           </span>
         )}
       </div>
