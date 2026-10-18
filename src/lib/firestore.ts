@@ -890,6 +890,23 @@ export function normalizePhoneBrand(v: unknown): string {
   return '';
 }
 
+// Round 52 (18 Oct 2026): phone equivalent of CB_TO_LEGACY_BRAND — inverted
+// from LEGACY_PHONE_BRAND_MAP so the server-side brand IN filter covers
+// docs stored under free-text spellings ('Samsung') as well as pb* keys.
+// Capitalized Latin variants included (docs store 'Samsung', the map keys
+// are lowercase); Arabic keys pass through verbatim.
+const PB_TO_LEGACY_BRAND: Record<string, string[]> = (() => {
+  const m: Record<string, string[]> = {};
+  for (const [spell, key] of Object.entries(LEGACY_PHONE_BRAND_MAP)) {
+    (m[key] ||= []).push(spell);
+    if (/^[a-z]+$/.test(spell)) {
+      const cap = spell[0].toUpperCase() + spell.slice(1);
+      if (!m[key].includes(cap)) m[key].push(cap);
+    }
+  }
+  return m;
+})();
+
 // R16 (18 Oct 2026): typo tolerance for brand tokens in free-text search.
 // A Latin token that maps to no known brand gets ONE conservative
 // edit-distance attempt against the known Latin brand spellings
@@ -957,6 +974,38 @@ export function allTextVariants(v: unknown): string {
       .join(' ');
   }
   return '';
+}
+
+// Round 52 (18 Oct 2026): resolve a free-text query into an optional brand
+// key + remaining text tokens — the same brand mapping the fCarBrand/fBrand
+// facets use (R5-1 Arabic brands, AZ-1 phone brands, R16 fuzzy typos).
+// Extracted from the inline loop in runSearchPipeline so the server query
+// plan can ALSO pre-filter on the brand (answers.brand IN [...]) instead of
+// relying on the 120-doc global deep pool — pure brand queries like
+// q=samsung returned ZERO while 13 Samsung phones existed, because none
+// landed in the 120 newest docs. Verbatim logic, moved unchanged.
+export function resolveQueryBrand(rawQ: string): { qBrand: string; textQ: string } {
+  const q = normSearchText(rawQ);
+  const tokens = q.split(' ').filter(Boolean);
+  let qBrand = '';
+  const textTokens: string[] = [];
+  for (const t of tokens) {
+    // AZ-1 (18 Oct 2026): phone brands had no mapping at all — try the
+    // phone map too (q=سامسونج / q=samsung / q=iphone).
+    let b = !qBrand ? (normalizeCarBrand(t) || normalizePhoneBrand(t)) : '';
+    // R16 (18 Oct 2026): typo tolerance — a Latin token that maps to no
+    // known brand gets one conservative edit-distance attempt
+    // (peugot → cbPeugeot). Still '' for genuine unknowns.
+    if (!b && !qBrand) b = fuzzyBrandKey(t);
+    if (b) qBrand = b;
+    else textTokens.push(t);
+  }
+  if (!qBrand) {
+    const b = normalizeCarBrand(rawQ.trim()) || normalizePhoneBrand(rawQ.trim())
+      || fuzzyBrandKey(rawQ.trim());
+    if (b) qBrand = b;
+  }
+  return { qBrand, textQ: textTokens.join(' ') };
 }
 
 export function hasFacetFilter(f: SearchFilters): boolean {
@@ -1181,6 +1230,10 @@ async function runSearchPipeline(
   poolLimit: number,
   usePriceRange: boolean
 ): Promise<ListingCard[]> {
+  // Round 52 (18 Oct 2026): pre-resolve the query's brand key so the server
+  // plan can filter on it below — pure brand queries (q=samsung, q=سامسونج)
+  // no longer depend on the brand's docs landing in the 120 newest docs.
+  const qBrandKey = f.q && f.q.trim() ? resolveQueryBrand(f.q).qBrand : '';
   const filters: unknown[] = [{
     fieldFilter: {
       field: { fieldPath: 'status' },
@@ -1280,6 +1333,26 @@ async function runSearchPipeline(
         });
       }
     }
+  }
+
+  // Round 52 (18 Oct 2026): server-side brand pre-filter for free-text brand
+  // queries (q=بيجو / q=samsung / q=peugot). Equality on answers.brand keeps
+  // the query index-friendly in every sort/range shape — the missing-index
+  // fallback below degrades to the old client-only behavior, and the
+  // client-side qBrand check further down stays the correctness layer.
+  // Legacy spellings mirror the fCarBrand facet plan (CB_TO_LEGACY_BRAND)
+  // and its phone equivalent (PB_TO_LEGACY_BRAND).
+  if (qBrandKey) {
+    const legacy = qBrandKey.startsWith('pb')
+      ? (PB_TO_LEGACY_BRAND[qBrandKey] || [])
+      : (CB_TO_LEGACY_BRAND[qBrandKey] || []);
+    const inValues = [qBrandKey, ...legacy.filter((s) => s !== qBrandKey)];
+    filters.push({
+      fieldFilter: {
+        field: { fieldPath: 'answers.brand' }, op: 'IN',
+        value: { arrayValue: { values: inValues.map((s) => ({ stringValue: s })) } },
+      },
+    });
   }
 
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
@@ -1425,27 +1498,7 @@ async function runSearchPipeline(
   // match title/description as before. q=بيجو → all Peugeot; q=بيجو 2016
   // → Peugeot with 2016 in title/desc.
   if (f.q && f.q.trim()) {
-    const q = normSearchText(f.q);
-    const tokens = q.split(' ').filter(Boolean);
-    let qBrand = '';
-    const textTokens: string[] = [];
-    for (const t of tokens) {
-      // AZ-1 (18 Oct 2026): phone brands had no mapping at all — try the
-      // phone map too (q=سامسونج / q=samsung / q=iphone).
-      let b = !qBrand ? (normalizeCarBrand(t) || normalizePhoneBrand(t)) : '';
-      // R16 (18 Oct 2026): typo tolerance — a Latin token that maps to no
-      // known brand gets one conservative edit-distance attempt
-      // (peugot → cbPeugeot). Still '' for genuine unknowns.
-      if (!b && !qBrand) b = fuzzyBrandKey(t);
-      if (b) qBrand = b;
-      else textTokens.push(t);
-    }
-    if (!qBrand) {
-      const b = normalizeCarBrand(f.q.trim()) || normalizePhoneBrand(f.q.trim())
-        || fuzzyBrandKey(f.q.trim());
-      if (b) qBrand = b;
-    }
-    const textQ = textTokens.join(' ');
+    const { qBrand, textQ } = resolveQueryBrand(f.q);
     const matched: ListingCard[] = [];
     for (const d of docs) {
       if (matched.length >= SEARCH_MAX_MATCHES) break;
