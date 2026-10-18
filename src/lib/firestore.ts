@@ -826,7 +826,10 @@ export function matchFacets(d: ListingCard, f: SearchFilters): boolean {
 // Verbatim port of js/home.js relevanceRank: exact title (100) > title
 // prefix (50) > title contains (30) > description contains (10);
 // recency breaks ties. Schwartzian transform — each doc normalized once.
-function relevanceRank(docs: ListingCard[], q: string): ListingCard[] {
+// R5-1 (18 Oct 2026): optional brandKey — docs whose answers.brand maps to
+// it score 30 (title-contains tier) so pure brand queries (q=بيجو) don't
+// all score zero.
+function relevanceRank(docs: ListingCard[], q: string, brandKey = ''): ListingCard[] {
   const qn = normSearchText(q);
   const decorated = new Array<{ d: ListingCard; score: number; ts: number }>(docs.length);
   for (let i = 0; i < docs.length; i++) {
@@ -837,11 +840,14 @@ function relevanceRank(docs: ListingCard[], q: string): ListingCard[] {
         : ''
     );
     const desc = normSearchText(d.description?.ar || '');
+    const answers = (d.answers || {}) as Record<string, unknown>;
+    const brandHit = !!brandKey && normalizeCarBrand(answers.brand) === brandKey;
     const c = d.createdAt;
     decorated[i] = {
       d,
       score: title === qn ? 100 : title.startsWith(qn) ? 50
-        : title.includes(qn) ? 30 : desc.includes(qn) ? 10 : 0,
+        : title.includes(qn) ? 30 : desc.includes(qn) ? 10
+        : brandHit ? 30 : 0,
       ts: c instanceof Date && !isNaN(c.getTime()) ? c.getTime() : 0,
     };
   }
@@ -1230,23 +1236,50 @@ async function runSearchPipeline(
 
   // Text query: normalized substring match on title/description
   // (js/home.js renderFeed R-9 branch, verbatim logic).
+  // R5-1 (18 Oct 2026): Arabic free-text brand search. q=بيجو normalizes to
+  // Arabic text that never matches Latin titles (all titles are Latin),
+  // so brand queries in Arabic silently returned zero. Apply the same
+  // brand mapping the fCarBrand facet uses (normalizeCarBrand): a query
+  // token that maps to a cb* key acts as a brand filter, remaining tokens
+  // match title/description as before. q=بيجو → all Peugeot; q=بيجو 2016
+  // → Peugeot with 2016 in title/desc.
   if (f.q && f.q.trim()) {
     const q = normSearchText(f.q);
+    const tokens = q.split(' ').filter(Boolean);
+    let qBrand = '';
+    const textTokens: string[] = [];
+    for (const t of tokens) {
+      const b = !qBrand ? normalizeCarBrand(t) : '';
+      if (b) qBrand = b;
+      else textTokens.push(t);
+    }
+    if (!qBrand) {
+      const b = normalizeCarBrand(f.q.trim());
+      if (b) qBrand = b;
+    }
+    const textQ = textTokens.join(' ');
     const matched: ListingCard[] = [];
     for (const d of docs) {
       if (matched.length >= SEARCH_MAX_MATCHES) break;
-      const title = normSearchText(
-        d.title && typeof d.title === 'object'
-          ? (d.title as Record<string, string>).ar || ''
-          : ''
-      );
-      const desc = normSearchText(d.description?.ar || '');
-      if (title.includes(q) || desc.includes(q)) matched.push(d);
+      const answers = (d.answers || {}) as Record<string, unknown>;
+      if (qBrand && normalizeCarBrand(answers.brand) !== qBrand) continue;
+      if (textQ) {
+        const title = normSearchText(
+          d.title && typeof d.title === 'object'
+            ? (d.title as Record<string, string>).ar || ''
+            : ''
+        );
+        const desc = normSearchText(d.description?.ar || '');
+        if (!title.includes(textQ) && !desc.includes(textQ)) continue;
+      }
+      matched.push(d);
     }
     // FIX-WEB-021: with a text query, relevance leads (exact title first) —
     // recency only breaks ties. Price sorts keep their own order instead
     // (legacy renderFeed sort branch). No slice here — the caller paints.
-    docs = (!f.sort || f.sort === 'recent') ? relevanceRank(matched, f.q) : matched;
+    // R5-1: brand-matched docs score as title-contains so a pure brand
+    // query (q=بيجو) orders by recency instead of all-zero scores.
+    docs = (!f.sort || f.sort === 'recent') ? relevanceRank(matched, f.q, qBrand) : matched;
   }
 
   // 0.0.0.39 D-7 parity (Round 164): boosted/pro sellers lead the regular
