@@ -21,7 +21,7 @@ const PAGE_SIZE = 24;
 // so rewrite to w320 variants here — saves ~30KB+ per 24-item page on weak
 // connections. Falls back to the original URL when no variant is derivable
 // (old listings without photoVariants).
-function withW320Thumbs<T extends { photoUrls?: unknown; photoVariants?: boolean }>(
+function withW320Thumbs<T extends { photoUrls?: unknown; photoVariants?: boolean; photo_thumbs?: unknown }>(
   doc: T
 ): T {
   const urls = (doc as { photoUrls?: string[] }).photoUrls;
@@ -34,7 +34,12 @@ function withW320Thumbs<T extends { photoUrls?: unknown; photoVariants?: boolean
       return u;
     }
   });
-  return { ...doc, photoUrls: w320 };
+  // 18 Oct 2026 (Zak): set img field for load-more cards — the card uses
+  // l.img ?? cardImage(l), and without img the fallback can fail on fast scroll.
+  const d = doc as { photo_thumbs?: string[] };
+  const thumbs = d.photo_thumbs;
+  const img = (Array.isArray(thumbs) && thumbs[0]) || w320[0] || '';
+  return { ...doc, photoUrls: w320, img };
 }
 
 export async function GET(req: NextRequest) {
