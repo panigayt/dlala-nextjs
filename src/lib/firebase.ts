@@ -242,6 +242,67 @@ export async function withAuthRetry<T>(fn: () => Promise<T>, ms = 15000): Promis
 
 // ---- Auth gate hooks (behavior identical to firebase-client) ----
 
+// Round 18 BL-1: mid-session disabled-user detection.
+//
+// No onIdTokenChanged listener existed anywhere in src/ — a user disabled
+// while signed in kept the local session until they signed out manually,
+// degrading into generic permission-denied UI errors. installDisabledUserWatch
+// subscribes a single app-wide onIdTokenChanged listener (the SDK fires it
+// on every token change, including its hourly refresh): a forced refresh
+// surfaces auth/user-disabled for a user who was disabled mid-session, and
+// the handler then signs out and bounces to /auth?disabled=1 so the page
+// shows the localized "account disabled" notice (same copy as sign-in-time
+// disabled, auth/page.tsx).
+//
+// Note: firebase-auth wraps getIdToken(forceRefresh) in _logoutIfInvalidated,
+// so on user-disabled the SDK signs the user out by itself before the catch
+// runs — the defensive signOut below is a no-op in that path; the value this
+// adds is the redirect WITH the disabled flag (the SDK's silent sign-out
+// gives the user no explanation).
+let disabledWatchAuth: Auth | null = null;
+
+export function installDisabledUserWatch(client: FirebaseClient): void {
+  if (disabledWatchAuth === client.auth) return;
+  disabledWatchAuth = client.auth;
+  const { auth, authMod } = client;
+  // The subscription fires once immediately with the current user — skip it
+  // (a disabled/stale session would not have restored in the first place,
+  // and this avoids one extra token request on every page load).
+  let skipInitial = true;
+  // Re-entrancy guard: the forced refresh below fires this listener again.
+  let checking = false;
+  authMod.onIdTokenChanged(auth, (u) => {
+    if (!u) return;
+    if (skipInitial) {
+      skipInitial = false;
+      return;
+    }
+    if (checking) return;
+    checking = true;
+    authMod
+      .getIdToken(u, true)
+      .catch(async (e: unknown) => {
+        const code = (e as { code?: string } | null)?.code;
+        if (code !== 'auth/user-disabled') return;
+        try {
+          await authMod.signOut(auth);
+        } catch {
+          /* best effort — the SDK usually signed out already */
+        }
+        try {
+          const here = window.location.pathname + window.location.search;
+          window.location.href =
+            '/auth?disabled=1&return=' + encodeURIComponent(here);
+        } catch {
+          /* never break the app from the watch */
+        }
+      })
+      .finally(() => {
+        checking = false;
+      });
+  });
+}
+
 export type AuthState =
   | { status: 'loading' }
   | { status: 'signed-out' }
@@ -259,6 +320,8 @@ export function useRequireAuth(): AuthState {
     getFirebaseCdn()
       .then((client) => {
         if (cancelled) return;
+        // Round 18 BL-1: mid-session disabled-user detection (once per Auth).
+        installDisabledUserWatch(client);
         unsub = client.authMod.onAuthStateChanged(client.auth, (u) => {
           if (cancelled) return;
           if (u) {
@@ -298,6 +361,10 @@ export function useAuthState(): AuthState {
     getFirebaseCdn()
       .then((client) => {
         if (cancelled) return;
+        // Round 18 BL-1: mid-session disabled-user detection (once per Auth).
+        // Installed here (SiteChrome mounts this hook on every page) as well
+        // as in useRequireAuth — the install itself is idempotent.
+        installDisabledUserWatch(client);
         unsub = client.authMod.onAuthStateChanged(client.auth, (u) => {
           if (cancelled) return;
           // js/app.js attachAuth parity: mirror the uid so on-device

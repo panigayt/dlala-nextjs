@@ -122,6 +122,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     categoriesNav: 'الفئات', // port-added (nav aria-label)
     wilaya: 'الولاية', allWilayas: 'كل الولايات',
     minPrice: 'السعر الأدنى', maxPrice: 'السعر الأقصى',
+    filterNotNumeric: 'يرجى إدخال رقم', // port-added (Round 18 BK-obs2: junk filter hint)
     sortLabel: 'ترتيب حسب', sortRecent: 'الأحدث',
     sortPriceAsc: 'السعر: من الأقل', sortPriceDesc: 'السعر: من الأعلى',
     applyFilters: 'تطبيق', resetFilters: 'مسح',
@@ -479,6 +480,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     categoriesNav: 'Catégories', // port-added (nav aria-label)
     wilaya: 'Wilaya', allWilayas: 'Toutes wilayas',
     minPrice: 'Prix min', maxPrice: 'Prix max',
+    filterNotNumeric: 'Veuillez saisir un nombre', // port-added (Round 18 BK-obs2: junk filter hint)
     sortLabel: 'Trier par', sortRecent: 'Plus récents',
     sortPriceAsc: 'Prix croissant', sortPriceDesc: 'Prix décroissant',
     applyFilters: 'Appliquer', resetFilters: 'Effacer',
@@ -835,6 +837,7 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     categoriesNav: 'Categories', // port-added (nav aria-label)
     wilaya: 'Wilaya', allWilayas: 'All wilayas',
     minPrice: 'Min price', maxPrice: 'Max price',
+    filterNotNumeric: 'Please enter a number', // port-added (Round 18 BK-obs2: junk filter hint)
     sortLabel: 'Sort by', sortRecent: 'Most recent',
     sortPriceAsc: 'Price: low to high', sortPriceDesc: 'Price: high to low',
     applyFilters: 'Apply', resetFilters: 'Clear',

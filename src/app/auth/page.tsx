@@ -190,7 +190,13 @@ function AuthPageInner() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [terms, setTerms] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Round 18 BL-1: the mid-session disabled-user watch bounces here with
+  // ?disabled=1 — surface the same localized "account disabled" copy as
+  // sign-in-time disabled (initial state from useSearchParams — SSR-safe
+  // per the B2 note above).
+  const [error, setError] = useState<string | null>(
+    params.get('disabled') === '1' ? t('authUserDisabled') : null
+  );
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState('');

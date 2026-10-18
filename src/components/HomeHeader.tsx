@@ -28,6 +28,11 @@ import {
   type SearchFilters,
 } from '@/lib/firestore';
 import { brandLatinName } from '@/lib/seo';
+// Round 18 BK-obs2: inline "not a number" hint for junk filter values.
+import NumericFilterInput from './NumericFilterInput';
+// Round 18 BK-obs1: truncate the text query client-side before apply/submit
+// (the server clamps too — see clampQ in filters.ts).
+import { SEARCH_Q_MAX } from '@/app/search/filters';
 
 type Wilaya = { code: number; ar: string; fr: string; en: string };
 
@@ -51,8 +56,12 @@ function SearchBar({
     },
     []
   );
-  const applyQ = (val: string) =>
-    onFiltersChange({ ...filters, q: val.trim() ? val : undefined });
+  const applyQ = (val: string) => {
+    // Round 18 BK-obs1: cap the query length before apply (both the Enter
+    // submit and the 450ms debounced live apply funnel through here).
+    const v = val.trim().slice(0, SEARCH_Q_MAX);
+    onFiltersChange({ ...filters, q: v ? v : undefined });
+  };
   return (
     <form
       role="search"
@@ -258,55 +267,47 @@ function HomeFacetBar({
         <label htmlFor="home-fYearMin" className="sr-only">
           {t('yearFrom')}
         </label>
-        <input
+        <NumericFilterInput
           id="home-fYearMin"
-          type="number"
           min="1950"
           max="2030"
-          inputMode="numeric"
           placeholder={t('yearFrom')}
           value={filters.fYearMin || ''}
-          onChange={(e) => onFiltersChange({ ...filters, fYearMin: e.target.value || undefined })}
+          onChange={(v) => onFiltersChange({ ...filters, fYearMin: v || undefined })}
           className={`${CTL} w-28`}
         />
         <label htmlFor="home-fYearMax" className="sr-only">
           {t('yearTo')}
         </label>
-        <input
+        <NumericFilterInput
           id="home-fYearMax"
-          type="number"
           min="1950"
           max="2030"
-          inputMode="numeric"
           placeholder={t('yearTo')}
           value={filters.fYearMax || ''}
-          onChange={(e) => onFiltersChange({ ...filters, fYearMax: e.target.value || undefined })}
+          onChange={(v) => onFiltersChange({ ...filters, fYearMax: v || undefined })}
           className={`${CTL} w-24`}
         />
         <label htmlFor="home-fMilMin" className="sr-only">
           {t('mileageFrom')}
         </label>
-        <input
+        <NumericFilterInput
           id="home-fMilMin"
-          type="number"
           min="0"
-          inputMode="numeric"
           placeholder={t('mileageFrom')}
           value={filters.fMilMin || ''}
-          onChange={(e) => onFiltersChange({ ...filters, fMilMin: e.target.value || undefined })}
+          onChange={(v) => onFiltersChange({ ...filters, fMilMin: v || undefined })}
           className={`${CTL} w-36`}
         />
         <label htmlFor="home-fMilMax" className="sr-only">
           {t('mileageTo')}
         </label>
-        <input
+        <NumericFilterInput
           id="home-fMilMax"
-          type="number"
           min="0"
-          inputMode="numeric"
           placeholder={t('mileageTo')}
           value={filters.fMilMax || ''}
-          onChange={(e) => onFiltersChange({ ...filters, fMilMax: e.target.value || undefined })}
+          onChange={(v) => onFiltersChange({ ...filters, fMilMax: v || undefined })}
           className={`${CTL} w-24`}
         />
       </>
@@ -353,27 +354,23 @@ function HomeFilters({
       <label htmlFor="home-min" className="sr-only">
         {t('minPrice')}
       </label>
-      <input
+      <NumericFilterInput
         id="home-min"
-        type="number"
         min="0"
-        inputMode="numeric"
         placeholder={t('minPrice')}
         value={filters.min || ''}
-        onChange={(e) => set({ min: clean(e.target.value) })}
+        onChange={(v) => set({ min: clean(v) })}
         className={`${CTL} w-32`}
       />
       <label htmlFor="home-max" className="sr-only">
         {t('maxPrice')}
       </label>
-      <input
+      <NumericFilterInput
         id="home-max"
-        type="number"
         min="0"
-        inputMode="numeric"
         placeholder={t('maxPrice')}
         value={filters.max || ''}
-        onChange={(e) => set({ max: clean(e.target.value) })}
+        onChange={(v) => set({ max: clean(v) })}
         className={`${CTL} w-32`}
       />
       <label htmlFor="home-sort" className="sr-only">

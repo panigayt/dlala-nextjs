@@ -28,6 +28,8 @@ import {
   type SearchResult,
 } from '@/lib/firestore';
 import SearchResultsGrid from '@/app/search/SearchResultsGrid';
+// Round 18 BK-obs2: inline "not a number" hint for junk filter values.
+import NumericFilterInput, { isJunkNumeric } from './NumericFilterInput';
 
 type Wilaya = { code: number; ar: string; fr: string; en: string };
 
@@ -114,55 +116,51 @@ function FacetBar({ filters }: { filters: SearchFilters }) {
         <label htmlFor="search-fYearMin" className="sr-only">
           {t('yearFrom')}
         </label>
-        <input
+        <NumericFilterInput
           id="search-fYearMin"
-          type="number"
           name="fYearMin"
           min="1950"
           max="2030"
-          inputMode="numeric"
           placeholder={t('yearFrom')}
           defaultValue={filters.fYearMin || ''}
+          invalid={isJunkNumeric(filters.fYearMin)}
           className={`${CTL} w-28`}
         />
         <label htmlFor="search-fYearMax" className="sr-only">
           {t('yearTo')}
         </label>
-        <input
+        <NumericFilterInput
           id="search-fYearMax"
-          type="number"
           name="fYearMax"
           min="1950"
           max="2030"
-          inputMode="numeric"
           placeholder={t('yearTo')}
           defaultValue={filters.fYearMax || ''}
+          invalid={isJunkNumeric(filters.fYearMax)}
           className={`${CTL} w-24`}
         />
         <label htmlFor="search-fMilMin" className="sr-only">
           {t('mileageFrom')}
         </label>
-        <input
+        <NumericFilterInput
           id="search-fMilMin"
-          type="number"
           name="fMilMin"
           min="0"
-          inputMode="numeric"
           placeholder={t('mileageFrom')}
           defaultValue={filters.fMilMin || ''}
+          invalid={isJunkNumeric(filters.fMilMin)}
           className={`${CTL} w-36`}
         />
         <label htmlFor="search-fMilMax" className="sr-only">
           {t('mileageTo')}
         </label>
-        <input
+        <NumericFilterInput
           id="search-fMilMax"
-          type="number"
           name="fMilMax"
           min="0"
-          inputMode="numeric"
           placeholder={t('mileageTo')}
           defaultValue={filters.fMilMax || ''}
+          invalid={isJunkNumeric(filters.fMilMax)}
           className={`${CTL} w-24`}
         />
       </>
@@ -229,27 +227,25 @@ function FilterBar({ filters }: { filters: SearchFilters }) {
       <label htmlFor="search-min" className="sr-only">
         {t('minPrice')}
       </label>
-      <input
+      <NumericFilterInput
         id="search-min"
-        type="number"
         name="min"
         min="0"
-        inputMode="numeric"
         placeholder={t('minPrice')}
         defaultValue={filters.min || ''}
+        invalid={isJunkNumeric(filters.min)}
         className={`${CTL} w-32`}
       />
       <label htmlFor="search-max" className="sr-only">
         {t('maxPrice')}
       </label>
-      <input
+      <NumericFilterInput
         id="search-max"
-        type="number"
         name="max"
         min="0"
-        inputMode="numeric"
         placeholder={t('maxPrice')}
         defaultValue={filters.max || ''}
+        invalid={isJunkNumeric(filters.max)}
         className={`${CTL} w-32`}
       />
       <label htmlFor="search-sort" className="sr-only">
