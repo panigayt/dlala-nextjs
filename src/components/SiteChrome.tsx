@@ -79,6 +79,12 @@ function badgeText(n: number): string {
   return n > 9 ? '9+' : String(n);
 }
 
+// DF-O2 (Round 34, 18 Oct 2026): badge-count TTL cache. refreshBadges runs
+// on every full page load for signed-in users; a fresh cache entry lets it
+// skip all Firestore queries. Per-uid key so a uid change misses the cache.
+const BADGE_TTL_MS = 60_000;
+const badgeCacheKey = (uid: string) => `dlala_badges_${uid}`;
+
 interface ProfileData {
   name?: string;
   username?: string;
@@ -216,45 +222,71 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   // Badges: one-shot unread counts (legacy refreshNavMsgBadge + refreshBell).
   // 12 Oct 2026: refactored to refreshable function + event listener for
   // alerts-read (was stale until full reload).
-  const refreshBadges = useCallback(async () => {
+  // DF-O2 (Round 34, 18 Oct 2026): this used to fire up to 4 SEQUENTIAL
+  // Firestore queries on every full page load for signed-in users. Two
+  // reductions: (1) the three independent queries (conversations,
+  // notifications, savedSearches) now run concurrently via Promise.all;
+  // (2) a 60s per-uid TTL cache (localStorage) skips all queries when the
+  // last successful refresh is fresh. The dlala:alerts-read event passes
+  // force=true; a uid change misses the cache (uid-scoped key).
+  const refreshBadges = useCallback(async (force = false) => {
     if (!user || !client) return;
     const uid = user.uid;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(badgeCacheKey(uid));
+        if (raw) {
+          const cached = JSON.parse(raw) as { at?: number; msgs?: number; alerts?: number };
+          if (
+            cached && typeof cached.at === 'number' &&
+            Date.now() - cached.at < BADGE_TTL_MS &&
+            typeof cached.msgs === 'number' && typeof cached.alerts === 'number' &&
+            mounted.current
+          ) {
+            setUnreadMsgs(cached.msgs);
+            setUnreadAlerts(cached.alerts);
+            return;
+          }
+        }
+      } catch { /* ignore: fall through to a fresh refresh */ }
+    }
     try {
       // Round 12: modular Firestore.
       const { db, fsMod } = client;
       // Unread messages: bounded to the 50 most recent conversations
       // (P1-6 — the (participants, updatedAt) composite index exists).
-      const cSnap = await fsMod.getDocs(
-        fsMod.query(
-          fsMod.collection(db, 'conversations'),
-          fsMod.where('participants', 'array-contains', uid),
-          fsMod.orderBy('updatedAt', 'desc'),
-          fsMod.limit(50)
-        )
-      );
+      // DF-O2: the three independent queries run concurrently (were sequential).
+      const [cSnap, nSnap, sSnap] = await Promise.all([
+        fsMod.getDocs(
+          fsMod.query(
+            fsMod.collection(db, 'conversations'),
+            fsMod.where('participants', 'array-contains', uid),
+            fsMod.orderBy('updatedAt', 'desc'),
+            fsMod.limit(50)
+          )
+        ),
+        // Alerts bell: unread notifications. AC-3 (Round 7, 18 Oct 2026):
+        // removed the limit(20) cap — the badge must reflect the true
+        // unread count, not cap at 20.
+        fsMod.getDocs(
+          fsMod.query(
+            fsMod.collection(db, 'users', uid, 'notifications'),
+            fsMod.where('read', '==', false)
+          )
+        ),
+        fsMod.getDocs(fsMod.collection(db, 'users', uid, 'savedSearches')),
+      ]);
       let n = 0;
       cSnap.forEach((d) => {
         const unread = (d.data().unread || {}) as Record<string, number>;
         n += unread[uid] || 0;
       });
       if (mounted.current) setUnreadMsgs(n);
-      // Alerts bell: unread notifications + new saved-search matches.
-      // AC-3 (Round 7, 18 Oct 2026): removed the limit(20) cap — the badge
-      // must reflect the true unread count, not cap at 20.
-      const nSnap = await fsMod.getDocs(
-        fsMod.query(
-          fsMod.collection(db, 'users', uid, 'notifications'),
-          fsMod.where('read', '==', false)
-        )
-      );
       let bellCount = nSnap.size;
       // AC-1 (Round 7, 18 Oct 2026): the bell ignored saved-search matches.
       // Count new (unseen) matches across enabled saved searches.
       try {
         const { matchesSavedSearch, tsMs } = await import('@/lib/savedSearchMatch');
-        const sSnap = await fsMod.getDocs(
-          fsMod.collection(db, 'users', uid, 'savedSearches')
-        );
         const searches = sSnap.docs
           .map((d) => ({ id: d.id, ...d.data() }) as { id: string; enabled?: boolean })
           .filter((s) => s.enabled !== false);
@@ -272,23 +304,37 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
             const raw = JSON.parse(localStorage.getItem(`dlala_seen_${uid}`) || '{}');
             if (raw && typeof raw === 'object') seen = raw;
           } catch { /* ignore */ }
+          // DF-O1 (Round 34, 18 Oct 2026): apply the R16 cross-group dedup
+          // to the badge — a listing matching several enabled searches
+          // counted N× before; it now counts once, matching the inbox.
+          const countedIds = new Set<string>();
           for (const s of searches) {
             const last = seen[s.id] || 0;
             for (const ld of lSnap.docs) {
+              if (countedIds.has(ld.id)) continue;
               const l = { id: ld.id, ...ld.data() } as Parameters<typeof matchesSavedSearch>[0];
-              if (matchesSavedSearch(l, s) && tsMs(l.createdAt) > last) bellCount++;
+              if (matchesSavedSearch(l, s) && tsMs(l.createdAt) > last) {
+                countedIds.add(ld.id);
+                bellCount++;
+              }
             }
           }
         }
       } catch { /* best-effort: badge falls back to notifications only */ }
       if (mounted.current) setUnreadAlerts(bellCount);
+      try {
+        localStorage.setItem(
+          badgeCacheKey(uid),
+          JSON.stringify({ at: Date.now(), msgs: n, alerts: bellCount })
+        );
+      } catch { /* ignore */ }
     } catch { /* best-effort: badges stay hidden */ }
   }, [user, client]);
 
   useEffect(() => {
     refreshBadges();
     // Listen for alerts-read event from /alerts page.
-    const onAlertsRead = () => refreshBadges();
+    const onAlertsRead = () => refreshBadges(true);
     window.addEventListener('dlala:alerts-read', onAlertsRead);
     return () => window.removeEventListener('dlala:alerts-read', onAlertsRead);
   }, [refreshBadges]);
