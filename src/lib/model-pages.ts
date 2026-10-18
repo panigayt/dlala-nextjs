@@ -142,6 +142,7 @@ export interface ModelCardItem {
   price: string;
   wilayaCode: number;
   photo: string;
+  negotiable?: boolean; // R71 (18 Oct 2026): Zak's FINAL rule — 1-DZD shown WITH badge
 }
 
 // S-03 (0.0.0.21): card links use the canonical /listing/<id> form.
@@ -153,11 +154,14 @@ export function cardHtml(item: ModelCardItem, pos: number, lang: string): string
     // R8-2 (18 Oct 2026): was hardcoded Arabic دلالة on fr/en pages.
     : `<div class="noimg">${lang === 'fr' || lang === 'en' ? 'Dlala' : 'دلالة'}</div>`;
   const href = `${SITE}/listing/${escHtml(item.id)}`;
+  // R71 (18 Oct 2026): Zak's FINAL rule — 1-DZD always shown WITH the badge.
+  const badgeText = lang === 'fr' ? 'Négociable' : lang === 'en' ? 'Negotiable' : 'قابل للتفاوض';
+  const badge = item.negotiable ? `<span class="negbadge">${badgeText}</span>` : '';
   return `<article class="card">
   <a href="${href}">${img}</a>
   <div class="cbody">
     <h3><a href="${href}">${escHtml(item.title)}</a></h3>
-    <div class="price" dir="ltr">${escHtml(item.price)}</div>
+    <div class="price" dir="ltr">${escHtml(item.price)}${badge}</div>
     <div class="wilaya">${escHtml(wilayaName(item.wilayaCode, lang))}</div>
   </div>
 </article>`;
@@ -274,6 +278,7 @@ body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:1
 .cta-top .h{display:block;font-weight:800;font-size:16px;margin-bottom:12px;color:#0a3d28;white-space:nowrap}
 .cta-top .b{display:inline-block;background:#0d7a4f;color:#fff!important;font-weight:700;font-size:15.5px;padding:12px 34px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(13,122,79,.35)}
 html[lang="fr"] .cta-top .h,html[lang="en"] .cta-top .h{font-size:15px}
+.negbadge{display:inline-block;font-size:11px;font-weight:400;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:2px 8px;margin-inline-start:6px;white-space:nowrap;vertical-align:middle}
 </style>
 <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>
 </head>
@@ -374,6 +379,7 @@ export function filterModelItems(
       price: fmtPrice(f.price, lang),
       wilayaCode: Number(f.wilayaCode) || 0,
       photo,
+      negotiable: (f as Record<string, unknown>).negotiable === true, // R71
     });
   }
   return items;

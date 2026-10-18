@@ -117,6 +117,7 @@ export function filterWilayaItems(
       wilayaCode: code,
       photo,
       rawPrice: Number.isFinite(rawPrice) ? rawPrice : 0,
+      negotiable: f.negotiable === true, // R71 (18 Oct 2026): Zak's FINAL rule
     });
   }
   return items;
@@ -371,6 +372,7 @@ body{font-family:system-ui,'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:1
 .card h3{font-size:14px;margin:0 0 6px;line-height:1.35}
 .card h3 a{color:#1a1a1a;text-decoration:none}
 .card .price{font-weight:800;color:#0d7a4f}
+.negbadge{display:inline-block;font-size:11px;font-weight:400;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:2px 8px;margin-inline-start:6px;white-space:nowrap;vertical-align:middle}
 .card .wilaya{font-size:12px;color:#666;margin-top:4px}
 .noimg{height:160px;display:flex;align-items:center;justify-content:center;background:#0d7a4f;color:#fff;font-weight:800}
 .cta-top{text-align:center;margin:18px 0;background:#eef7f1;border:1px solid rgba(13,122,79,.25);border-radius:14px;padding:18px 16px;box-shadow:0 2px 8px rgba(13,122,79,.08)}
