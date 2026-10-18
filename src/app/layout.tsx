@@ -143,8 +143,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             header/footer SSR in the correct language instead of Arabic.
             Suspense: usePathname() is a client hook unavailable during static
             prerender — the fallback renders the default (Arabic) chrome,
-            which the client then corrects on hydration for /fr|en paths. */}
-        <Suspense fallback={<SiteChrome>{children}</SiteChrome>}>
+            which the client then corrects on hydration for /fr|en paths.
+            R13 AX-F1 (18 Oct 2026) ROOT CAUSE: the fallback used to render
+            {children} too — so every dynamic page was emitted TWICE in the
+            server HTML (fallback tree + primary tree): duplicate <main>,
+            duplicate headings, and duplicate JSON-LD. No page-level move of
+            the JSON-LD script could ever fix it (verified via curl: R13
+            shell-level move still counted 2; R15b BB-2's sibling-of-ListingDir
+            move also still counted 2 with 2x </main>). The fallback keeps the
+            chrome only; page content streams exactly once via the primary
+            tree. */}
+        <Suspense fallback={<SiteChrome>{null}</SiteChrome>}>
           <ChromeWithLang>{children}</ChromeWithLang>
         </Suspense>
         {/* R3 (Zak ordered): applies a pending favorite saved before login —
