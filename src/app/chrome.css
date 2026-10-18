@@ -221,6 +221,10 @@ button.drawer-link:hover { background: #eef3f0; }
 .footer-guides { width: 100%; margin-top: 8px; line-height: 1.9; }
 .footer-guides a { color: var(--muted); text-decoration: none; }
 .footer-guides a:hover { color: var(--emerald); }
+/* R53 Team B (18 Oct 2026): category landing cross-links — same treatment as guides. */
+.footer-cats { width: 100%; margin-top: 8px; line-height: 1.9; }
+.footer-cats a { color: var(--muted); text-decoration: none; }
+.footer-cats a:hover { color: var(--emerald); }
 
 /* skip link (FIX-WEB-015) */
 .skip-link {

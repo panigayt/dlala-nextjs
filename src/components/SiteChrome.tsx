@@ -13,6 +13,9 @@ import { usePathname, useRouter } from 'next/navigation';
 // boundary holds: nothing Firebase-shaped enters the initial bundle.
 import { useAuthState, type CompatUser, type FirebaseClient } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
+// R53 Team B (18 Oct 2026): footer category-landing links — lib/categories is
+// pure data (no server imports), safe for this client component.
+import { catName } from '@/lib/categories';
 import PlatformBanner from './PlatformBanner';
 import AuthLinks, { AuthLinksFallback } from './AuthLinks';
 
@@ -574,6 +577,11 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   // FR readers get /fr/guides/<slug>, AR stays /guides/<slug>. Uses the
   // same `lang` from useLang() the footer already resolves.
   const guidePrefix = lang === 'fr' ? '/fr' : lang === 'en' ? '/en' : '';
+  // R53 Team B (18 Oct 2026): footer cross-links to the main SEO category
+  // landing pages (footer was guides-only — no link equity flowed to the
+  // category hubs). Only the two large stable categories are linked: moto
+  // (4) and electronics (3) sit at the thin-content guard and could 404.
+  const catPrefix = guidePrefix;
 
   return (
     <>
@@ -717,6 +725,10 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
             </Link> ·{' '}
             <Link href={`${guidePrefix}/guides/controler-telephone-occasion`}>{t('guidePhone')}</Link> ·{' '}
             <Link href={`${guidePrefix}/guides/eviter-arnaques`}>{t('guideScam')}</Link>
+          </div>
+          <div className="footer-cats">
+            <Link href={`${catPrefix}/voitures`}>{catName('cars', lang)}</Link> ·{' '}
+            <Link href={`${catPrefix}/telephones`}>{catName('phones', lang)}</Link>
           </div>
         </div>
       </footer>
