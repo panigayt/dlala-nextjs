@@ -63,7 +63,10 @@ function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: str
     case 'sdk-load-failed':
       return t('authConnectionProblem');
     case 'auth/email-already-in-use':
-      return t('authEmailInUse');
+      // E2 (18 Oct 2026): do NOT confirm the email is registered — the
+      // generic signup message hides registration status. (The L9 sign-in
+      // fallback below still keys off the raw code, so UX is unchanged.)
+      return t(fallbackKey);
     case 'auth/weak-password':
       return t('authWeakPassword');
     case 'auth/too-many-requests':
