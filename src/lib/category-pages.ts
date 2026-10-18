@@ -347,9 +347,8 @@ ${subSections}
 }
 
 // R53 Team B (18 Oct 2026): single-category live count for the category
-// page header/description. Separate 'use cache' entry from categoryCounts()
-// (the sitemap batch helper) — one cheap aggregation POST instead of 22,
-// and an independent cache key.
+// page header/description and the sitemap filter — one cheap aggregation
+// POST per category, each with its own 'use cache' entry.
 export async function categoryCount(categoryId: string): Promise<number> {
   'use cache';
   cacheLife('hours');
@@ -384,58 +383,6 @@ export async function categoryCount(categoryId: string): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-// Cached per-category count (for sitemap).
-// CM-1 fix (Round 30): use server-side aggregation counts per category.
-// The old approach counted from fetchAvailableListings()'s 500-newest window,
-// which contained only cars — non-car categories got count 0 and were dropped
-// from the sitemap even when they had listings.
-export async function categoryCounts(): Promise<Record<string, number>> {
-  'use cache';
-  cacheLife('hours');
-  const url = FIRESTORE_REST_BASE + ':runAggregationQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
-  const counts: Record<string, number> = Object.create(null);
-  await Promise.all(
-    CATEGORIES.map(async (c) => {
-      const body = {
-        structuredAggregationQuery: {
-          // R53 Team B (18 Oct 2026): the alias is REQUIRED — without it
-          // Firestore returns the count under the auto-key "field_1" and
-          // the reader below (aggregateFields.count) saw 0 for every
-          // category, so this function always returned {}.
-          aggregations: [{ alias: 'count', count: {} }],
-          structuredQuery: {
-            from: [{ collectionId: 'listings' }],
-            where: {
-              compositeFilter: {
-                op: 'AND',
-                filters: [
-                  { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'available' } } },
-                  { fieldFilter: { field: { fieldPath: 'categoryId' }, op: 'EQUAL', value: { stringValue: c.id } } },
-                ],
-              },
-            },
-          },
-        },
-      };
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          cache: 'no-store',
-        });
-        if (!res.ok) return;
-        const data = await res.json().catch(() => null);
-        const n = Number(data?.[0]?.result?.aggregateFields?.count?.integerValue ?? 0);
-        if (n > 0) counts[c.id] = n;
-      } catch {
-        // Count failed for this category — skip it (page will 404 on thin guard).
-      }
-    }),
-  );
-  return counts;
 }
 
 // CM-1 (18 Oct 2026): was fetchAvailableCars() (hardcoded categoryId ==

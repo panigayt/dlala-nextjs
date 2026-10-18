@@ -10,7 +10,7 @@ import {
 } from '@/lib/model-pages';
 import { qualifyingWilayaUrls, WILAYA_MIN_LISTINGS } from '@/lib/wilaya-pages';
 import {
-  categoryCounts,
+  categoryCount,
   catSlugFr,
   CATEGORY_MIN_LISTINGS,
 } from '@/lib/category-pages';
@@ -163,20 +163,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // qualifying categories (server-side aggregation count >=
     // CATEGORY_MIN_LISTINGS, matching the page's thin-content guard),
     // weekly/0.7 like the model/wilaya landing pages. Arabic default stays
-    // unprefixed — no /ar/ variant, by design.
+    // unprefixed — no /ar/ variant, by design. Uses the singular
+    // categoryCount() (fresh per-category cache entries).
     let categoryUrls: MetadataRoute.Sitemap = [];
     try {
-      const counts = await categoryCounts();
-      categoryUrls = CATEGORIES.filter(
-        (c) => (counts[c.id] || 0) >= CATEGORY_MIN_LISTINGS,
-      ).flatMap((c) => {
-        const slug = catSlugFr(c);
-        return [
-          { url: `${BASE}/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
-          { url: `${BASE}/fr/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
-          { url: `${BASE}/en/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
-        ];
-      });
+      const counts = await Promise.all(
+        CATEGORIES.map(async (c) => ({ c, n: await categoryCount(c.id).catch(() => 0) })),
+      );
+      categoryUrls = counts
+        .filter(({ n }) => n >= CATEGORY_MIN_LISTINGS)
+        .flatMap(({ c }) => {
+          const slug = catSlugFr(c);
+          return [
+            { url: `${BASE}/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+            { url: `${BASE}/fr/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+            { url: `${BASE}/en/${slug}`, changeFrequency: 'weekly' as const, priority: 0.7 },
+          ];
+        });
     } catch {
       // Firestore unreachable for the counts — skip category landings
     }
