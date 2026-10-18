@@ -62,6 +62,7 @@ import MatchesLoader from './MatchesLoader';
 // `ssr: false` is illegal in Server Components, so they live behind the tiny
 // client wrapper RecordersClient (12 Oct 2026 gate fix).
 import RecordersClient from './RecordersClient';
+import { ListingJsonLd } from './ListingJsonLd';
 import {
   ListingDir,
   SoldBanner,
@@ -637,10 +638,11 @@ export default async function ListingPage({
   }
 
   // R13 AX-F1 (18 Oct 2026), fixed R15b BB-2: the per-listing JSON-LD
-  // <script> renders ONCE here, in the non-streamed page shell — as a
-  // SIBLING of <ListingDir>, not a child. ListingDir is a client component
-  // (useLang); PPR streamed the script twice (byte-identical) when it was
-  // inside the client boundary. '<' is escaped (\u003c) so user content
+  // <script> renders ONCE via the dedicated <ListingJsonLd> Server
+  // Component (./ListingJsonLd.tsx). Inlined JSX duplicated it under PPR
+  // (two byte-identical streamed chunks) — first inside <ListingDir>
+  // (client boundary), then as a fragment sibling. The separate component
+  // renders in the static shell. '<' is escaped (\u003c) so user content
   // can never break out of the script. 1-DZD no-price listings emit zero
   // JSON-LD (seoForListing returns null jsonLd — rule holds).
   const pageLang = await getServerLang();
@@ -655,12 +657,7 @@ export default async function ListingPage({
 
   return (
     <>
-      {jsonLdScript && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLdScript }}
-        />
-      )}
+      <ListingJsonLd json={jsonLdScript} />
       <ListingDir>
         <Suspense fallback={<ListingSkeleton />}>
           <ListingContent params={params} listing={listing} />
