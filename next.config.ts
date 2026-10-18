@@ -41,6 +41,23 @@ const nextConfig: NextConfig = {
     // 12 Oct 2026: img.dzdlala.com added — listing photos were blocked.
     return [
       {
+        // K-M1 (audit round 2, 18 Oct 2026): listing bodies render in the
+        // dlala_lang cookie language (ar/fr/en). The edge cache must vary
+        // by Cookie, or it serves whichever language rendered first to all
+        // users. proxy.ts cannot set this (Next.js overwrites Vary after
+        // the proxy runs); next.config headers are applied last and win.
+        // Includes Next.js's own Vary tokens (rsc, next-router-*) so
+        // client-side navigation keeps working.
+        source: "/listing/:id*",
+        headers: [
+          {
+            key: "Vary",
+            value:
+              "Cookie, rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+          },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           {
