@@ -174,17 +174,22 @@ export async function proxy(req: NextRequest) {
   // (listing 300s, seller/announcement/home 60s).
   const p = req.nextUrl.pathname;
   if (/^\/(listing)\/[^/]+\/?$/.test(p)) {
-    // K-M1 (audit round 2, 18 Oct 2026): listing bodies render in the
-    // dlala_lang cookie language (ar/fr/en). Without Vary: Cookie, the
-    // edge cache serves whichever language rendered first to all users.
-    // Vary: Cookie was attempted via proxy.ts (overwritten by Next.js),
-    // vercel.json edge headers, and next.config.ts headers — none took
-    // effect live (verified 18 Oct 2026). FALLBACK: Cache-Control: private
-    // disables edge caching entirely for listings; every request hits the
-    // origin and renders in the user's cookie language. Correctness over
-    // edge-cache hits. Browsers may still cache (max-age=60).
-    // Round 4 (18 Oct 2026): fallback implemented per audit instruction.
-    res.headers.set('Cache-Control', 'private, max-age=60');
+    // R54 (18 Oct 2026 — K-M1 root fix): listing SSR is now
+    // language-invariant (Arabic); the dlala_lang cookie NO LONGER drives
+    // server rendering (it applies client-side via useLang(), the Round-107
+    // pattern). The old mitigations are REMOVED:
+    //   - Vary: Cookie (next.config.ts + vercel.json) — never took effect
+    //     live (verified 18 Oct 2026 on production AND preview).
+    //   - Cache-Control: private here — the proxy runs AFTER the edge
+    //     cache's store decision, so the edge cached anyway (verified:
+    //     X-Vercel-Cache: HIT with growing Age on `private` responses).
+    // With no cookie variance, edge caching is SAFE again: public ISR
+    // (300s, matching the route's cacheLife) keeps listings fast on weak
+    // connections for every locale.
+    res.headers.set(
+      'Cache-Control',
+      'public, s-maxage=300, max-age=60, stale-while-revalidate=300'
+    );
   } else if (/^\/(seller|announcement)\/[^/]+\/?$/.test(p)) {
     res.headers.set(
       'Cache-Control',

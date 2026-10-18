@@ -18,12 +18,10 @@ import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import {
   fetchWanted,
-  normSearchText,
   type ListingCard,
 } from '@/lib/firestore';
-import WantedShell from './WantedShell';
+import WantedShell, { WantedSkeleton } from './WantedShell';
 import type { WantedFilters } from './WantedFilterBar';
-import { getServerLang } from '@/lib/server-lang';
 import { SITE } from '@/lib/seo';
 import type { Metadata } from 'next';
 
@@ -49,7 +47,8 @@ export function generateMetadata(): Metadata {
   };
 }
 
-const WANTED_LIMIT = 60;
+// R54: the 60-cap moved client-side (WantedShell applies it after the
+// language-dependent q filter).
 
 async function getWanted(): Promise<ListingCard[]> {
   'use cache';
@@ -66,9 +65,15 @@ function wantedVisible(l: ListingCard): boolean {
   );
 }
 
-// js/wanted.js wantedMatches — verbatim logic.
-// 11 Oct 2026: text search uses viewer's language (was Arabic-only).
-function wantedMatches(l: ListingCard, f: WantedFilters, lang: string): boolean {
+// js/wanted.js wantedMatches — verbatim logic, split for R54.
+//
+// R54 (18 Oct 2026): the text-search (q) match is language-dependent, so it
+// MUST NOT run server-side — the edge cache cannot vary by the dlala_lang
+// cookie (K-M1 follow-up, verified live), and server filtering poisoned
+// every locale. Server applies the language-invariant filters (cat/wilaya)
+// only; the q text-match runs client-side in WantedShell via useLang()
+// (same Round-107 pattern as the homepage/search shells).
+function wantedMatchesServer(l: ListingCard, f: WantedFilters): boolean {
   if (!l) return false;
   const cat = l.categoryId || '';
   if (f.cat && cat !== f.cat) return false;
@@ -79,24 +84,6 @@ function wantedMatches(l: ListingCard, f: WantedFilters, lang: string): boolean 
     )
       return false;
   }
-  const q = normSearchText(f.q);
-  if (q) {
-    // 11 Oct 2026: viewer's language + string-title fallback (was ar-only, '' for strings).
-    const titleText =
-      typeof l.title === 'string'
-        ? l.title
-        : l.title && typeof l.title === 'object'
-          ? (l.title as Record<string, string>)[lang] || l.title.ar || ''
-          : '';
-    const descText =
-      typeof l.description === 'string'
-        ? l.description
-        : l.description && typeof l.description === 'object'
-          ? (l.description as Record<string, string>)[lang] || l.description.ar || ''
-          : '';
-    const hay = normSearchText(titleText + ' ' + descText);
-    if (!hay.includes(q)) return false;
-  }
   return true;
 }
 
@@ -106,7 +93,11 @@ async function WantedLoader({
   searchParams: Promise<{ cat?: string; wilaya?: string; q?: string }>;
 }) {
   const sp = await searchParams;
-  const lang = await getServerLang();
+  // R54: NO dlala_lang cookie read — SSR is language-invariant (Arabic).
+  // The q text-match is language-dependent and runs client-side in
+  // WantedShell; the server applies cat/wilaya only. The client re-applies
+  // the 60-cap after its q filter, so the server passes the full
+  // cat/wilaya-filtered window (≤120).
   const f: WantedFilters = {
     cat: sp.cat || '',
     wilaya: sp.wilaya || '',
@@ -121,35 +112,9 @@ async function WantedLoader({
     error = 'wanted-error';
   }
 
-  const list = docs
-    .filter((l) => wantedVisible(l) && wantedMatches(l, f, lang))
-    .slice(0, WANTED_LIMIT);
+  const list = docs.filter((l) => wantedVisible(l) && wantedMatchesServer(l, f));
 
   return <WantedShell f={f} docs={list} error={error} />;
-}
-
-// Visual skeleton — no text, so no language dependency (search-page parity).
-function WantedSkeleton({ dir }: { dir: 'rtl' | 'ltr' }) {
-  return (
-    <div className="min-h-screen bg-zinc-50" dir={dir}>
-      <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl bg-white shadow-sm overflow-hidden"
-            >
-              <div className="aspect-[4/3] bg-zinc-200 animate-pulse" />
-              <div className="p-3">
-                <div className="h-5 bg-zinc-200 rounded animate-pulse w-1/2" />
-                <div className="mt-2 h-4 bg-zinc-200 rounded animate-pulse" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </main>
-    </div>
-  );
 }
 
 export default async function WantedPage({
@@ -157,10 +122,10 @@ export default async function WantedPage({
 }: {
   searchParams: Promise<{ cat?: string; wilaya?: string; q?: string }>;
 }) {
-  // 11 Oct 2026: skeleton dir matches language (was hardcoded rtl).
-  const lang = await getServerLang();
+  // R54: skeleton dir follows the UI language client-side (WantedSkeleton
+  // is a client component) — no dlala_lang cookie read in SSR.
   return (
-    <Suspense fallback={<WantedSkeleton dir={lang === 'ar' ? 'rtl' : 'ltr'} />}>
+    <Suspense fallback={<WantedSkeleton />}>
       <WantedLoader searchParams={searchParams} />
     </Suspense>
   );

@@ -9,13 +9,20 @@
 //   - Public view renders without auth; sold/hidden docs (403 anonymous)
 //     render the trilingual 404.
 //
-// I18N DESIGN (Round 4, 18 Oct 2026 — intentional, not a defect):
-//   Listing-detail pages are SINGLE-LOCALE. There are no /fr/listing/<id>
-//   or /en/listing/<id> routes (they 404 by design). The page language
-//   comes from the dlala_lang cookie (getServerLang), so one URL serves
-//   all three languages. This avoids duplicate-content SEO penalties and
-//   keeps the sitemap to canonical Arabic URLs (hreflang: ar + x-default).
-//   Do NOT create localized listing routes.
+// I18N DESIGN (R54, 18 Oct 2026 — supersedes the Round-4 cookie-SSR design):
+//   Listing-detail pages are SINGLE-LOCALE (no /fr/listing/<id> or
+//   /en/listing/<id> routes — they 404 by design) and their SSR is
+//   LANGUAGE-INVARIANT (Arabic). The dlala_lang cookie MUST NOT drive
+//   server rendering: the edge cache cannot vary by cookie (K-M1 follow-up,
+//   verified live 18 Oct 2026 — Vary: Cookie via next.config.ts +
+//   vercel.json and Cache-Control: private via the proxy were ALL
+//   ineffective), so cookie-dependent SSR poisoned every locale. One URL
+//   serves all three languages via CLIENT-SIDE translation (useLang():
+//   ListingH1, ListingPrice, Gallery alt text, LocalizedDocTitle) — the
+//   Round-107 pattern the homepage/search/wanted shells already use.
+//   SEO is unchanged: crawlers get Arabic SSR + Arabic JSON-LD, the sitemap
+//   keeps canonical Arabic URLs (hreflang: ar + x-default).
+//   Do NOT create localized listing routes. Do NOT read dlala_lang here.
 
 import { Suspense, cache } from 'react';
 import { cacheLife } from 'next/cache';
@@ -28,7 +35,6 @@ import {
   fetchSeller,
   cardTitle,
   cardImage,
-  formatPrice,
   type ListingCard,
   type ListingDetail,
   type SellerProfile,
@@ -46,12 +52,13 @@ import {
   fmtPriceText,
 } from '@/lib/seo';
 import { t, type Lang } from '@/lib/i18n-strings';
-import { getServerLang } from '@/lib/server-lang';
+import { LocaleDir, RetryLabel } from '@/components/LocaleBits';
 import type { MatchOfferDoc } from './MatchingOffers';
 import BackLink from '@/components/BackLink';
 import OwnerSellerCard from './OwnerSellerCard';
 import WantedBadge from './WantedBadge';
-import PriceReducedBadge from './PriceReducedBadge';
+import ListingH1 from './ListingH1';
+import ListingPrice from './ListingPrice';
 import RateCta from '@/components/RateCta';
 import NotFoundCta from './NotFoundCta';
 
@@ -297,9 +304,11 @@ export async function generateMetadata({
 // re-runs this server component and retries the Firestore fetch, so no
 // client island is needed.
 async function TransientErrorView({ id }: { id: string }) {
-  const lang = await getServerLang();
+  // R54: language-invariant SSR (Arabic) — the edge cache cannot vary by
+  // cookie, so no dlala_lang read here. dir + retry label follow the UI
+  // language client-side (LocaleBits); the messages stay trilingual.
   return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <LocaleDir className="max-w-2xl mx-auto px-4 py-16 text-center">
       <div className="text-6xl font-bold text-emerald-700">D</div>
       <h1 className="mt-4 text-2xl font-bold" lang="ar" dir="rtl">تعذّر تحميل الإعلان</h1>
       <p className="mt-2 text-zinc-600" lang="ar" dir="rtl">
@@ -312,11 +321,11 @@ async function TransientErrorView({ id }: { id: string }) {
           href={`/listing/${encodeURIComponent(id)}`}
           className="inline-block rounded-lg bg-emerald-700 text-white px-6 py-3 font-medium"
         >
-          {t('retry', lang)}
+          <RetryLabel />
         </a>
         <NotFoundCta />
       </div>
-    </div>
+    </LocaleDir>
   );
 }
 
@@ -351,7 +360,15 @@ async function ListingContent({
   const { id } = await params;
 
   const l = listing;
-  const pageLang = await getServerLang();
+  // R54 (18 Oct 2026): SSR is language-invariant (Arabic). The dlala_lang
+  // cookie MUST NOT drive server rendering — the edge cache cannot vary by
+  // cookie (K-M1: Vary: Cookie via next.config.ts + vercel.json and
+  // Cache-Control: private via the proxy were all verified ineffective
+  // live), so cookie-dependent SSR served Arabic to FR/EN users and vice
+  // versa. UI language now applies client-side via useLang() (ListingH1,
+  // ListingPrice, Gallery, LocalizedDocTitle) — the Round-107 pattern the
+  // homepage/search/wanted shells already use.
+  const pageLang = 'ar' as const;
   // 11 Oct 2026: rewrite dzdlala.com default ad images to local paths
   // (dzdlala.com blocks hotlinking on the preview domain). Fixes existing
   // listings without Firestore updates.
@@ -377,19 +394,20 @@ async function ListingContent({
   // This component sits inside <Suspense> and Next.js PPR emitted its
   // script tag twice (static shell + streamed segment, byte-identical).
   // The script now renders exactly once in ListingPage's non-streamed
-  // shell below. This block only derives the localized tab title.
-  let localizedTitle = 'DLALA';
+  // shell below. This block derives the tab title in all three languages
+  // (R54: server computes ar/fr/en, the client picks via useLang()).
+  let localizedTitles: Record<'ar' | 'fr' | 'en', string> = { ar: 'DLALA', fr: 'DLALA', en: 'DLALA' };
   try {
-    // Round 17 T7: reuse pageLang (same request, same cookie) instead of
-    // reading the cookie store a second time.
     // 16 Oct 2026: listingJsonLd returns null for no-real-price listings
     // (Google requires offers/review/aggregateRating on Product) — skip.
-    const seo = seoForListing(l, id, pageLang);
-    if (typeof seo.metadata.title === 'string' && seo.metadata.title) {
-      localizedTitle = seo.metadata.title;
-    }
+    (['ar', 'fr', 'en'] as const).forEach((tlang) => {
+      const seo = seoForListing(l, id, tlang);
+      if (typeof seo.metadata.title === 'string' && seo.metadata.title) {
+        localizedTitles[tlang] = seo.metadata.title;
+      }
+    });
   } catch {
-    /* keep default title */
+    /* keep default titles */
   }
   // js/listing.js loadMatches parity:
   // - regular ads: similar ads (same category, max 12).
@@ -430,8 +448,8 @@ async function ListingContent({
     <main id="main-content" className="max-w-4xl mx-auto px-4 py-6">
       {/* 17 Oct 2026 (audit H2): static-Arabic <title> metadata lands in
           <head>; the reader's localized SEO title goes on the tab here
-          (Round 133 behavior preserved). */}
-      <LocalizedDocTitle title={localizedTitle} />
+          (R54: server computes ar/fr/en, client picks via useLang()). */}
+      <LocalizedDocTitle titles={localizedTitles} />
       {/* LIS-7 (16 Sep 2026, js/listing.js): the back link returns to the
           previous page (feed with its filters/scroll intact) via
           history.back() instead of dumping to home; href="/" is the
@@ -465,7 +483,7 @@ async function ListingContent({
       <Gallery
         photos={photos}
         fallback={cardImage(l)}
-        title={title}
+        title={l.title}
         hasVariants={!!l.photoVariants}
         heroLqip={lqipUrlFor(l)}
         thumbs={thumbs}
@@ -476,22 +494,17 @@ async function ListingContent({
         {/* LIS-1 (legacy js/listing.js): sold listings get an explicit
             "no longer available" banner, prepended to the detail card. */}
         {l.status === 'sold' && <SoldBanner />}
-        <h1 className="text-2xl font-bold text-zinc-900">{title}</h1>
+        {/* R54: h1 follows the UI language client-side (ListingH1). */}
+        <ListingH1 listing={l} />
         {isWanted && !isSeeker && <WantedBadge />}
-        <p className="mt-2 text-3xl font-bold text-emerald-700">
-          {/* Zak 18 Oct 2026: ALWAYS show the price (even "1 دج") + badge.
-              Clean 2-line layout: line 1 = price + دج + badge, line 2 = Darija. */}
-          <span className="whitespace-nowrap">
-            <span dir="ltr">{formatPrice(l.price || 0, pageLang)}</span>
-            {((l as { negotiable?: boolean }).negotiable || Number(l.price) <= 1) && (
-              <span className="ms-2 text-sm font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-3 py-1 whitespace-nowrap align-middle">{t('negotiable', pageLang)}</span>
-            )}
-          </span>
-          {priceWords && <span className="block text-base font-normal text-zinc-500">({priceWords})</span>}
-          {(l as { priceReduced?: boolean }).priceReduced && (
-            <PriceReducedBadge />
-          )}
-        </p>
+        {/* R54: price + negotiable badge follow the UI language client-side
+            (ListingPrice). Darija parenthetical stays Arabic (Zak, 21 Sep). */}
+        <ListingPrice
+          price={l.price || 0}
+          negotiable={!!(l as { negotiable?: boolean }).negotiable}
+          priceWords={priceWords}
+          priceReduced={!!(l as { priceReduced?: boolean }).priceReduced}
+        />
         <MetaGrid
           wilayaCode={l.wilayaCode}
           condition={l.condition}
@@ -648,7 +661,9 @@ export default async function ListingPage({
   // renders in the static shell. '<' is escaped (\u003c) so user content
   // can never break out of the script. 1-DZD no-price listings emit zero
   // JSON-LD (seoForListing returns null jsonLd — rule holds).
-  const pageLang = await getServerLang();
+  // R54 (18 Oct 2026): JSON-LD stays Arabic — crawlers never send the
+  // dlala_lang cookie, and SSR must be language-invariant (see top).
+  const pageLang = 'ar' as const;
   let jsonLdScript = '';
   try {
     const seo = seoForListing(listing, id, pageLang);

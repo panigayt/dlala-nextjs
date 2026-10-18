@@ -1,25 +1,33 @@
-// LocalizedDocTitle — 17 Oct 2026 (audit H2 fix).
+// LocalizedDocTitle — 17 Oct 2026 (audit H2 fix), R54 rework.
 //
 // Pages whose <title> metadata is intentionally STATIC (Arabic) so it
-// lands in <head> (see the audit-H2 comments in src/app/page.tsx and
-// src/app/listing/[id]/page.tsx) still owe the READER a localized tab
-// title (Round 133). This null-rendering client component sets
-// document.title from the server-computed, cookie-localized title on
-// hydration — the same division the /search route already uses
-// (static metadata + lib/i18n updateDocTitle), but for dynamic content
-// titles that no static i18n key can express.
+// lands in <head> still owe the READER a localized tab title (Round 133).
+// This null-rendering client component sets document.title on hydration.
+//
+// R54 (18 Oct 2026): the server no longer pre-localizes the title via the
+// dlala_lang cookie — cookie-dependent SSR poisons the edge cache (K-M1:
+// Vary: Cookie and Cache-Control: private both verified ineffective live).
+// The server computes all three SEO titles (Arabic default for crawlers)
+// and the client picks the reader's language via useLang().
 
 'use client';
 
 import { useEffect } from 'react';
+import { useLang, type Lang } from '@/lib/i18n';
 
-export default function LocalizedDocTitle({ title }: { title: string }) {
+export default function LocalizedDocTitle({
+  titles,
+}: {
+  titles: Record<Lang, string>;
+}) {
+  const { lang } = useLang();
   useEffect(() => {
     try {
+      const title = titles[lang] || titles.ar;
       if (title) document.title = title;
     } catch {
       // a title must never break the page
     }
-  }, [title]);
+  }, [titles, lang]);
   return null;
 }

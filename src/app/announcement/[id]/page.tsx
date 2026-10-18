@@ -22,7 +22,7 @@ import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { fetchAnnouncement, annLocalized, type Announcement } from '@/lib/firestore';
 import { t } from '@/lib/i18n-strings';
-import { getServerLang } from '@/lib/server-lang';
+import { LocaleDir, RetryLabel } from '@/components/LocaleBits';
 import AnnouncementDetail, { type AnnouncementDetailData } from './AnnouncementDetail';
 
 // Trilingual strings — verbatim from js/i18n.{ar,en,fr}.js (Round 120:
@@ -118,9 +118,11 @@ export async function generateMetadata({
 // component and retries the Firestore fetch. Genuinely missing
 // announcements (null) never reach this — they get notFound() above.
 async function TransientErrorView({ id }: { id: string }) {
-  const lang = await getServerLang();
+  // R54: language-invariant SSR (Arabic) — no dlala_lang cookie read (edge
+  // cache cannot vary by cookie). dir + retry label follow the UI language
+  // client-side; the messages stay trilingual.
   return (
-    <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+    <LocaleDir>
       <div className="rounded-xl bg-white p-8 text-center">
         <div className="text-4xl">📢</div>
         <h1 className="mt-3 text-lg font-semibold text-zinc-800" lang="ar" dir="rtl">تعذّر تحميل الإعلان</h1>
@@ -134,11 +136,11 @@ async function TransientErrorView({ id }: { id: string }) {
             href={`/announcement/${encodeURIComponent(id)}`}
             className="inline-block rounded-lg bg-emerald-700 px-6 py-3 font-medium text-white"
           >
-            {t('retry', lang)}
+            <RetryLabel />
           </a>
         </div>
       </div>
-    </div>
+    </LocaleDir>
   );
 }
 

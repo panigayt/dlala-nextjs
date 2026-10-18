@@ -144,7 +144,10 @@ export default function Gallery({
 }: {
   photos: string[];
   fallback: string;
-  title: string;
+  // R54: trilingual title map (or legacy plain string) — alt text / aria
+  // labels follow the UI language client-side (was a pre-localized string
+  // from the dlala_lang cookie; cookie-SSR poisoned the edge cache).
+  title: string | Record<string, string>;
   // LIS-9/LIS-10: the publish pipeline wrote W-series variants (R11+).
   hasVariants?: boolean;
   // Speed 29: w32 LQIP for photo 0 ('' = none — old listing).
@@ -154,7 +157,9 @@ export default function Gallery({
 }) {
   // Round 108: trilingual AR/FR/EN (js/i18n.js parity) — lightbox
   // aria-labels follow the app language.
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const localizedTitle =
+    typeof title === 'string' ? title : title[lang] || title.ar || title.fr || title.en || '';
   const all = useMemo(
     () => (photos.length ? photos : fallback ? [fallback] : []),
     [photos, fallback]
@@ -420,7 +425,7 @@ export default function Gallery({
         <SafeImg
           key={shownSrc}
           candidates={[shownSrc, fallback]}
-          alt={`${title} — ${t('photo')} ${sel + 1}/${all.length}`}
+          alt={`${localizedTitle} — ${t('photo')} ${sel + 1}/${all.length}`}
           className={
             'w-full aspect-[4/3] object-cover g-hero' + (shownSharp ? '' : ' blurred')
           }
@@ -437,7 +442,7 @@ export default function Gallery({
               key={i}
               type="button"
               onClick={() => setSel(i)}
-              aria-label={`${title} — ${t('photo')} ${i + 1}/${all.length}`}
+              aria-label={`${localizedTitle} — ${t('photo')} ${i + 1}/${all.length}`}
               aria-pressed={i === sel}
               className={
                 'shrink-0 rounded-lg overflow-hidden transition ' +
@@ -455,7 +460,7 @@ export default function Gallery({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={thumbs[i] || p}
-                alt={`${title} — ${t('photo')} ${i + 1}/${all.length}`}
+                alt={`${localizedTitle} — ${t('photo')} ${i + 1}/${all.length}`}
                 loading="lazy"
                 decoding="async"
                 className="w-20 h-20 object-cover"
@@ -470,7 +475,7 @@ export default function Gallery({
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label={title}
+          aria-label={localizedTitle}
           className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeLightbox();
@@ -517,7 +522,7 @@ export default function Gallery({
           <SafeImg
             key={all[lbIdx]}
             candidates={[all[lbIdx], fallback]}
-            alt={`${title} — ${t('photo')} ${lbIdx + 1}/${all.length}`}
+            alt={`${localizedTitle} — ${t('photo')} ${lbIdx + 1}/${all.length}`}
             className="max-w-full max-h-full object-contain"
             tileClassName="w-[min(90vw,640px)] aspect-[4/3]"
             imgRef={setLightboxImg}

@@ -50,23 +50,10 @@ const nextConfig: NextConfig = {
     // CSP via next.config headers (proven on Vercel).
     // 12 Oct 2026: img.dzdlala.com added — listing photos were blocked.
     return [
-      {
-        // K-M1 (audit round 2, 18 Oct 2026): listing bodies render in the
-        // dlala_lang cookie language (ar/fr/en). The edge cache must vary
-        // by Cookie, or it serves whichever language rendered first to all
-        // users. proxy.ts cannot set this (Next.js overwrites Vary after
-        // the proxy runs); next.config headers are applied last and win.
-        // Includes Next.js's own Vary tokens (rsc, next-router-*) so
-        // client-side navigation keeps working.
-        source: "/listing/:id*",
-        headers: [
-          {
-            key: "Vary",
-            value:
-              "Cookie, rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
-          },
-        ],
-      },
+      // R54 (18 Oct 2026): the /listing/:id* Vary: Cookie block was REMOVED.
+      // It never took effect live (verified 18 Oct 2026 on production and
+      // the preview domain) — and it is no longer needed: listing SSR is
+      // language-invariant (Arabic) since R54, so edge caching is safe.
       {
         source: "/(.*)",
         headers: [
