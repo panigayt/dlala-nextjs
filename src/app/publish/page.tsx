@@ -1078,7 +1078,10 @@ function PublishForm({
 
       if (editId) {
         // Edit: direct Firestore update (owner only, rules enforce).
-        // Spec: negotiable is ABSENT from edit payload (edits never change it).
+        // Round 30 CS-1 (18 Oct 2026): negotiable is now INCLUDED in the
+        // edit payload. The Batch-3 owner-edit rule explicitly lists
+        // 'negotiable' in its affectedKeys() allowlist, so changing the
+        // toggle in edit mode saves correctly instead of being dropped.
         const saleQty = isWanted ? 1 : Math.max(1, Number(qty) || 1);
         // Read current doc for version + price-drop detection
         const curSnap = await fsMod.getDoc(fsMod.doc(db, 'listings', editId));
@@ -1166,6 +1169,9 @@ function PublishForm({
           wilayaCode,
           condition: cat === 'beauty' ? answers['qBeautyCond'] || '' : condition,
           answers: canonAnswers,
+          // Round 30 CS-1: same semantics as publish (line ~1337) — jobs and
+          // wanted never carry negotiable; otherwise the edit toggle saves.
+          negotiable: isWanted || cat === 'jobs' ? false : negotiable,
           quantity: saleQty,
           isWholesale: saleQty > 1,
           version: Number(cur.version || 0) + 1,

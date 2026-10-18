@@ -456,12 +456,17 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                     </div>
                   </a>
                   <div className="mt-2 flex gap-2">
-                    <a
-                      href={`/publish?edit=${encodeURIComponent(l.id)}`}
-                      className="flex-1 rounded-lg bg-white border border-zinc-300 px-2 py-2 text-xs font-medium text-zinc-700 text-center hover:bg-zinc-50 min-h-[44px] flex items-center justify-center"
-                    >
-                      ✎ {t('edit')}
-                    </a>
+                    {/* Round 30 CS-3 (18 Oct 2026): sold ads are not editable
+                        (publish blocks them with editSoldError) — hide the
+                        edit button instead of a dead-end round trip. */}
+                    {l.status !== 'sold' && (
+                      <a
+                        href={`/publish?edit=${encodeURIComponent(l.id)}`}
+                        className="flex-1 rounded-lg bg-white border border-zinc-300 px-2 py-2 text-xs font-medium text-zinc-700 text-center hover:bg-zinc-50 min-h-[44px] flex items-center justify-center"
+                      >
+                        ✎ {t('edit')}
+                      </a>
+                    )}
                     {l.status !== 'sold' && (
                       <button
                         onClick={() => markSold(l.id)}
