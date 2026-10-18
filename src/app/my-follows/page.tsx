@@ -5,7 +5,7 @@
 //
 // Behavior preserved:
 // - Reads follows where followerId == uid (limit 200, client-side sort)
-// - Hydrates each followed user from users_public/{uid}
+// - Hydrates each followed user from users/{uid}
 // - Verified stores show the gold pro-merchant badge
 // - Name, @username, follower count, rating shown per row
 // - Unfollow button with optimistic UI (row removed on confirm)
@@ -208,7 +208,7 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
       await Promise.all(
         followRows.map(async (r) => {
           try {
-            const ds = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users_public', r.storeId)), 15000);
+            const ds = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users', r.storeId)), 15000);
             if (ds.exists()) users[r.storeId] = ds.data() as FollowedUser;
           } catch {
             // ignore

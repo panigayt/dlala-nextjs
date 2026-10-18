@@ -534,7 +534,7 @@ function ChatInner() {
         else if (data.listingId === 'announcements') name = gst('announcementsTitle');
         else if (other) {
           try {
-            const d = await fsMod.getDoc(fsMod.doc(db, `users_public/${other}`));
+            const d = await fsMod.getDoc(fsMod.doc(db, `users/${other}`));
             if (d.exists()) {
               const m = d.data() || {};
               name =

@@ -15,7 +15,7 @@
 // state with the same visual end-state:
 //   - the own badge renders once auth resolves (no DOM patching),
 //   - pro verdicts resolve through the module cache below + ONE batched REST
-//     :batchGet on users_public (guest-safe public read, same as
+//     :batchGet on users (guest-safe public read, same as
 //     fetchVerifiedStores) with mask=storeTier — no Firestore SDK download,
 //     preserving the 0.0.0.1w R1 win (no 101KB SDK on every home visit).
 // Never throws: failures fail closed (no badges), exactly like legacy.
@@ -129,7 +129,7 @@ async function flushProVerdicts(): Promise<void> {
         body: JSON.stringify({
           documents: chunk.map(
             (id) =>
-              `${FIRESTORE_RESOURCE_BASE}/users_public/${encodeURIComponent(id)}`,
+              `${FIRESTORE_RESOURCE_BASE}/users/${encodeURIComponent(id)}`,
           ),
           mask: { fieldPaths: ['storeTier'] },
         }),

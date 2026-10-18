@@ -97,7 +97,7 @@ function SettingsContent({ user }: { user: CompatUser }) {
         let name = '';
         let username = '';
         try {
-          const u = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users_public/' + uid)), 15000);
+          const u = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'users/' + uid)), 15000);
           if (u.exists()) {
             const data = u.data() as { name?: string; username?: string } | undefined;
             name = data?.name || '';

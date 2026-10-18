@@ -5,7 +5,7 @@
 //   - <Suspense> wraps the params-dependent fetches: first visit to a UID
 //     renders on demand, then the result is cached (ISR, 60s revalidate).
 //     Subsequent visits serve from cache.
-//   - The public profile doc (users_public/{uid}) and the seller's active
+//   - The public profile doc (users/{uid}) and the seller's active
 //     listings are fetched server-side via Firestore REST — zero Firebase
 //     SDK on the server path.
 //
@@ -16,7 +16,7 @@
 
 // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
 // proxy (src/proxy.ts + src/proxy-404.ts) — it runs the Firestore
-// existence check (documents/users_public/{uid}: 404/403 → real 404;
+// existence check (documents/users/{uid}: 404/403 → real 404;
 // transient check failures fail open to this page) BEFORE any
 // rendering/streaming starts. The earlier Round-12 plan of notFound()
 // kept HTTP 200 under cacheComponents:true PPR (verified via curl on
@@ -148,7 +148,7 @@ export default async function SellerPageRoute({
 
   // Round 14 (12 Oct 2026): the REAL HTTP 404 now comes from the Edge
   // proxy (src/proxy.ts + src/proxy-404.ts), which checks Firestore
-  // (documents/users_public/{uid}) BEFORE rendering/streaming starts.
+  // (documents/users/{uid}) BEFORE rendering/streaming starts.
   // The earlier Round-12 approach of notFound() at this point kept
   // HTTP 200: with cacheComponents:true the page-body await is postponed
   // (x-nextjs-postponed: 1), so the 200 headers were sent before notFound()

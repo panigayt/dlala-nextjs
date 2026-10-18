@@ -254,7 +254,7 @@ export interface SellerProfile {
 
 export async function fetchSeller(uid: string): Promise<SellerProfile | null> {
   const url =
-    FIRESTORE_REST_BASE + '/users_public/' + encodeURIComponent(uid) +
+    FIRESTORE_REST_BASE + '/users/' + encodeURIComponent(uid) +
     '?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const res = await fetch(url, { cache: 'no-store' });
   if (res.status === 404) return null;
@@ -302,7 +302,7 @@ export async function fetchVerifiedStores(): Promise<VerifiedStore[]> {
   const url =
     FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const structuredQuery = {
-    from: [{ collectionId: 'users_public' }],
+    from: [{ collectionId: 'users' }],
     where: {
       fieldFilter: {
         field: { fieldPath: 'storeTier' },
@@ -1317,7 +1317,7 @@ function partitionWithBoostMap(
 }
 
 // Batch-fetch seller boost verdicts (storeTier + vitrineBoostUntil) for a
-// listing pool via a single :batchGet on users_public (guest-safe public
+// listing pool via a single :batchGet on users (guest-safe public
 // read — same collection the card pro-badges read in card-markers.ts).
 // Returns sellerId → boosted/pro.
 async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boolean>> {
@@ -1337,7 +1337,7 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
       body: JSON.stringify({
         documents: chunk.map(
           (id) =>
-            `${FIRESTORE_RESOURCE_BASE}/users_public/${encodeURIComponent(id)}`
+            `${FIRESTORE_RESOURCE_BASE}/users/${encodeURIComponent(id)}`
         ),
         mask: { fieldPaths: ['storeTier', 'vitrineBoostUntil'] },
       }),

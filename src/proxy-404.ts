@@ -47,7 +47,7 @@ export type DocCheck = 'missing' | 'exists' | 'check-failed';
 const CHECK_TIMEOUT_MS = 4000; // fail fast, fail open
 
 export async function checkDocExists(
-  collection: 'listings' | 'users_public' | 'announcements',
+  collection: 'listings' | 'users' | 'announcements',
   docId: string,
   requireActive = false,
 ): Promise<DocCheck> {

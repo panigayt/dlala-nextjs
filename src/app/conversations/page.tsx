@@ -172,7 +172,7 @@ export default function ConversationsPage() {
       const nameEntries = await Promise.all(
         otherUids.map(async (id) => {
           try {
-            const d = await fsMod.getDoc(fsMod.doc(db, `users_public/${id}`));
+            const d = await fsMod.getDoc(fsMod.doc(db, `users/${id}`));
             if (d.exists()) {
               const m = d.data() || {};
               const name =

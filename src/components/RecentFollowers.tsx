@@ -82,7 +82,7 @@ export default function RecentFollowers({ uid }: { uid: string }) {
           if (!cancelled && mounted.current) setProfiles([]);
           return;
         }
-        // 0.0.0.31 (users_public split): follower profiles are public reads.
+        // 0.0.0.31 (users split): follower profiles are public reads.
         const list = await Promise.all(
           snap.docs.map(async (d) => {
             const fid = String(
@@ -90,7 +90,7 @@ export default function RecentFollowers({ uid }: { uid: string }) {
             );
             try {
               const p = await withTimeout(
-                fsMod.getDoc(fsMod.doc(db, `users_public/${fid}`)),
+                fsMod.getDoc(fsMod.doc(db, `users/${fid}`)),
                 10000
               );
               const data = (p.exists() ? p.data() || {} : {}) as Record<

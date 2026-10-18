@@ -24,7 +24,8 @@ import {
 // 200 headers stream. The proxy runs BEFORE any rendering starts, so a
 // Firestore existence check here can return a genuine HTTP 404.
 //   - GET/HEAD /listing/:id     → documents/listings/{id} (strip ".html")
-//   - GET/HEAD /seller/:uid      → documents/users_public/{uid}
+//   - GET/HEAD /seller/:uid      → documents/users/{uid} (public profile,
+//     private fields moved to usersPrivate by E1, 18 Oct 2026)
 //   - GET/HEAD /announcement/:id → documents/announcements/{id}
 //     (+ fields.active.booleanValue must be true)
 // 404/403 from the REST API → real 404 (403 = doc exists but unreadable
@@ -118,7 +119,7 @@ export async function proxy(req: NextRequest) {
       if (prefix === 'listing') {
         check = await checkDocExists('listings', stripHtmlSuffix(id));
       } else if (prefix === 'seller') {
-        check = await checkDocExists('users_public', id);
+        check = await checkDocExists('users', id);
       } else {
         // prefix === 'announcement'
         check = await checkDocExists('announcements', id, true);
