@@ -181,6 +181,9 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noNewMatches: 'لا توجد إعلانات جديدة مطابقة لبحوثك.',
     followedYou: '{name} بدأ بمتابعتك',
     newMessage: 'رسالة جديدة',
+    // Round 52 (18 Oct 2026): legacy new_message template — verbatim
+    // js/i18n.ar.js (notif.new_message). Used when data.senderName exists.
+    notifNewMessage: 'رسالة جديدة من {senderName}',
     notifPriceDrop: 'انخفض سعر {title}: من {oldPrice} إلى {newPrice}',
     // 11 Oct 2026: 4 missing notification templates (were falling back to "new message").
     notifSavedSearchMatch: 'إعلان جديد يطابق بحثك المحفوظ: {title} — {price} في {wilaya}',
@@ -539,6 +542,9 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noNewMatches: 'Aucune nouvelle annonce pour vos recherches.',
     followedYou: '{name} a commencé à vous suivre',
     newMessage: 'Nouveau message',
+    // Round 52 (18 Oct 2026): legacy new_message template — verbatim
+    // js/i18n.fr.js (notif.new_message). Used when data.senderName exists.
+    notifNewMessage: 'Nouveau message de {senderName}',
     notifPriceDrop: 'Prix en baisse pour {title} : de {oldPrice} à {newPrice}',
     notifSavedSearchMatch: 'Nouvelle annonce pour votre recherche sauvegardée : {title} — {price} à {wilaya}',
     notifNewFavorite: 'Quelqu\u2019un a ajouté votre annonce {title} à ses favoris',
@@ -896,6 +902,9 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     noNewMatches: 'No new listings match your searches.',
     followedYou: '{name} started following you',
     newMessage: 'New message',
+    // Round 52 (18 Oct 2026): legacy new_message template — verbatim
+    // js/i18n.en.js (notif.new_message). Used when data.senderName exists.
+    notifNewMessage: 'New message from {senderName}',
     notifPriceDrop: 'Price drop on {title}: from {oldPrice} to {newPrice}',
     notifSavedSearchMatch: 'New listing matches your saved search: {title} — {price} in {wilaya}',
     notifNewFavorite: 'Someone added your listing {title} to their favorites',

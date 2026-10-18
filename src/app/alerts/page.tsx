@@ -208,20 +208,45 @@ interface Notif {
     oldPrice?: number;
     newPrice?: number;
     photo?: string | null;
+    // Legacy payloads (pre-cutover 0.0.0.39 writers — observed live):
+    // new_message {senderName?}, phone_request {listingTitle?},
+    // deal_confirmed {name?}, new_favorite {title}.
+    senderName?: string;
+    listingTitle?: string;
+    name?: string;
   };
 }
 
 // Resolve a notification's navigation target — mirrors alerts.js
 // notifTarget(). Returns a relative in-app URL or null.
-// R13 AW-D3 (18 Oct 2026): dead types REMOVED — new_message, message,
-// phone_request, deal_confirmed, new_favorite, saved_search_match have no
-// writer in the Next.js repo or either functions package (verified), so
-// their branches could never fire. Live: price_drop (publish page),
-// follow (FollowButton), favorite/priceDrop/savedSearch (legacy
-// camelCase variants of still-possible docs).
+// Round 52 (18 Oct 2026): RESTORED the legacy-type branches that R13
+// AW-D3 removed. R13 claimed new_message/phone_request/deal_confirmed/
+// new_favorite had "no writer in the Next.js repo or either functions
+// package (verified)" — but the writers were the PRE-CUTOVER 0.0.0.39
+// js/ clients and the confirmDeal Cloud Function, and those notification
+// docs are LIVE in production inboxes today (verified via REST: types
+// new_message, phone_request, deal_confirmed, new_favorite with empty
+// title/body). Without branches they rendered as dead, identical
+// "new message" rows with no navigation.
+// Live: price_drop (publish page), follow (FollowButton),
+// favorite/priceDrop/savedSearch (legacy camelCase variants of
+// still-possible docs).
 function notifTarget(n: Notif): string | null {
   if (!n || typeof n !== 'object') return null;
   const d = n.data || {};
+  // Round 52: legacy types (pre-cutover writers) — target the thread.
+  if (
+    (n.type === 'new_message' ||
+      n.type === 'phone_request' ||
+      n.type === 'deal_confirmed') &&
+    d.conversationId
+  ) {
+    return '/chat/' + encodeURIComponent(d.conversationId);
+  }
+  // Round 52: legacy new_favorite — target the listing.
+  if (n.type === 'new_favorite' && d.listingId) {
+    return '/listing/' + encodeURIComponent(d.listingId);
+  }
   if (n.type === 'price_drop' && d.listingId) {
     return '/listing/' + encodeURIComponent(d.listingId);
   }
@@ -258,8 +283,37 @@ function notifTitle(n: Notif, t: (k: string) => string, lang: Lang = 'ar'): stri
       .split('{newPrice}')
       .join(formatPrice(Number(d.newPrice) || 0, lang));
   }
-  // R13 AW-D3: dead-type branches (message/new_message, saved_search_match,
-  // new_favorite, phone_request, deal_confirmed) removed — no writer exists.
+  // Round 52 (18 Oct 2026): legacy-type branches RESTORED (see
+  // notifTarget) — these docs are live in production inboxes with empty
+  // title/body. Templates are verbatim js/i18n.*.js (notif.*); the
+  // notifNewFavorite/notifPhoneRequest/notifDealConfirmed keys already
+  // existed in the i18n store (11 Oct) but were never wired. Legacy
+  // parity: substitute the raw data value (possibly empty), exactly as
+  // the legacy notifText() did.
+  if (n.type === 'new_message') {
+    const sn = String((n.data && n.data.senderName) || '');
+    return sn
+      ? t('notifNewMessage').split('{senderName}').join(sn)
+      : t('newMessage');
+  }
+  if (n.type === 'phone_request') {
+    const d = n.data || {};
+    return t('notifPhoneRequest')
+      .split('{listingTitle}')
+      .join(String(d.listingTitle || d.title || ''));
+  }
+  if (n.type === 'deal_confirmed') {
+    const d = n.data || {};
+    return t('notifDealConfirmed')
+      .split('{name}')
+      .join(String(d.name || ''));
+  }
+  if (n.type === 'new_favorite') {
+    const d = n.data || {};
+    return t('notifNewFavorite')
+      .split('{title}')
+      .join(String(d.title || ''));
+  }
   // 11 Oct 2026: Final fallback — NEVER return blank.
   // Some legacy notifications have empty title and unhandled type.
   const title = n.title || '';
@@ -488,6 +542,8 @@ export default function AlertsPage() {
                   followerName: String(nd.followerName || ''),
                   title: String(nd.title || ''),
                   listingTitle: String(nd.listingTitle || nd.title || ''),
+                  // Round 52: deal_confirmed {name} — keep for the restored template.
+                  name: String(nd.name || ''),
                   senderName: String(nd.senderName || ''),
                   price: Number(nd.price || 0),
                   oldPrice: Number(nd.oldPrice || 0),
