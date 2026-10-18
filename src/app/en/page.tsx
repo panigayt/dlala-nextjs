@@ -65,6 +65,13 @@ export default async function HomeEn() {
         name: 'Dlala',
         url: 'https://www.dzdlala.com',
         inLanguage: LANG,
+        // D4 (SEO audit 18 Oct 2026): SearchAction — /search?q= is the live
+        // search route (filters.q in src/app/search/filters.ts).
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: 'https://www.dzdlala.com/search?q={search_term_string}',
+          'query-input': 'required name=search_term_string',
+        },
       },
       {
         '@type': 'Organization',
