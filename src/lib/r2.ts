@@ -32,6 +32,16 @@ export function r2PublicUrl(): string {
   return (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
 }
 
+// Long-lived cache for R2 images (18 Oct 2026, F1): objects get
+// Cache-Control: public, max-age=31536000, immutable so browsers/CDNs keep
+// them for a year. Safe because keys are write-once ({ts}_{i} — a fresh
+// Date.now() per upload, and old keys are deleted, never overwritten).
+// Signed into the presigned URL: every PUT client MUST echo this exact
+// header on the PUT request (like Content-Type), or R2 rejects it as a
+// signature mismatch (403). See uploadToR2 in r2-upload.ts and the chat
+// photo PUT in app/chat/[id]/page.tsx — and any external batch uploader.
+const R2_IMAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
 // Generate a presigned PUT URL for direct browser → R2 upload.
 // key: object key in the bucket, e.g. "listings/{uid}/{listingId}/photo-0.webp"
 // contentType: MIME type of the file being uploaded.
@@ -47,6 +57,7 @@ export async function presignedUploadUrl(
     Bucket: r2Bucket(),
     Key: key,
     ContentType: contentType,
+    CacheControl: R2_IMAGE_CACHE_CONTROL,
     ...(contentLength ? { ContentLength: contentLength } : {}),
   });
   return getSignedUrl(client, command, { expiresIn });

@@ -961,7 +961,12 @@ function ChatInner() {
       publicUrlRef.current = publicUrl;
       const put = await fetch(url, {
         method: 'PUT',
-        headers: { 'Content-Type': 'image/jpeg' },
+        // 18 Oct 2026 (F1): Cache-Control is signed into the presigned URL —
+        // the PUT must echo it exactly or R2 rejects the request (403).
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        },
         body: blob,
       });
       if (!put.ok) throw new Error('r2-put');

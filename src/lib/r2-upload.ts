@@ -48,6 +48,10 @@ export async function uploadToR2(
     xhr.open('PUT', url);
     xhr.timeout = timeoutMs;
     xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+    // 18 Oct 2026 (F1): Cache-Control is signed into the presigned URL —
+    // the PUT must echo it exactly or R2 rejects the request (403). The
+    // uploaded object is stored with this header for long-lived caching.
+    xhr.setRequestHeader('Cache-Control', 'public, max-age=31536000, immutable');
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
         onProgress(Math.round((e.loaded / e.total) * 100));
