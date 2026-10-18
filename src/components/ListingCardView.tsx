@@ -127,10 +127,10 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
               </p>
             ) : (
               <>
-                <p className="whitespace-nowrap">
-                  <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+                <p className="flex items-center gap-1 flex-wrap">
+                  <span dir="ltr" className="whitespace-nowrap font-extrabold">{formatPrice(l.price || 0, lang)}</span>
                   {(l.negotiable || Number(l.price) <= 1) && (
-                    <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
+                    <span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
                   )}
                 </p>
                 {words && Number(l.price) > 1 && (
