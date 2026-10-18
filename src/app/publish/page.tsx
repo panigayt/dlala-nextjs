@@ -1113,6 +1113,11 @@ function PublishForm({
     setError(null);
 
     // Verified email required
+    // R52: reload the Auth user first — user.emailVerified is cached on the
+    // JS object and getIdToken() does NOT refresh it; a user who verified
+    // in another tab would otherwise be wrongly blocked here (my-listings
+    // already follows this pattern).
+    try { await authMod.reload(user); } catch { /* ignore */ }
     try { await authMod.getIdToken(user, true); } catch { /* ignore */ }
     if (!user.emailVerified) {
       fail(t('mustLogin'));

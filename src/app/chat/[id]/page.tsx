@@ -699,9 +699,19 @@ function ChatInner() {
 
       // Verified email required for normal threads; support threads allow
       // any signed-in user.
-      if (data.listingId !== 'support' && !user.emailVerified) {
-        setFatal(gst('mustVerifyChat'));
-        return;
+      // R52: reload the Auth user first — user.emailVerified is cached on
+      // the JS object; a user who verified in another tab would otherwise
+      // be wrongly blocked from contacting the seller here.
+      if (data.listingId !== 'support') {
+        try {
+          await client.authMod.reload(user);
+        } catch {
+          /* ignore — fall through to the cached flag */
+        }
+        if (!user.emailVerified) {
+          setFatal(gst('mustVerifyChat'));
+          return;
+        }
       }
 
       // Header: peer name + listing chip
