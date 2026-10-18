@@ -1,1 +1,1 @@
-{"framework":"nextjs","regions":["fra1"]}
+{"framework":"nextjs","headers":[{"headers":[{"key":"Vary","value":"Cookie, rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"}],"source":"/listing/:id*"}],"regions":["fra1"]}
