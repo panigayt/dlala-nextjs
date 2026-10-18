@@ -38,8 +38,33 @@ function withW320Thumbs<T extends { photoUrls?: unknown; photoVariants?: boolean
 }
 
 export async function GET(req: NextRequest) {
-  const offsetRaw = req.nextUrl.searchParams.get('offset');
-  const offset = Math.max(0, parseInt(offsetRaw || '0', 10) || 0);
+  const params = req.nextUrl.searchParams;
+  // AU-D1 (R12, 18 Oct 2026): honor ?page= and ?limit= (were silently
+  // ignored — ?page=1 and ?page=2 returned byte-identical lists).
+  // ?offset= takes precedence when both are given (existing clients).
+  const limitRaw = params.get('limit');
+  const pageRaw = params.get('page');
+  const offsetRaw = params.get('offset');
+  let limit = PAGE_SIZE;
+  if (limitRaw !== null) {
+    const l = parseInt(limitRaw, 10);
+    if (!Number.isFinite(l) || l < 1 || l > 100) {
+      return NextResponse.json({ error: 'invalid-limit' }, { status: 400 });
+    }
+    limit = l;
+  }
+  let offset: number;
+  if (offsetRaw !== null) {
+    offset = Math.max(0, parseInt(offsetRaw, 10) || 0);
+  } else if (pageRaw !== null) {
+    const p = parseInt(pageRaw, 10);
+    if (!Number.isFinite(p) || p < 1) {
+      return NextResponse.json({ error: 'invalid-page' }, { status: 400 });
+    }
+    offset = (p - 1) * limit;
+  } else {
+    offset = 0;
+  }
   // Sanity cap: never allow an absurd offset to trigger a huge scan.
   if (offset > 10000) {
     return NextResponse.json({ error: 'offset-too-large' }, { status: 400 });
@@ -47,7 +72,7 @@ export async function GET(req: NextRequest) {
   try {
     // 11 Oct 2026: server-side timeout (was hanging until platform timeout).
     const docs = await Promise.race([
-      fetchFeed(PAGE_SIZE, offset),
+      fetchFeed(limit, offset),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('feed-timeout')), 15000)
       ),
@@ -60,7 +85,7 @@ export async function GET(req: NextRequest) {
       .filter((d) => !d.isWanted)
       .map(withW320Thumbs);
     return NextResponse.json(
-      { regular, hasMore: docs.length >= PAGE_SIZE },
+      { regular, hasMore: docs.length >= limit },
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
   } catch {

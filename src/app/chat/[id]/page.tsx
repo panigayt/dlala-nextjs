@@ -269,10 +269,17 @@ function ChatInner() {
   // "New messages" pill: shows when messages arrive while the user is
   // scrolled up reading history (legacy js/chat.js parity).
   const [showPill, setShowPill] = useState(false);
+  // D12 (R12, 18 Oct 2026): message history pagination — messages older
+  // than the live newest-100 window. Loaded on demand via "load more".
+  const [olderMsgs, setOlderMsgs] = useState<Msg[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlder, setHasOlder] = useState(true);
 
   const clientRef = useRef<FirebaseClient | null>(null);
   // 11 Oct 2026: phone flow in-flight guard.
   const phoneBusy = useRef(false);
+  // D6 (R12, 18 Oct 2026): requestPhone in-flight guard (double-tap).
+  const requestPhoneBusy = useRef(false);
   const userRef = useRef<CompatUser | null>(null);
   const convRef = useRef<ConvData | null>(null);
   const msgsRef = useRef<Msg[]>([]);
@@ -328,7 +335,13 @@ function ChatInner() {
               setConv(d);
             }
           },
-          () => {}
+          // D14 (R12, 18 Oct 2026): was silent () => {} — a rejected read
+          // left a perpetual spinner. Surface the error.
+          (err) => {
+            setFatal(
+              `${chatSt(getLang(), 'chatError')} [${(err as Error)?.message || 'snapshot'}]`
+            );
+          }
         )
       );
       unsubs.push(
@@ -352,6 +365,9 @@ function ChatInner() {
               // is already near the bottom (or first paint); otherwise show
               // the "new messages" pill so history reading isn't yanked.
               if (!hasNew) return;
+              // D3 (R12): messages arrived while the thread is open —
+              // mark them read (debounced) so readAt/unread stay fresh.
+              markReadSoon();
               if (nearBottomNow()) {
                 scrollBottom();
                 setShowPill(false);
@@ -359,7 +375,13 @@ function ChatInner() {
                 setShowPill(true);
               }
             },
-            () => {}
+            // D14 (R12, 18 Oct 2026): was silent () => {} — a rejected
+            // read left an empty thread. Surface the error.
+            (err) => {
+              showToast(
+                `${chatSt(getLang(), 'chatError')} [${(err as Error)?.message || 'snapshot'}]`
+              );
+            }
           )
       );
       unsubsRef.current = unsubs;
@@ -397,18 +419,15 @@ function ChatInner() {
 
   // ---------- bootstrap ----------
 
+  // D3/D4/D5 (R12, 18 Oct 2026): markRead reworked.
+  // - D4: the unread counter reset now happens AFTER the readAt batch
+  //   commits (was: counter zeroed immediately, racing incoming messages).
+  // - D5: the 50-message cap is removed — the batch marks all fetched
+  //   messages (up to the 100 query limit; Firestore batches allow 500).
+  // - D3: callers re-run markRead on new incoming messages (debounced)
+  //   and on tab-visibility return, so readAt/unread never go stale.
   function markRead(client: FirebaseClient, data: ConvData, uid: string) {
     const { db, fsMod } = client;
-    try {
-      fsMod
-        .updateDoc(fsMod.doc(db, `conversations/${data.id}`), {
-          [`unread.${uid}`]: 0,
-          [`lastReadAt.${uid}`]: fsMod.serverTimestamp(),
-        })
-        .catch(() => {});
-    } catch {
-      /* best-effort */
-    }
     fsMod
       .getDocs(
         fsMod.query(
@@ -423,16 +442,90 @@ function ChatInner() {
         let n = 0;
         for (const d of snap.docs) {
           const m = (d.data() || {}) as Record<string, unknown>;
-          if (n < 50 && m.senderId === other && !m.isSystem && !m.readAt) {
+          if (m.senderId === other && !m.isSystem && !m.readAt) {
             batch.update(d.ref, {
               readAt: fsMod.serverTimestamp(),
             });
             n++;
           }
         }
-        if (n) batch.commit().catch(() => {});
+        const done = () => {
+          // D4: reset the counter only after readAt commits, so a
+          // message landing mid-flight doesn't get clobbered.
+          try {
+            fsMod
+              .updateDoc(fsMod.doc(db, `conversations/${data.id}`), {
+                [`unread.${uid}`]: 0,
+                [`lastReadAt.${uid}`]: fsMod.serverTimestamp(),
+              })
+              .catch(() => {});
+          } catch {
+            /* best-effort */
+          }
+        };
+        if (n) batch.commit().then(done).catch(done);
+        else done();
       })
       .catch(() => {});
+  }
+
+  // D3: debounced re-mark for messages arriving while the thread is open.
+  const markReadDebounceRef = useRef(0);
+  function markReadSoon() {
+    const now = Date.now();
+    if (now - markReadDebounceRef.current < 5000) return;
+    markReadDebounceRef.current = now;
+    const client = clientRef.current;
+    const user = userRef.current;
+    const c = convRef.current;
+    if (client && user && c && !document.hidden) markRead(client, c, user.uid);
+  }
+
+  // D12 (R12, 18 Oct 2026): load messages older than the live newest-100
+  // window. Uses startAfter on the oldest known message timestamp.
+  async function loadOlderMessages() {
+    const client = clientRef.current;
+    if (!client || loadingOlder || !hasOlder) return;
+    const { db, fsMod } = client;
+    const all = [...olderMsgs, ...msgsRef.current];
+    if (!all.length) return;
+    // Oldest by `at` (Firestore Timestamp or number for optimistic rows).
+    const oldest = all.reduce((a, b) => {
+      const ta = a.at as unknown;
+      const tb = b.at as unknown;
+      const na =
+        ta && typeof ta === 'object' && 'toMillis' in (ta as object)
+          ? (ta as { toMillis(): number }).toMillis()
+          : Number(ta) || 0;
+      const nb =
+        tb && typeof tb === 'object' && 'toMillis' in (tb as object)
+          ? (tb as { toMillis(): number }).toMillis()
+          : Number(tb) || 0;
+      return na <= nb ? a : b;
+    });
+    const oldestAt = oldest.at as unknown;
+    setLoadingOlder(true);
+    try {
+      const q = fsMod.query(
+        fsMod.collection(db, 'conversations', convId, 'messages'),
+        fsMod.orderBy('at', 'desc'),
+        fsMod.startAfter(oldestAt),
+        fsMod.limit(100)
+      );
+      const snap = await fsMod.getDocs(q);
+      const list: Msg[] = snap.docs
+        .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Msg)
+        .reverse();
+      // Dedupe against already-loaded IDs (overlap at the boundary).
+      const seen = new Set(all.map((m) => m.id));
+      const fresh = list.filter((m) => !seen.has(m.id));
+      if (fresh.length) setOlderMsgs((prev) => [...fresh, ...prev]);
+      if (list.length < 100) setHasOlder(false);
+    } catch {
+      showToast(st('errorGeneric'));
+    } finally {
+      setLoadingOlder(false);
+    }
   }
 
   const openThread = useCallback(
@@ -477,26 +570,39 @@ function ChatInner() {
               createdAt: fsMod.serverTimestamp(),
               updatedAt: fsMod.serverTimestamp(),
             });
-            const sys = async (kind: string) => {
+            // D13 (R12, 18 Oct 2026): deterministic message IDs for the
+            // support greetings — two tabs opening support simultaneously
+            // both passed the !exists() check and appended duplicate
+            // greetings with random IDs. Fixed IDs make the second write
+            // idempotent (overwrite, not duplicate).
+            const sys = async (kind: string, fixedId: string) => {
               const mref = fsMod.doc(
-                fsMod.collection(db, 'conversations', convId, 'messages')
+                db,
+                'conversations',
+                convId,
+                'messages',
+                fixedId
               );
               const batch = fsMod.writeBatch(db);
-              batch.set(mref, {
-                senderId: uid,
-                text: '',
-                at: fsMod.serverTimestamp(),
-                isSystem: true,
-                systemKind: kind,
-              });
+              batch.set(
+                mref,
+                {
+                  senderId: uid,
+                  text: '',
+                  at: fsMod.serverTimestamp(),
+                  isSystem: true,
+                  systemKind: kind,
+                },
+                { merge: true }
+              );
               batch.update(fsMod.doc(db, `conversations/${convId}`), {
                 updatedAt: fsMod.serverTimestamp(),
               });
               // 11 Oct 2026: timeout — hanging commit caused permanent send lock.
       await withTimeout(batch.commit(), 15000);
             };
-            await sys('support_greeting');
-            await sys('support_autoreply');
+            await sys('support_greeting', 'sys_support_greeting');
+            await sys('support_autoreply', 'sys_support_autoreply');
             snap = await fsMod.getDoc(fsMod.doc(db, `conversations/${convId}`));
           } catch (e) {
             setFatal(
@@ -699,6 +805,8 @@ function ChatInner() {
         unsubscribeAll();
       } else if (openedRef.current && clientRef.current) {
         subscribeAll(clientRef.current);
+        // D3 (R12): messages may have arrived while hidden — re-mark.
+        markReadSoon();
       }
     };
     const onHide = () => unsubscribeAll();
@@ -761,8 +869,22 @@ function ChatInner() {
     }
     const t = cleanText(opts.text || '');
     if (!t && !opts.imageUrl && opts.proposal == null) return null;
+    // D9 (R12, 18 Oct 2026): confine imageUrl to the sender's own R2
+    // prefix. Rules enforce the domain; the path prefix
+    // chat/{convId}/{uid}/ is enforced here so a participant cannot
+    // re-attach another conversation's photo key.
+    if (opts.imageUrl) {
+      const expectedPrefix = `/chat/${convId}/${user.uid}/`;
+      if (!opts.imageUrl.includes(expectedPrefix)) {
+        showToast(st('imageSendError'));
+        return null;
+      }
+    }
     const msgId = opts.mid || mintMessageId(user.uid);
     const oUid = (c.participants || []).find((p) => p !== user.uid) || '';
+    // D16 (R12, 18 Oct 2026): never write junk `unread.` / `hiddenFor`
+    // entries when the peer uid is empty — skip those fields instead.
+    const hasPeer = oUid !== '';
     const msg: Record<string, unknown> = {
       senderId: user.uid,
       text: t || (opts.imageUrl ? '📷' : ''),
@@ -803,7 +925,8 @@ function ChatInner() {
         fsMod.doc(db, 'conversations', convId, 'messages', msgId),
         msg
       );
-      batch.update(fsMod.doc(db, `conversations/${convId}`), {
+      // D16: only touch unread/hiddenFor when we have a real peer uid.
+      const convUpdate: Record<string, unknown> = {
         updatedAt: fsMod.serverTimestamp(),
         lastUserMessageAt: fsMod.serverTimestamp(),
         lastMessage: {
@@ -812,9 +935,12 @@ function ChatInner() {
           senderId: user.uid,
           at: fsMod.serverTimestamp(),
         },
-        [`unread.${oUid}`]: fsMod.increment(1),
-        hiddenFor: fsMod.arrayRemove(oUid),
-      });
+      };
+      if (hasPeer) {
+        convUpdate[`unread.${oUid}`] = fsMod.increment(1);
+        convUpdate.hiddenFor = fsMod.arrayRemove(oUid);
+      }
+      batch.update(fsMod.doc(db, `conversations/${convId}`), convUpdate);
       // 11 Oct 2026: timeout — hanging commit caused permanent send lock.
       await withTimeout(batch.commit(), 15000);
       lastSendAtRef.current = Date.now();
@@ -826,8 +952,22 @@ function ChatInner() {
       // while the response was lost. Check the deterministic id first.
       // 12 Oct 2026: also check on deadline-exceeded (timeout), not just
       // permission-denied — timeouts can commit server-side too.
+      // D15 (R12, 18 Oct 2026): expanded to ALL transient codes —
+      // previously only permission-denied/deadline-exceeded were checked,
+      // so unavailable/internal/cancelled after a commit produced
+      // spurious failure banners (and, for photos, duplicates via D1).
       const code = (e as { code?: string })?.code;
-      if (code === 'permission-denied' || code === 'deadline-exceeded') {
+      const TRANSIENT_CODES = new Set([
+        'permission-denied',
+        'deadline-exceeded',
+        'unavailable',
+        'internal',
+        'cancelled',
+        'unknown',
+        'aborted',
+        'resource-exhausted',
+      ]);
+      if (code && TRANSIENT_CODES.has(code)) {
         try {
           const check = await fsMod.getDoc(
             fsMod.doc(db, 'conversations', convId, 'messages', msgId)
@@ -874,6 +1014,16 @@ function ChatInner() {
     setStatusBar(null);
     if (!p) {
       setFailedSend(null);
+      return;
+    }
+    // D2 (R12, 18 Oct 2026): if the failure happened before the R2 upload,
+    // there is nothing to resend (no text, no imageUrl, no proposal) —
+    // calling sendChatMessage would hit its early return and silently
+    // no-op while the error banner was already cleared. Surface a clear
+    // error telling the user to re-pick the photo instead.
+    if (!p.text && !p.imageUrl && p.proposal == null) {
+      setFailedSend(null);
+      showToast(st('imageSendError'));
       return;
     }
     const id = await sendChatMessage({
@@ -971,11 +1121,12 @@ function ChatInner() {
       });
       if (!put.ok) throw new Error('r2-put');
       setStatusBar(null);
-      const id = await sendChatMessage({ imageUrl: publicUrl });
-      if (!id && !failedSend) {
-        setFailedSend({ imageUrl: publicUrl, mid: mintMessageId(user.uid) });
-        setStatusBar({ mode: 'error', text: st('chatSendFailed') });
-      }
+      // D1 (R12, 18 Oct 2026): sendChatMessage already sets failedSend with
+      // the ORIGINAL mid on failure (idempotent retry). Do NOT overwrite
+      // with a fresh mid here — the stale closure `failedSend` is always
+      // null at this point, and a fresh mid would break idempotency and
+      // deliver the photo twice if the original commit succeeded.
+      await sendChatMessage({ imageUrl: publicUrl });
     } catch (e) {
       // 11 Oct 2026: retain imageUrl on failure — retry was a silent no-op
       // (fresh mid with no imageUrl hit the early return).
@@ -1070,10 +1221,15 @@ function ChatInner() {
     // is needed for security — a modified client cannot bypass the rules.
     // The UI hides the button when pf.myBlocked (line ~1369); a stale-UI
     // write attempt would simply be rejected by Firestore.
+    // D6 (R12, 18 Oct 2026): in-flight guard — double-tap fired two
+    // updateDocs; the second was denied by rules with a generic error
+    // toast. Guard client-side like answerPhone's phoneBusy.
     const client = clientRef.current;
     const user = userRef.current;
     const c = convRef.current;
-    if (!client || !user || !c || blockedSendGuard()) return;
+    if (!client || !user || !c || blockedSendGuard() || requestPhoneBusy.current)
+      return;
+    requestPhoneBusy.current = true;
     const { db, fsMod } = client;
     const prevBy = c.phoneRequestBy;
     const prevStatus = c.phoneRequestStatus;
@@ -1095,6 +1251,8 @@ function ChatInner() {
       convRef.current = rb;
       setConv(rb);
       showToast(st('errorGeneric'));
+    } finally {
+      requestPhoneBusy.current = false;
     }
   }
 
@@ -1514,7 +1672,9 @@ function ChatInner() {
   }
 
   let lastDay = '';
-  const msgNodes = msgs.map((m) => {
+  // D12: render older (paginated) messages above the live window.
+  const allMsgs = [...olderMsgs, ...msgs];
+  const msgNodes = allMsgs.map((m) => {
     const ts = tsMs(m.at);
     const nodes: React.ReactNode[] = [];
     if (ts) {
@@ -1764,13 +1924,28 @@ function ChatInner() {
       {/* messages */}
       <div className="relative flex-1 flex flex-col min-h-0">
         <div ref={scrollerRef} className="flex-1 overflow-y-auto px-3 py-2">
-          {msgs.length === 0 ? (
+          {allMsgs.length === 0 ? (
             <div className="text-center py-10 text-zinc-500">
               <div className="text-4xl mb-2">👋</div>
               <p className="text-sm">{st('sayHello')}</p>
             </div>
           ) : (
-            msgNodes
+            <>
+              {/* D12: load older message history */}
+              {hasOlder && allMsgs.length >= 100 && (
+                <div className="text-center py-2">
+                  <button
+                    type="button"
+                    onClick={loadOlderMessages}
+                    disabled={loadingOlder}
+                    className="rounded-full border border-zinc-300 bg-white px-4 py-2 text-[13px] text-zinc-700 disabled:opacity-50"
+                  >
+                    {loadingOlder ? '…' : st('loadOlder')}
+                  </button>
+                </div>
+              )}
+              {msgNodes}
+            </>
           )}
         </div>
         {showPill && (

@@ -136,6 +136,15 @@ export default function ConversationsPage() {
   const clientRef = useRef<FirebaseClient | null>(null);
   const userRef = useRef<CompatUser | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  // D10 (R12, 18 Oct 2026): cache resolved peer names + listing meta
+  // across snapshots — loadMeta was re-fetching every doc on every live
+  // update (N+1 read amplification). Only uncached IDs are fetched now.
+  // Cache is keyed by language (names/titles are localized).
+  const metaCacheRef = useRef<{
+    lang: string;
+    names: Record<string, string>;
+    listings: Record<string, { title: string; photo: string }>;
+  }>({ lang: '', names: {}, listings: {} });
   // Round 73 pattern (chat page): language switch re-renders = legacy
   // onLangChange() parity.
   const { lang } = useLang();
@@ -152,11 +161,20 @@ export default function ConversationsPage() {
   const loadMeta = useCallback(
     async (items: Conv[], uid: string, client: FirebaseClient, lang: Lang) => {
       const { db, fsMod } = client;
+      const cache = metaCacheRef.current;
+      // D10: invalidate the cache on language switch (strings localized).
+      if (cache.lang !== lang) {
+        cache.lang = lang;
+        cache.names = {};
+        cache.listings = {};
+      }
       const otherUids = [
         ...new Set(
           items
             .map((c) => (c.participants || []).find((p) => p !== uid) || '')
             .filter(Boolean)
+            // D10: skip already-cached peers.
+            .filter((id) => !(id in cache.names))
         ),
       ];
       const listingIds = [
@@ -166,6 +184,8 @@ export default function ConversationsPage() {
             .filter(
               (id) => id && id !== 'support' && id !== 'announcements'
             )
+            // D10: skip already-cached listings.
+            .filter((id) => !(id in cache.listings))
         ),
       ];
       // Names
@@ -220,6 +240,10 @@ export default function ConversationsPage() {
         for (const [id, info] of listingEntries) next[id] = info;
         return next;
       });
+      // D10: populate the cross-snapshot cache with freshly resolved entries.
+      for (const [id, name] of nameEntries) metaCacheRef.current.names[id] = name;
+      for (const [id, info] of listingEntries)
+        metaCacheRef.current.listings[id] = info;
       // Return fresh maps for snapshot writing (0.0.0.22).
       return {
         names: Object.fromEntries(nameEntries),

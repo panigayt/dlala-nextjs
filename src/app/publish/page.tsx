@@ -584,7 +584,14 @@ function PublishForm({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const setAnswer = useCallback((k: string, v: string) => {
-    setAnswers((a) => ({ ...a, [k]: v }));
+    setAnswers((a) => {
+      const next = { ...a, [k]: v };
+      // AT-7 (R12, 18 Oct 2026): clear stale gearbox when switching to
+      // electric — server rejects 'answers.gear must not be set for
+      // electric cars'.
+      if (k === 'qFuel' && v === 'fuelElectric') delete next['qGear'];
+      return next;
+    });
   }, []);
 
   // Draft autosave
@@ -865,15 +872,36 @@ function PublishForm({
         return false;
       }
     }
-    // Condition required (except beauty/services/jobs/land/wanted)
-    const isLand = cat === 'realestate' && answers['qPropertyType'] === 'reLand';
-    if (!isWanted && !['beauty', 'services', 'jobs'].includes(cat) && !isLand) {
+    // Condition required (except beauty/services/jobs/wanted).
+    // AT-8 (R12, 18 Oct 2026): land was exempted client-side but the
+    // server requires condition for land — removed the land exemption
+    // to match the server.
+    if (!isWanted && !['beauty', 'services', 'jobs'].includes(cat)) {
       if (!condition) { fail(t('selectCondition')); return false; }
     }
     // 11 Oct 2026: photo count guard — max enforced only at pick-time (race).
     const totalPhotos = photos.length + existingPhotos.length;
     // 12 Oct 2026: dedicated message (was generic error).
     if (totalPhotos > 10) { fail(t('photoLimitReached')); return false; }
+    // AT-5 (R12, 18 Oct 2026): server caps quantity at 99 + integer
+    // required (MAX_QUANTITY, D-3 Zak decision). Reject client-side
+    // before the upload instead of failing server-side after.
+    if (!isWanted) {
+      const qtyNum = Number(qty);
+      if (qty.trim() !== '' && (!Number.isInteger(qtyNum) || qtyNum < 1 || qtyNum > 99)) {
+        fail(t('errorQtyRange')); return false;
+      }
+    }
+    // AT-6 (R12, 18 Oct 2026): server requires integer mileage 0–9,999,999.
+    if (cat === 'cars' && answers['qMileage']) {
+      const milNum = Number(answers['qMileage']);
+      if (!Number.isInteger(milNum) || milNum < 0 || milNum > 9999999) {
+        fail(t('errorMileageRange')); return false;
+      }
+    }
+    // AT-1 (R12, 18 Oct 2026): server F-14 rejects sale ads with zero
+    // photos AFTER the upload progress — block client-side for good UX.
+    if (!isWanted && totalPhotos === 0) { fail(t('errorPhotoRequired')); return false; }
     return true;
   };
 
@@ -922,7 +950,18 @@ function PublishForm({
       const key = r2KeyFor(uid, listingId, `${ts}_${i}${ext}`);
       const { publicUrl } = await uploadToR2(p.file, key, idToken);
       urls.push(publicUrl);
-      hashes.push(p.hash || '');
+      // AT-9 (R12, 18 Oct 2026): an empty aHash ('') fails the server's
+      // validatePhotoHashes (/^[0-9a-fA-F]{16}$/) and blocks the ENTIRE
+      // publish. Substitute a random 16-hex placeholder — it preserves
+      // 1:1 url/hash alignment, passes validation, and (being random)
+      // cannot falsely match another photo's perceptual hash.
+      let h = p.hash || '';
+      if (!/^[0-9a-fA-F]{16}$/.test(h)) {
+        h = [...crypto.getRandomValues(new Uint8Array(8))]
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
+      }
+      hashes.push(h);
       // Variants: w320 thumb (photo_thumbs content), w640/w1024 heroes, w32 LQIP.
       // 14 Oct 2026 (R62 FIX 3): variant keys use the File's actual extension —
       // makeVariant now emits .jpg when the browser has no WebP encoder.
@@ -1015,11 +1054,17 @@ function PublishForm({
       if (editId) {
         // Edit: direct Firestore update (owner only, rules enforce).
         // Spec: negotiable is ABSENT from edit payload (edits never change it).
-        const isSeeker = cat === 'jobs' && answers['qJobType'] === 'jobSeeker';
         const saleQty = isWanted ? 1 : Math.max(1, Number(qty) || 1);
         // Read current doc for version + price-drop detection
         const curSnap = await fsMod.getDoc(fsMod.doc(db, 'listings', editId));
         const cur = curSnap.exists() ? (curSnap.data() as Record<string, unknown>) : {};
+        // AT-10 (R12, 18 Oct 2026): sold listings cannot be edited —
+        // server handleEdit rejects them; the client bypassed it via
+        // direct updateDoc. Block here with a clear message.
+        if (cur.status === 'sold') {
+          fail(t('editSoldError'));
+          return;
+        }
         const oldPrice = Number(cur.price || 0);
         // 11 Oct 2026: category change is not a price drop (was false alerts).
         const priceDropped = effPrice < oldPrice && cat === String(cur.categoryId || '');
@@ -1035,7 +1080,17 @@ function PublishForm({
           photos.length > 0 && cur.photoVariants === true && up.variantsOk.some((ok) => !ok);
         // Merge: existing kept photos first, then new uploads (legacy mergeEditPhotos)
         const mergedUrls = existingPhotos.map((p) => p.url).concat(up.urls);
-        const mergedHashes = existingPhotos.map((p) => p.hash || '').concat(up.hashes);
+        // AT-9: sanitize any empty/invalid hashes from old docs (same
+        // rule as uploadNewPhotos — server rejects non-16-hex entries).
+        const cleanHash = (h: string) =>
+          /^[0-9a-fA-F]{16}$/.test(h || '')
+            ? h
+            : [...crypto.getRandomValues(new Uint8Array(8))]
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join('');
+        const mergedHashes = existingPhotos
+          .map((p) => cleanHash(p.hash || ''))
+          .concat(up.hashes);
         const mergedThumbs = existingPhotos.map((p) => p.thumb).concat(up.thumbs);
         // Canonicalize answer keys for Firestore (same Q_TO_SHORT as publish flow).
         // Edit mode must send short keys (brand, year...) not q* form keys.
@@ -1068,7 +1123,9 @@ function PublishForm({
           title: { ar: title.trim() },
           description: { ar: desc.trim() },
           price: effPrice,
-          categoryId: cat,
+          // AT-11 (R12, 18 Oct 2026): categoryId removed from edit payload —
+          // server handleEdit rejects category changes; the rules allowlist
+          // should not have included it. Edits keep their original category.
           wilayaCode,
           condition: cat === 'beauty' ? answers['qBeautyCond'] || '' : condition,
           answers: canonAnswers,
@@ -1078,7 +1135,10 @@ function PublishForm({
           priceReduced: priceDropped,
           previousPrice: priceDropped ? oldPrice : null,
           updatedAt: fsMod.serverTimestamp(),
-          ...(isSeeker ? { isWanted: true } : {}),
+          // AT-12 (R12, 18 Oct 2026): isWanted removed from edit payload —
+          // rules pin it immutable; writing it on jobSeeker edits caused
+          // denials with a generic error. The original value is preserved
+          // by not writing the field.
         };
         // Only touch photos when the user changed them (picked new or removed existing)
         if (photos.length || existingDirty) {
@@ -1176,16 +1236,18 @@ function PublishForm({
 
       // Default images when no photo picked (app parity)
       // 11 Oct 2026: use full dzdlala.com URLs (backend rejects relative paths).
+      // AT-4 (R12, 18 Oct 2026): use BARE domain (no www.) — server
+      // allowlist exact-matches https://dzdlala.com/... (index.js:150-154).
       if (!urls.length) {
         const jt = answers['qJobType'];
         if (cat === 'jobs' && jt === 'jobSeeker') {
-          urls.push('https://www.dzdlala.com/img/default_ads/seeker-v5.png');
+          urls.push('https://dzdlala.com/img/default_ads/seeker-v5.png');
           thumbs.push(null);
         } else if (cat === 'jobs' && jt === 'jobOffer') {
-          urls.push('https://www.dzdlala.com/img/default_ads/offer-v5.png');
+          urls.push('https://dzdlala.com/img/default_ads/offer-v5.png');
           thumbs.push(null);
         } else if (isWanted) {
-          urls.push('https://www.dzdlala.com/img/default_ads/wanted-v5.png');
+          urls.push('https://dzdlala.com/img/default_ads/wanted-v5.png');
           thumbs.push(null);
         }
       }
@@ -1223,9 +1285,9 @@ function PublishForm({
       for (const [k, v] of Object.entries(answers)) {
         if (v === '' || v == null) continue;
         const short = Q_TO_SHORT[k] || k;
-        // Skip qBeautyCond here — it's mapped to top-level condition below
-        // (production also stores it in answers, but top-level is canonical).
-        if (k === 'qBeautyCond') continue;
+        // AT-2 (R12, 18 Oct 2026): do NOT skip qBeautyCond — server
+        // validateBeauty requires answers.condition (new/good/used).
+        // It is stored BOTH in answers and as top-level condition.
         canonAnswers[short] = NUMERIC_ANSWERS.has(short) ? Number(v) : v;
       }
       const payload = {
