@@ -70,6 +70,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
   // countDelta parity: ±1 per tap, reconciled with the server result).
   const [delta, setDelta] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [toastIsAuth, setToastIsAuth] = useState(false);
   const inFlight = useRef(false);
   const mounted = useRef(true);
   const toastTimer = useRef<number | null>(null);
@@ -124,12 +125,17 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       // R3 (Zak ordered, js/app.js:843 parity): stash the pending favorite so
       // it auto-applies after the login round-trip.
       savePendingAction({ type: 'favorite', listingId });
+      // CL-4 (18 Oct 2026): no more forced navigation — show the toast with
+      // explicit Login/Stay actions. The user chooses; nothing auto-pushes.
       setToast(msg);
+      setToastIsAuth(true);
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
       toastTimer.current = window.setTimeout(() => {
-        if (mounted.current) setToast(null);
-        router.push(authLoginHref(window.location.pathname, window.location.search));
-      }, 1500);
+        if (mounted.current) {
+          setToast(null);
+          setToastIsAuth(false);
+        }
+      }, 6000);
     },
     [router, listingId]
   );
@@ -277,6 +283,35 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
             className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
           >
             {toast}
+            {toastIsAuth && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast(null);
+                    setToastIsAuth(false);
+                    router.push(authLoginHref(window.location.pathname, window.location.search));
+                  }}
+                  className="underline font-bold"
+                >
+                  {t('login')}
+                </button>
+                {' · '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast(null);
+                    setToastIsAuth(false);
+                    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+                  }}
+                  className="underline"
+                  aria-label="×"
+                >
+                  ×
+                </button>
+              </>
+            )}
           </span>
         )}
       </span>
@@ -309,6 +344,35 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
         >
           {toast}
+          {toastIsAuth && (
+            <>
+              {' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setToast(null);
+                  setToastIsAuth(false);
+                  router.push(authLoginHref(window.location.pathname, window.location.search));
+                }}
+                className="underline font-bold"
+              >
+                {t('login')}
+              </button>
+              {' · '}
+              <button
+                type="button"
+                onClick={() => {
+                  setToast(null);
+                  setToastIsAuth(false);
+                  if (toastTimer.current) window.clearTimeout(toastTimer.current);
+                }}
+                className="underline"
+                aria-label="×"
+              >
+                ×
+              </button>
+            </>
+          )}
         </span>
       )}
     </span>

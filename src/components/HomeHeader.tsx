@@ -66,6 +66,8 @@ function SearchBar({
   return (
     <form
       role="search"
+      action="/search"
+      method="GET"
       className="flex gap-2 mb-4"
       onSubmit={(e) => {
         e.preventDefault();
@@ -80,6 +82,7 @@ function SearchBar({
       </label>
       <input
         id="home-q"
+        name="q"
         type="search"
         value={q}
         onChange={(e) => {
@@ -135,24 +138,30 @@ function CategoryChips({
     }`;
   return (
     <nav aria-label={t('categoriesNav')} className="flex gap-2 overflow-x-auto pb-3 mb-2">
-      <button
-        type="button"
+      <a
+        href="/search"
         aria-current={!filters.cat ? 'page' : undefined}
-        onClick={() => setCat(undefined)}
+        onClick={(e) => {
+          e.preventDefault();
+          setCat(undefined);
+        }}
         className={chip(!filters.cat)}
       >
         {t('allCategories')}
-      </button>
+      </a>
       {CATEGORIES.map((c) => (
-        <button
+        <a
           key={c.id}
-          type="button"
+          href={`/search?cat=${encodeURIComponent(c.id)}`}
           aria-current={filters.cat === c.id ? 'page' : undefined}
-          onClick={() => setCat(c.id)}
+          onClick={(e) => {
+            e.preventDefault();
+            setCat(c.id);
+          }}
           className={chip(filters.cat === c.id)}
         >
           {c[lang as keyof typeof c] || c.ar}
-        </button>
+        </a>
       ))}
       <Link
         href="/wanted"
@@ -332,6 +341,11 @@ function HomeFilters({
   return (
     <form
       // Round 157: no navigation — submit applies in place (text inputs).
+      // CL-2 (18 Oct 2026): action/name for no-JS fallback — pre-hydration
+      // Enter submits to /search with the filter params instead of dropping
+      // them via native reload to /.
+      action="/search"
+      method="GET"
       onSubmit={(e) => {
         e.preventDefault();
         onFiltersChange({ ...filters });
@@ -343,6 +357,7 @@ function HomeFilters({
       </label>
       <select
         id="home-wilaya"
+        name="wilaya"
         className={CTL}
         value={filters.wilaya || ''}
         onChange={(e) => set({ wilaya: clean(e.target.value) })}
@@ -359,6 +374,7 @@ function HomeFilters({
       </label>
       <NumericFilterInput
         id="home-min"
+        name="min"
         min="0"
         placeholder={t('minPrice')}
         value={filters.min || ''}
@@ -370,6 +386,7 @@ function HomeFilters({
       </label>
       <NumericFilterInput
         id="home-max"
+        name="max"
         min="0"
         placeholder={t('maxPrice')}
         value={filters.max || ''}
@@ -381,6 +398,7 @@ function HomeFilters({
       </label>
       <select
         id="home-sort"
+        name="sort"
         className={CTL}
         value={filters.sort || 'recent'}
         onChange={(e) => set({ sort: e.target.value || undefined })}

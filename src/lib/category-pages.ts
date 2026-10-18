@@ -11,6 +11,7 @@
 import { cacheLife } from 'next/cache';
 import { SITE } from './seo';
 import { CATEGORIES, type Category } from './categories';
+import { FIREBASE_API_KEY, FIRESTORE_REST_BASE } from './firestore';
 import {
   escHtml,
   titleOf,
@@ -19,7 +20,6 @@ import {
   cardHtml,
   ctaTopHtml,
   notFoundPage,
-  fetchAvailableCars,
   wilayaName,
   type ModelCardItem,
   type ModelListingSummary,
@@ -275,7 +275,7 @@ ${ctaTopHtml(lang)}
 export async function categoryCounts(): Promise<Record<string, number>> {
   'use cache';
   cacheLife('hours');
-  const listings = await fetchAvailableCars();
+  const listings = await fetchAvailableListings();
   const counts: Record<string, number> = Object.create(null);
   for (const l of listings) {
     const f = l as unknown as Record<string, unknown>;
@@ -286,8 +286,68 @@ export async function categoryCounts(): Promise<Record<string, number>> {
   return counts;
 }
 
+// CM-1 (18 Oct 2026): was fetchAvailableCars() (hardcoded categoryId ==
+// 'cars'), so all non-car category pages 404'd and were missing from the
+// sitemap. Now fetches ALL available listings; callers filter by category.
+function decodeRestValue(v: unknown): unknown {
+  if (v == null || typeof v !== 'object') return v;
+  const o = v as Record<string, unknown>;
+  if ('stringValue' in o) return o.stringValue;
+  if ('integerValue' in o) return Number(o.integerValue);
+  if ('doubleValue' in o) return Number(o.doubleValue);
+  if ('booleanValue' in o) return !!o.booleanValue;
+  if ('nullValue' in o) return null;
+  if ('timestampValue' in o) return new Date(o.timestampValue as string);
+  if ('arrayValue' in o) {
+    const av = o.arrayValue as { values?: unknown[] };
+    return (av.values || []).map(decodeRestValue);
+  }
+  if ('mapValue' in o) {
+    const out: Record<string, unknown> = {};
+    const fs = (o.mapValue as { fields?: Record<string, unknown> }).fields || {};
+    for (const k in fs) out[k] = decodeRestValue(fs[k]);
+    return out;
+  }
+  return null;
+}
+
+export async function fetchAvailableListings(): Promise<ModelListingSummary[]> {
+  'use cache';
+  cacheLife('hours');
+  const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const fields = [
+    'title', 'price', 'wilayaCode',
+    'photo_thumbs', 'thumbUrls', 'photoUrls', 'photos',
+    'answers', 'categoryId', 'status', 'hidden', 'createdAt',
+  ];
+  const structuredQuery = {
+    from: [{ collectionId: 'listings' }],
+    where: {
+      fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'available' } },
+    },
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    select: { fields: fields.map((f) => ({ fieldPath: f })) },
+    limit: 500,
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`category-listings-rest-${res.status}`);
+  const body = await res.json().catch(() => null);
+  const docs = (Array.isArray(body) ? body : []).filter((r) => r.document).map((r) => r.document);
+  return docs.map((d: { name: string; fields?: Record<string, unknown> }) => {
+    const out: Record<string, unknown> = { id: String(d.name).split('/').pop() };
+    const fs = d.fields || {};
+    for (const k in fs) out[k] = decodeRestValue(fs[k]);
+    return out as unknown as ModelListingSummary;
+  });
+}
+
 export async function fetchListings() {
   'use cache';
   cacheLife('hours');
-  return fetchAvailableCars();
+  return fetchAvailableListings();
 }

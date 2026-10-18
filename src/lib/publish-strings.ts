@@ -41,6 +41,8 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   errorRequired: { ar: "يرجى ملء جميع الحقول المطلوبة.", fr: "Veuillez remplir tous les champs requis.", en: "Please fill in all required fields." },
   errorTitleRequired: { ar: "يرجى إدخال عنوان الإعلان.", fr: "Veuillez saisir le titre de l'annonce.", en: "Please enter the listing title." },
   errorTitleTooLong: { ar: "عنوان الإعلان طويل جداً (الحد 80 حرفاً).", fr: "Le titre de l'annonce est trop long (80 caractères maximum).", en: "The listing title is too long (80 characters max)." },
+  errorTitleTooShort: { ar: "عنوان الإعلان قصير جداً (10 أحرف على الأقل).", fr: "Le titre de l'annonce est trop court (10 caractères minimum).", en: "The listing title is too short (10 characters minimum)." },
+  errorDescTooShort: { ar: "الوصف قصير جداً (20 حرفاً على الأقل).", fr: "La description est trop courte (20 caractères minimum).", en: "The description is too short (20 characters minimum)." },
   existingPhotos: { ar: "الصور الحالية", fr: "Photos actuelles", en: "Current photos" },
   experienceEx: { ar: "مثال: 8", fr: "Ex : 8", en: "E.g. 8" },
   fuelDiesel: { ar: "ديزل", fr: "Diesel", en: "Diesel" },

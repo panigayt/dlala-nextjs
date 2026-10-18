@@ -828,8 +828,12 @@ function PublishForm({
   const validate = (): boolean => {
     if (!title.trim()) { fail(t('errorTitleRequired')); return false; }
     if (title.trim().length > 80) { fail(t('errorTitleTooLong')); return false; }
+    // CL-5 (18 Oct 2026): minimum lengths — a 1-char title/description
+    // passes the "required" check but is useless. 10/20 chars minimum.
+    if (title.trim().length < 10) { fail(t('errorTitleTooShort')); return false; }
     if (!desc.trim()) { fail(t('errorDescRequired')); return false; }
     if (desc.trim().length > 2000) { fail(t('errorDescTooLong')); return false; }
+    if (desc.trim().length < 20) { fail(t('errorDescTooShort')); return false; }
     if (!cat) { fail(t('errorCatRequired')); return false; }
     const isJobsCat = cat === 'jobs';
     const priceNum = price.trim() === '' ? NaN : Number(price);
