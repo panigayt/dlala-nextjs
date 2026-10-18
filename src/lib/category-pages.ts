@@ -272,17 +272,50 @@ ${ctaTopHtml(lang)}
 }
 
 // Cached per-category count (for sitemap).
+// CM-1 fix (Round 30): use server-side aggregation counts per category.
+// The old approach counted from fetchAvailableListings()'s 500-newest window,
+// which contained only cars — non-car categories got count 0 and were dropped
+// from the sitemap even when they had listings.
 export async function categoryCounts(): Promise<Record<string, number>> {
   'use cache';
   cacheLife('hours');
-  const listings = await fetchAvailableListings();
+  const url = FIRESTORE_REST_BASE + ':runAggregationQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const counts: Record<string, number> = Object.create(null);
-  for (const l of listings) {
-    const f = l as unknown as Record<string, unknown>;
-    if (f.status !== 'available' || f.hidden === true) continue;
-    const cat = String(f.categoryId || '');
-    if (cat) counts[cat] = (counts[cat] || 0) + 1;
-  }
+  await Promise.all(
+    CATEGORIES.map(async (c) => {
+      const body = {
+        structuredAggregationQuery: {
+          aggregations: [{ count: {} }],
+          structuredQuery: {
+            from: [{ collectionId: 'listings' }],
+            where: {
+              compositeFilter: {
+                op: 'AND',
+                filters: [
+                  { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'available' } } },
+                  { fieldFilter: { field: { fieldPath: 'categoryId' }, op: 'EQUAL', value: { stringValue: c.id } } },
+                ],
+              },
+            },
+          },
+        },
+      };
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        const n = Number(data?.[0]?.result?.aggregateFields?.count?.integerValue ?? 0);
+        if (n > 0) counts[c.id] = n;
+      } catch {
+        // Count failed for this category — skip it (page will 404 on thin guard).
+      }
+    }),
+  );
   return counts;
 }
 
@@ -311,7 +344,7 @@ function decodeRestValue(v: unknown): unknown {
   return null;
 }
 
-export async function fetchAvailableListings(): Promise<ModelListingSummary[]> {
+export async function fetchAvailableListings(categoryId?: string): Promise<ModelListingSummary[]> {
   'use cache';
   cacheLife('hours');
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
@@ -320,10 +353,20 @@ export async function fetchAvailableListings(): Promise<ModelListingSummary[]> {
     'photo_thumbs', 'thumbUrls', 'photoUrls', 'photos',
     'answers', 'categoryId', 'status', 'hidden', 'createdAt',
   ];
+  // CM-1 fix (Round 30): when a categoryId is given, filter server-side so the
+  // limit window can't starve non-car categories (500 newest were all cars).
+  const filters: Array<Record<string, unknown>> = [
+    { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'available' } } },
+  ];
+  if (categoryId) {
+    filters.push({
+      fieldFilter: { field: { fieldPath: 'categoryId' }, op: 'EQUAL', value: { stringValue: categoryId } },
+    });
+  }
   const structuredQuery = {
     from: [{ collectionId: 'listings' }],
     where: {
-      fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'available' } },
+      compositeFilter: { op: 'AND', filters },
     },
     orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
     select: { fields: fields.map((f) => ({ fieldPath: f })) },

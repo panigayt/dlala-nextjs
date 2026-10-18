@@ -3,7 +3,7 @@ import {
   filterCategoryItems,
   buildCategoryPage,
   notFoundPage,
-  fetchListings,
+  fetchAvailableListings,
   CATEGORY_MIN_LISTINGS,
 } from '@/lib/category-pages';
 
@@ -20,7 +20,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     });
   }
   try {
-    const listings = await fetchListings();
+    const listings = await fetchAvailableListings(cat.id);
     const items = filterCategoryItems(listings, cat.id, 'fr');
     let total = 0;
     for (const l of listings) {

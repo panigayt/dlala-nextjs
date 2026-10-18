@@ -3,7 +3,7 @@ import {
   filterCategoryItems,
   buildCategoryPage,
   notFoundPage,
-  fetchListings,
+  fetchAvailableListings,
   CATEGORY_MIN_LISTINGS,
 } from '@/lib/category-pages';
 
@@ -21,7 +21,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     });
   }
   try {
-    const listings = await fetchListings();
+    // CM-1 fix (Round 30): filter by category server-side so the fetch
+    // window can't starve non-car categories.
+    const listings = await fetchAvailableListings(cat.id);
     const items = filterCategoryItems(listings, cat.id);
     let total = 0;
     for (const l of listings) {
