@@ -168,10 +168,20 @@ function paintAlertsSnapshot(): {
     if (!searches.length && !notifs.length) return null;
     // Recompute matches from cached searches + listings (legacy
     // buildMatchesHtml parity — matches are derived, not stored).
+    // R16 (18 Oct 2026): same cross-group dedup as loadAll — a listing
+    // matching several searches paints only under the first group.
     const active = searches.filter((s) => s && s.enabled);
     const matches: { search: SavedSearch; hits: FreshListing[] }[] = [];
+    const shownIds = new Set<string>();
     for (const s of active) {
-      const hits = listings.filter((l) => l && matchesSavedSearch(l, s)).slice(0, 6);
+      const hits = listings
+        .filter((l) => l && matchesSavedSearch(l, s))
+        .filter((l) => {
+          if (shownIds.has(l.id)) return false;
+          shownIds.add(l.id);
+          return true;
+        })
+        .slice(0, 6);
       if (hits.length) matches.push({ search: s, hits });
     }
     return { searches, matches, notifs };
@@ -370,21 +380,31 @@ export default function AlertsPage() {
             /* ignore */
           }
           const nowSeen = { ...seen };
+          // R16 (18 Oct 2026): cross-group dedup — a listing matching
+          // several saved searches renders only under the FIRST group
+          // (the seen watermark still advances for every search below).
+          const shownIds = new Set<string>();
           for (const s of active) {
             const last = seen[s.id] || 0;
             // AC-4 (Round 7, 18 Oct 2026): the "New matches" section must
             // not repeat already-seen hits. Filter to listings newer than
             // the per-search seen watermark; the watermark advances to the
             // newest hit shown.
-            const hits = fresh
+            const rawHits = fresh
               .filter((l) => matchesSavedSearch(l, s))
               .filter((l) => tsMs(l.createdAt) > last)
               .slice(0, 6);
-            if (!hits.length) continue;
-            for (const h of hits) {
+            if (!rawHits.length) continue;
+            for (const h of rawHits) {
               const t = tsMs(h.createdAt);
               nowSeen[s.id] = Math.max(nowSeen[s.id] || 0, t);
             }
+            const hits = rawHits.filter((h) => {
+              if (shownIds.has(h.id)) return false;
+              shownIds.add(h.id);
+              return true;
+            });
+            if (!hits.length) continue;
             matchGroups.push({ search: s, hits });
           }
           try {

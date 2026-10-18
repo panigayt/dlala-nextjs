@@ -486,6 +486,13 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
                             ▼ {t('priceDropped')}
                           </span>
                         )}
+                        {/* R16 (18 Oct 2026): mark sold favorites clearly
+                            (was: sold cards rendered with no indicator). */}
+                        {!dropped && live.status === 'sold' && (
+                          <span className="absolute top-2 start-2 rounded bg-zinc-900/80 text-white text-xs px-2 py-1">
+                            {t('sold')}
+                          </span>
+                        )}
                       </div>
                       <div className="p-3">
                         <p className="font-bold text-emerald-700">{formatPrice(live.price || 0, lang)}</p>

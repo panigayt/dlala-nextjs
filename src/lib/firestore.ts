@@ -888,6 +888,75 @@ export function normalizePhoneBrand(v: unknown): string {
   return '';
 }
 
+// R16 (18 Oct 2026): typo tolerance for brand tokens in free-text search.
+// A Latin token that maps to no known brand gets ONE conservative
+// edit-distance attempt against the known Latin brand spellings
+// (peugot → peugeot, samsong → samsung). Thresholds are tight and short
+// keys are skipped — unknown values still resolve to '' (no guessing),
+// so this only rescues near-misses of real brands.
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = new Array<number>(n + 1);
+  let cur = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    const ac = a.charCodeAt(i - 1);
+    for (let j = 1; j <= n; j++) {
+      const cost = ac === b.charCodeAt(j - 1) ? 0 : 1;
+      const del = prev[j] + 1;
+      const ins = cur[j - 1] + 1;
+      const sub = prev[j - 1] + cost;
+      cur[j] = del < ins ? (del < sub ? del : sub) : (ins < sub ? ins : sub);
+    }
+    const tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[n];
+}
+
+export function fuzzyBrandKey(token: string): string {
+  const latin = String(token || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Latin-only, min length 4 — shorter tokens are too ambiguous to guess.
+  if (!/^[a-z0-9]{4,}$/.test(latin)) return '';
+  let best = '';
+  let bestDist = Infinity;
+  const consider = (map: Record<string, string>) => {
+    for (const key of Object.keys(map)) {
+      // Skip very short keys (vw, byd...) — distance-1 on a 2-3 char key
+      // would match half the dictionary.
+      if (!/^[a-z]{4,}$/.test(key)) continue;
+      const d = editDistance(latin, key);
+      // Tight threshold: 1 typo for short names, 2 for longer ones.
+      const maxD = key.length <= 6 ? 1 : 2;
+      if (d > 0 && d <= maxD && d < bestDist) {
+        bestDist = d;
+        best = map[key];
+      }
+    }
+  };
+  consider(LEGACY_CAR_BRAND_MAP);
+  consider(LEGACY_PHONE_BRAND_MAP);
+  return best;
+}
+
+// R16 (18 Oct 2026): the main search pipeline hardcoded the .ar title /
+// description slots, so .fr/.en description content was never searched
+// (the Round 7 all-variants fix only covered saved-search matching).
+// Join ALL language variants into the search haystack — same approach as
+// matchesSavedSearch in savedSearchMatch.ts.
+export function allTextVariants(v: unknown): string {
+  if (!v) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'object') {
+    return Object.values(v as Record<string, unknown>)
+      .filter((s): s is string => typeof s === 'string' && !!s)
+      .join(' ');
+  }
+  return '';
+}
+
 export function hasFacetFilter(f: SearchFilters): boolean {
   return !!(
     f.fOs || f.fBrand || f.fCarBrand || f.fFuel || f.fGear ||
@@ -937,12 +1006,10 @@ function relevanceRank(docs: ListingCard[], q: string, brandKey = ''): ListingCa
   const decorated = new Array<{ d: ListingCard; score: number; ts: number }>(docs.length);
   for (let i = 0; i < docs.length; i++) {
     const d = docs[i];
-    const title = normSearchText(
-      d.title && typeof d.title === 'object'
-        ? (d.title as Record<string, string>).ar || ''
-        : ''
-    );
-    const desc = normSearchText(d.description?.ar || '');
+    // R16 (18 Oct 2026): search ALL title/description language variants
+    // (was .ar only — .fr/.en descriptions were never matched).
+    const title = normSearchText(allTextVariants(d.title));
+    const desc = normSearchText(allTextVariants(d.description));
     const answers = (d.answers || {}) as Record<string, unknown>;
     // R5-1 (18 Oct 2026): optional brandKey — docs whose answers.brand maps to
     // it score 30 (title-contains tier) so pure brand queries (q=بيجو) don't
@@ -1001,8 +1068,12 @@ export function viewsText(n: number | null | undefined, lang = 'ar'): string {
 // js/home.js paging constants — DEEP_POOL = 60 (single deep fetch when
 // client-side refinements need room), MAX_SEARCH_MATCHES = 60 (text-search
 // match cap), PAGE_SIZE = 24 (docs per page).
-export const SEARCH_DEEP_POOL = 60;
-export const SEARCH_MAX_MATCHES = 60;
+// R16 (18 Oct 2026): raised 60 → 120. Text search could only ever return
+// from the 60 newest docs of the filtered set, making older matching
+// listings unreachable. 120 doubles reachability with bounded read cost
+// (deep-pool mode only: text query, price range, or facet filters).
+export const SEARCH_DEEP_POOL = 120;
+export const SEARCH_MAX_MATCHES = 120;
 export const SEARCH_PAGE_SIZE = 24;
 
 export interface SearchResult {
@@ -1359,12 +1430,17 @@ async function runSearchPipeline(
     for (const t of tokens) {
       // AZ-1 (18 Oct 2026): phone brands had no mapping at all — try the
       // phone map too (q=سامسونج / q=samsung / q=iphone).
-      const b = !qBrand ? (normalizeCarBrand(t) || normalizePhoneBrand(t)) : '';
+      let b = !qBrand ? (normalizeCarBrand(t) || normalizePhoneBrand(t)) : '';
+      // R16 (18 Oct 2026): typo tolerance — a Latin token that maps to no
+      // known brand gets one conservative edit-distance attempt
+      // (peugot → cbPeugeot). Still '' for genuine unknowns.
+      if (!b && !qBrand) b = fuzzyBrandKey(t);
       if (b) qBrand = b;
       else textTokens.push(t);
     }
     if (!qBrand) {
-      const b = normalizeCarBrand(f.q.trim()) || normalizePhoneBrand(f.q.trim());
+      const b = normalizeCarBrand(f.q.trim()) || normalizePhoneBrand(f.q.trim())
+        || fuzzyBrandKey(f.q.trim());
       if (b) qBrand = b;
     }
     const textQ = textTokens.join(' ');
@@ -1381,12 +1457,9 @@ async function runSearchPipeline(
         : normalizeCarBrand(answers.brand);
       if (qBrand && docBrand !== qBrand) continue;
       if (textQ) {
-        const title = normSearchText(
-          d.title && typeof d.title === 'object'
-            ? (d.title as Record<string, string>).ar || ''
-            : ''
-        );
-        const desc = normSearchText(d.description?.ar || '');
+        // R16 (18 Oct 2026): search ALL language variants (was .ar only).
+        const title = normSearchText(allTextVariants(d.title));
+        const desc = normSearchText(allTextVariants(d.description));
         if (!title.includes(textQ) && !desc.includes(textQ)) continue;
       }
       matched.push(d);
