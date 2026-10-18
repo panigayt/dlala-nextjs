@@ -64,6 +64,17 @@ function localizedTitle(title: unknown, lang: Lang = 'ar'): string {
   return '';
 }
 
+// AC-8 (Round 7, 18 Oct 2026): description variant for keyword search.
+function localizedDesc(desc: unknown, lang: Lang = 'ar'): string {
+  if (!desc) return '';
+  if (typeof desc === 'string') return desc;
+  if (typeof desc === 'object') {
+    const o = desc as Record<string, string>;
+    return o[lang] || o.ar || o.fr || o.en || '';
+  }
+  return '';
+}
+
 // Arabic-aware normalization — mirrors the legacy anti-duplicate
 // normalization (tashkeel/tatweel stripped, alef/hamza unified, ة→ه,
 // ى→ي, eastern digits→ASCII).
@@ -92,6 +103,7 @@ interface SavedSearch {
 interface FreshListing {
   id: string;
   title: unknown;
+  description?: unknown;
   price?: number;
   categoryId?: string;
   wilayaCode?: number;
@@ -108,15 +120,26 @@ function matchesSavedSearch(l: FreshListing, s: SavedSearch): boolean {
   if (l.isWanted) return false;
   if (s.categoryId && l.categoryId !== s.categoryId) return false;
   if (s.wilayaCode != null && l.wilayaCode !== s.wilayaCode) return false;
-  if (s.minPrice != null && (l.price || 0) < s.minPrice) return false;
-  if (s.maxPrice != null && (l.price || 0) > s.maxPrice) return false;
+  // AC-7 (Round 7, 18 Oct 2026): price-less listings (null/undefined/<=1,
+  // the 1-DZD "negotiable" convention) are NOT treated as price 0.
+  // A price-on-request listing could be in any range — skip the price
+  // bounds check instead of excluding it.
+  const lp = l.price;
+  const hasPrice = lp != null && lp > 1;
+  if (s.minPrice != null && hasPrice && (lp as number) < s.minPrice) return false;
+  if (s.maxPrice != null && hasPrice && (lp as number) > s.maxPrice) return false;
   const q = normAr(s.query || '');
   if (q) {
     // 11 Oct 2026: search ALL language variants (was Arabic-only — FR/EN broken).
+    // AC-8 (Round 7, 18 Oct 2026): also search descriptions, not just titles.
     const titles = typeof l.title === 'object' && l.title
       ? Object.values(l.title as Record<string, string>)
       : [localizedTitle(l.title)];
-    const hay = titles.map((t) => normAr(t)).join(' ');
+    const descs = typeof l.description === 'object' && l.description
+      ? Object.values(l.description as Record<string, string>)
+      : [localizedDesc(l.description)];
+    const hay = titles.map((t) => normAr(t)).join(' ')
+      + ' ' + descs.map((d) => normAr(d)).join(' ');
     const tokens = q.split(/\s+/).filter(Boolean);
     if (!tokens.every((tk) => hay.includes(tk))) return false;
   }
@@ -372,12 +395,19 @@ export default function AlertsPage() {
           }
           const nowSeen = { ...seen };
           for (const s of active) {
-            const hits = fresh.filter((l) => matchesSavedSearch(l, s)).slice(0, 6);
-            if (!hits.length) continue;
             const last = seen[s.id] || 0;
+            // AC-4 (Round 7, 18 Oct 2026): the "New matches" section must
+            // not repeat already-seen hits. Filter to listings newer than
+            // the per-search seen watermark; the watermark advances to the
+            // newest hit shown.
+            const hits = fresh
+              .filter((l) => matchesSavedSearch(l, s))
+              .filter((l) => tsMs(l.createdAt) > last)
+              .slice(0, 6);
+            if (!hits.length) continue;
             for (const h of hits) {
               const t = tsMs(h.createdAt);
-              if (t > last) nowSeen[s.id] = Math.max(nowSeen[s.id] || 0, t);
+              nowSeen[s.id] = Math.max(nowSeen[s.id] || 0, t);
             }
             matchGroups.push({ search: s, hits });
           }
@@ -663,6 +693,9 @@ export default function AlertsPage() {
           fsMod.doc(db, `users/${user.uid}/notifications`, n.id),
           { read: true }
         );
+        // AC-2 (Round 7, 18 Oct 2026): refresh the bell badge — was stale
+        // until reload because only markAllRead() dispatched the event.
+        window.dispatchEvent(new CustomEvent('dlala:alerts-read'));
       } catch {
         /* best-effort — still navigate */
       }

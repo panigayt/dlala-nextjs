@@ -238,15 +238,50 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
         n += unread[uid] || 0;
       });
       if (mounted.current) setUnreadMsgs(n);
-      // Alerts bell: unread notifications.
+      // Alerts bell: unread notifications + new saved-search matches.
+      // AC-3 (Round 7, 18 Oct 2026): removed the limit(20) cap — the badge
+      // must reflect the true unread count, not cap at 20.
       const nSnap = await fsMod.getDocs(
         fsMod.query(
           fsMod.collection(db, 'users', uid, 'notifications'),
-          fsMod.where('read', '==', false),
-          fsMod.limit(20)
+          fsMod.where('read', '==', false)
         )
       );
-      if (mounted.current) setUnreadAlerts(nSnap.size);
+      let bellCount = nSnap.size;
+      // AC-1 (Round 7, 18 Oct 2026): the bell ignored saved-search matches.
+      // Count new (unseen) matches across enabled saved searches.
+      try {
+        const { matchesSavedSearch, tsMs } = await import('@/lib/savedSearchMatch');
+        const sSnap = await fsMod.getDocs(
+          fsMod.collection(db, 'users', uid, 'savedSearches')
+        );
+        const searches = sSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }) as { id: string; enabled?: boolean })
+          .filter((s) => s.enabled !== false);
+        if (searches.length) {
+          const lSnap = await fsMod.getDocs(
+            fsMod.query(
+              fsMod.collection(db, 'listings'),
+              fsMod.where('status', 'in', ['available', 'negotiating']),
+              fsMod.orderBy('createdAt', 'desc'),
+              fsMod.limit(60)
+            )
+          );
+          let seen: Record<string, number> = {};
+          try {
+            const raw = JSON.parse(localStorage.getItem(`dlala_seen_${uid}`) || '{}');
+            if (raw && typeof raw === 'object') seen = raw;
+          } catch { /* ignore */ }
+          for (const s of searches) {
+            const last = seen[s.id] || 0;
+            for (const ld of lSnap.docs) {
+              const l = { id: ld.id, ...ld.data() } as Parameters<typeof matchesSavedSearch>[0];
+              if (matchesSavedSearch(l, s) && tsMs(l.createdAt) > last) bellCount++;
+            }
+          }
+        }
+      } catch { /* best-effort: badge falls back to notifications only */ }
+      if (mounted.current) setUnreadAlerts(bellCount);
     } catch { /* best-effort: badges stay hidden */ }
   }, [user, client]);
 

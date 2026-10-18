@@ -1120,7 +1120,11 @@ function PublishForm({
             const favSnap = await fsMod.getDocs(
               fsMod.collection(db, 'listingFavoriters', editId, 'users')
             );
-            const notifId = `drop_${editId}_${effPrice}`;
+            // AC-5 (Round 7, 18 Oct 2026): notifId was drop_{editId}_{effPrice}
+            // with non-merge set — if the price returned to a previously-read
+            // value, the re-set reset read:false. Unique ID per drop event
+            // (timestamp) preserves read state on older notifications.
+            const notifId = `drop_${editId}_${effPrice}_${Date.now()}`;
             const sellerUid = user.uid;
             const notifData = {
               listingId: editId,
