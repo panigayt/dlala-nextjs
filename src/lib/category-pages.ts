@@ -360,7 +360,11 @@ export async function categoryCounts(): Promise<Record<string, number>> {
     CATEGORIES.map(async (c) => {
       const body = {
         structuredAggregationQuery: {
-          aggregations: [{ count: {} }],
+          // R53 Team B (18 Oct 2026): the alias is REQUIRED — without it
+          // Firestore returns the count under the auto-key "field_1" and
+          // the reader below (aggregateFields.count) saw 0 for every
+          // category, so this function always returned {}.
+          aggregations: [{ alias: 'count', count: {} }],
           structuredQuery: {
             from: [{ collectionId: 'listings' }],
             where: {
