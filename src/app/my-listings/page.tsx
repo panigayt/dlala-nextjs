@@ -438,20 +438,18 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                     </div>
                     <div className="p-3">
                       {/* 11 Oct 2026: job offers show salary/month, not 0 DZD. */}
-                      {/* Zak 18 Oct 2026: ALWAYS show price (even "1 دج") + badge. */}
+                      {/* Zak 18 Oct 2026: price ALWAYS shown. Badge moved below title (Zak 18 Oct). */}
                       <p className="font-bold text-emerald-700 whitespace-nowrap">
                         {l.answers?.jobType === 'jobOffer' && typeof l.answers?.salary === 'number' ? (
                           <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
                         ) : (
-                          <>
-                            <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
-                            {(l.negotiable || Number(l.price) <= 1) && (
-                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
-                            )}
-                          </>
+                          <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
                         )}
                       </p>
                       <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(l, lang)}</h3>
+                      {(l.negotiable || Number(l.price) <= 1) && !(l.answers?.jobType === 'jobOffer') && (
+                        <p className="mt-1"><span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></p>
+                      )}
                     </div>
                   </a>
                   <div className="mt-2 flex gap-2">

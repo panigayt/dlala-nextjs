@@ -496,14 +496,14 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
                         )}
                       </div>
                       <div className="p-3">
-                        {/* Zak 18 Oct 2026: ALWAYS show price (even "1 دج") + badge. */}
+                        {/* Zak 18 Oct 2026: price ALWAYS shown. Badge moved below title (Zak 18 Oct). */}
                         <p className="font-bold text-emerald-700 whitespace-nowrap">
                           <span dir="ltr">{formatPrice(live.price || 0, lang)}</span>
-                          {(live.negotiable || Number(live.price) <= 1) && (
-                            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
-                          )}
                         </p>
                         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">{listingTitle(live, lang)}</h3>
+                        {(live.negotiable || Number(live.price) <= 1) && (
+                          <p className="mt-1"><span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></p>
+                        )}
                       </div>
                     </a>
                     <button

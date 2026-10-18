@@ -388,14 +388,11 @@ function SimilarCard({ l }: { l: ListingCard }) {
         )}
       </div>
       <div className="p-3">
-        {/* Zak 18 Oct 2026: clean 2-line price layout. ALWAYS show price + badge.
-            Line 1: price + دج + badge (never separated). Line 2: Darija words. */}
+        {/* Zak 18 Oct 2026: price ALWAYS shown. Negotiable badge moved to
+            bottom opposite date (Zak 18 Oct). */}
         <div className="font-bold text-emerald-700 text-lg">
           <p className="whitespace-nowrap">
             <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
-            {(l.negotiable || Number(l.price) <= 1) && (
-              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
-            )}
           </p>
           {words && Number(l.price) > 1 && (
             <p className="text-xs font-normal text-zinc-500">({words})</p>
@@ -404,24 +401,31 @@ function SimilarCard({ l }: { l: ListingCard }) {
         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
           {title}
         </h3>
-        <p className="mt-1 text-xs text-zinc-500">
-          {wilayaNameLang(l.wilayaCode, lang)}
-          {l.createdAt ? (
-            <>
-              {' · '}
-              <TimeAgo
-                iso={
-                  l.createdAt instanceof Date
-                    ? l.createdAt.toISOString()
-                    : String(l.createdAt)
-                }
-                lang={lang}
-              />
-            </>
-          ) : (
-            ''
+        {/* Zak 18 Oct 2026: bottom row — date/wilaya on one side, negotiable
+            badge on the opposite side. */}
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500">
+            {wilayaNameLang(l.wilayaCode, lang)}
+            {l.createdAt ? (
+              <>
+                {' · '}
+                <TimeAgo
+                  iso={
+                    l.createdAt instanceof Date
+                      ? l.createdAt.toISOString()
+                      : String(l.createdAt)
+                  }
+                  lang={lang}
+                />
+              </>
+            ) : (
+              ''
+            )}
+          </p>
+          {(l.negotiable || Number(l.price) <= 1) && (
+            <span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
           )}
-        </p>
+        </div>
       </div>
     </Link>
   );

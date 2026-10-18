@@ -117,9 +117,9 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
             />
           )}
           <div className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'}`}>
-            {/* Zak 18 Oct 2026: clean 2-line price layout. ALWAYS show the price
-                (even "1 دج") + badge. Line 1: price + دج + badge (never separated).
-                Line 2: Darija words, always fully visible, never truncated. */}
+            {/* Zak 18 Oct 2026: price ALWAYS shown (even "1 دج"). Darija words
+                on line 2, never truncated. Negotiable badge moved to card bottom
+                opposite the date (Zak 18 Oct). */}
             {/* 11 Oct 2026: job offers show salary/month, not price (0 DZD). */}
             {isOffer && typeof l.answers?.salary === 'number' ? (
               <p className="whitespace-nowrap">
@@ -129,15 +129,7 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
               <>
                 <p className="whitespace-nowrap font-extrabold"><bdi>{formatPrice(l.price || 0, lang)}</bdi></p>
                 {words && Number(l.price) > 1 && (
-                  <p className="flex items-center gap-1 text-xs font-normal text-zinc-500">
-                    <span>({words})</span>
-                    {(l.negotiable || Number(l.price) <= 1) && (
-                      <span className="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
-                    )}
-                  </p>
-                )}
-                {!(words && Number(l.price) > 1) && (l.negotiable || Number(l.price) <= 1) && (
-                  <p><span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span></p>
+                  <p className="text-xs font-normal text-zinc-500">({words})</p>
                 )}
               </>
             )}
@@ -150,18 +142,25 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
           <ProBadge sellerId={l.sellerId || ''} />
         </h3>
         {metaBits && <p className="mt-1 text-xs text-zinc-600">{metaBits}</p>}
-        <p className="mt-1 text-xs text-zinc-500">
-          {/* Round 139: createdAt may be a JSON-round-tripped ISO string
-              (e.g. cards appended from /api/feed) — never assume Date. */}
-          {l.createdAt ? (
-            <TimeAgo
-              iso={l.createdAt instanceof Date ? l.createdAt.toISOString() : String(l.createdAt)}
-              lang={lang}
-            />
-          ) : (
-            ''
+        {/* Zak 18 Oct 2026: bottom row — date on one side, negotiable badge
+            on the opposite side (flex justify-between handles RTL). */}
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500">
+            {/* Round 139: createdAt may be a JSON-round-tripped ISO string
+                (e.g. cards appended from /api/feed) — never assume Date. */}
+            {l.createdAt ? (
+              <TimeAgo
+                iso={l.createdAt instanceof Date ? l.createdAt.toISOString() : String(l.createdAt)}
+                lang={lang}
+              />
+            ) : (
+              ''
+            )}
+          </p>
+          {(l.negotiable || Number(l.price) <= 1) && (
+            <span className="text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
           )}
-        </p>
+        </div>
       </div>
     </a>
   );
