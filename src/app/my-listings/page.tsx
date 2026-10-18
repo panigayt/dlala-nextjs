@@ -438,16 +438,15 @@ function MyListingsContent({ user }: { user: CompatUser }) {
                     </div>
                     <div className="p-3">
                       {/* 11 Oct 2026: job offers show salary/month, not 0 DZD. */}
-                      <p className="font-bold text-emerald-700">
+                      {/* Zak 18 Oct 2026: ALWAYS show price (even "1 دج") + badge. */}
+                      <p className="font-bold text-emerald-700 whitespace-nowrap">
                         {l.answers?.jobType === 'jobOffer' && typeof l.answers?.salary === 'number' ? (
                           <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
                         ) : (
                           <>
                             <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
-                            {/* Zak 18 Oct 2026 (correction): ALWAYS show price (even 1 دج);
-                                badge when negotiable OR price<=1. */}
                             {(l.negotiable || Number(l.price) <= 1) && (
-                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
+                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
                             )}
                           </>
                         )}

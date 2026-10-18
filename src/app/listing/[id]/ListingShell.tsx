@@ -136,17 +136,11 @@ export function MetaGrid({
           Round 205), so the row never renders a literal "1 DZD". */}
       <div>
         <span className="text-zinc-500">{t('price')}: </span>
-        {/* Zak 18 Oct 2026: 1-DZD = negotiable — show text only, never "1 دج". */}
-        <b>
-          {Number(price) <= 1 ? (
-            t('negotiable')
-          ) : (
-            <>
-              <span dir="ltr">{formatPrice(price || 0, lang)}</span>
-              {negotiable && (
-                <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
-              )}
-            </>
+        {/* Zak 18 Oct 2026: ALWAYS show the price (even "1 دج") + badge. */}
+        <b className="whitespace-nowrap">
+          <span dir="ltr">{formatPrice(price || 0, lang)}</span>
+          {(negotiable || Number(price) <= 1) && (
+            <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
           )}
         </b>
       </div>
@@ -394,20 +388,19 @@ function SimilarCard({ l }: { l: ListingCard }) {
         )}
       </div>
       <div className="p-3">
-        <p className="font-bold text-emerald-700 text-lg">
-          {/* Zak 18 Oct 2026: 1-DZD = negotiable — show text only, never "1 دج". */}
-          {Number(l.price) <= 1 ? (
-            <span>{t('negotiable')}</span>
-          ) : (
-            <>
-              <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
-              {l.negotiable && (
-                <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
-              )}
-            </>
+        {/* Zak 18 Oct 2026: clean 2-line price layout. ALWAYS show price + badge.
+            Line 1: price + دج + badge (never separated). Line 2: Darija words. */}
+        <div className="font-bold text-emerald-700 text-lg">
+          <p className="whitespace-nowrap">
+            <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+            {(l.negotiable || Number(l.price) <= 1) && (
+              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
+            )}
+          </p>
+          {words && Number(l.price) > 1 && (
+            <p className="text-xs font-normal text-zinc-500">({words})</p>
           )}
-          {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
-        </p>
+        </div>
         <h3 className="mt-1 text-sm font-medium text-zinc-900 line-clamp-2">
           {title}
         </h3>

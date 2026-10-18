@@ -116,24 +116,29 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
               photoUrl={img}
             />
           )}
-          <p className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'}`}>
+          <div className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'}`}>
+            {/* Zak 18 Oct 2026: clean 2-line price layout. ALWAYS show the price
+                (even "1 دج") + badge. Line 1: price + دج + badge (never separated).
+                Line 2: Darija words, always fully visible, never truncated. */}
             {/* 11 Oct 2026: job offers show salary/month, not price (0 DZD). */}
             {isOffer && typeof l.answers?.salary === 'number' ? (
-              <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
-            ) : Number(l.price) <= 1 ? (
-              /* Zak 18 Oct 2026: 1-DZD = negotiable — show text only, never "1 دج". */
-              <span>{t('negotiable')}</span>
+              <p className="whitespace-nowrap">
+                <span dir="ltr">{t('salaryPerMonth').replace('{x}', formatPrice(l.answers.salary, lang))}</span>
+              </p>
             ) : (
               <>
-                <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
-                {/* Zak 18 Oct 2026: price + negotiable badge together. */}
-                {l.negotiable && (
-                  <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
+                <p className="whitespace-nowrap">
+                  <span dir="ltr">{formatPrice(l.price || 0, lang)}</span>
+                  {(l.negotiable || Number(l.price) <= 1) && (
+                    <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
+                  )}
+                </p>
+                {words && Number(l.price) > 1 && (
+                  <p className="text-xs font-normal text-zinc-500">({words})</p>
                 )}
               </>
             )}
-            {words && <small className="ms-1 font-normal text-zinc-500">({words})</small>}
-          </p>
+          </div>
         </div>
         <h3 className="mt-1 mb-1 text-sm text-zinc-900 whitespace-nowrap overflow-hidden text-ellipsis" style={{unicodeBidi: 'plaintext'}}>
           {cardTitle(l, lang)}

@@ -797,12 +797,11 @@ export default function AlertsPage() {
                           <div className="text-xs font-medium text-zinc-900 truncate">
                             {localizedTitle(h.title, lang)}
                           </div>
-                          <div className="text-sm font-bold text-emerald-700">
-                            {/* Zak 18 Oct 2026 (correction): ALWAYS show the price (even 1 دج);
-                                badge when negotiable OR price<=1 (1 DZD = negotiable). */}
+                          {/* Zak 18 Oct 2026: ALWAYS show price (even "1 دج") + badge. */}
+                          <div className="text-sm font-bold text-emerald-700 whitespace-nowrap">
                             <span dir="ltr">{formatPrice(h.price || 0, lang)}</span>
                             {(h.negotiable || Number(h.price) <= 1) && (
-                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap">{t('negotiable')}</span>
+                              <span className="ms-1 text-[11px] font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 whitespace-nowrap align-middle">{t('negotiable')}</span>
                             )}
                           </div>
                         </div>
