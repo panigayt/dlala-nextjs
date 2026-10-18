@@ -594,6 +594,14 @@ function PublishForm({
       // electric — server rejects 'answers.gear must not be set for
       // electric cars'.
       if (k === 'qFuel' && v === 'fuelElectric') delete next['qGear'];
+      // DE-3 (R34, 18 Oct 2026): clear stale phone brand when switching
+      // OS — e.g. iOS→Android left qPhoneBrand='pbApple' (not in Android
+      // options) → blank select + mismatched payload.
+      if (k === 'qOs') {
+        const b = next['qPhoneBrand'];
+        if (v === 'osAndroid' && b === 'pbApple') delete next['qPhoneBrand'];
+        if (v === 'osIos' && b && b !== 'pbApple') delete next['qPhoneBrand'];
+      }
       return next;
     });
   }, []);
@@ -867,6 +875,33 @@ function PublishForm({
     for (const k of req) {
       if (!answers[k]) { fail(t('errorRequired')); return false; }
     }
+    // DE-1 (R34, 18 Oct 2026): restore conditional required category
+    // questions (legacy validateCatQuestions parity) — they render with
+    // red asterisks but passed empty without these checks.
+    if (cat === 'jobs') {
+      const jt = answers['qJobType'] || '';
+      if (jt === 'jobOffer') {
+        if (!answers['qJobTitle']) { fail(t('errorRequired')); return false; }
+        if (!answers['qContract']) { fail(t('errorRequired')); return false; }
+      } else if (jt === 'jobSeeker') {
+        if (!answers['qProfession']) { fail(t('errorRequired')); return false; }
+        if (!answers['qExperience']) { fail(t('errorRequired')); return false; }
+        if (!answers['qAvailability']) { fail(t('errorRequired')); return false; }
+      }
+    }
+    if (cat === 'realestate' && answers['qPropertyType'] !== 'reLand') {
+      if (!answers['qRooms']) { fail(t('errorRequired')); return false; }
+    }
+    if ((cat === 'velos' && answers['qVeloType'] === 'veloElectric') ||
+        (cat === 'trottinettes' && answers['qTrotType'] === 'trotElectric')) {
+      if (!answers['qBatteryRange']) { fail(t('errorRequired')); return false; }
+    }
+    // Legacy parity: numeric category answers must be >= 0.
+    for (const k of ['qRooms', 'qArea', 'qExperience']) {
+      if (answers[k] !== undefined && answers[k] !== '' && Number(answers[k]) < 0) {
+        fail(t('errorRequired')); return false;
+      }
+    }
     if (cat === 'cars' && answers['qFuel'] !== 'fuelElectric' && !answers['qGear']) {
       fail(t('errorRequired')); return false;
     }
@@ -896,7 +931,8 @@ function PublishForm({
     // 11 Oct 2026: photo count guard — max enforced only at pick-time (race).
     const totalPhotos = photos.length + existingPhotos.length;
     // 12 Oct 2026: dedicated message (was generic error).
-    if (totalPhotos > 10) { fail(t('photoLimitReached')); return false; }
+    // DE-2 (R34, 18 Oct 2026): {n} = excess photos over the cap (was leaked raw).
+    if (totalPhotos > 10) { fail(t('photoLimitReached').replace('{n}', String(totalPhotos - 10))); return false; }
     // AT-5 (R12, 18 Oct 2026): server caps quantity at 99 + integer
     // required (MAX_QUANTITY, D-3 Zak decision). Reject client-side
     // before the upload instead of failing server-side after.
@@ -1711,7 +1747,10 @@ function PublishForm({
                 )}
               </div>
             ))}
-            {photos.length < MAX_PHOTOS && (
+            {/* DE-4 (R34, 18 Oct 2026): count existing photos too in edit
+                mode — the + button ignored them and offered slots already
+                taken. */}
+            {(photos.length + existingPhotos.length) < MAX_PHOTOS && (
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
