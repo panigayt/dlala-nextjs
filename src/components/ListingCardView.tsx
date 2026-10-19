@@ -31,7 +31,9 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
   // Round 62: prefer the canonical server-resolved image (trimFeedCard);
   // cardImage(l) stays the fallback for cards that still carry the photo
   // arrays (/api/feed load-more, /api/search filters). Byte-identical value.
-  const img = l.img ?? cardImage(l);
+  // 19 Oct 2026: use || not ?? — an empty-string img must fall through to
+  // the fallback (?? only skips null/undefined, leaving a blank image).
+  const img = l.img || cardImage(l);
   const reduced = l.priceReduced && (l.previousPrice || 0) > 0;
   const jobType = (l.answers && typeof l.answers.jobType === 'string' && l.answers.jobType) || '';
   const isSeeker = jobType === 'jobSeeker';

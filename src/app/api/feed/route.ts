@@ -35,11 +35,22 @@ function withW320Thumbs<T extends { photoUrls?: unknown; photoVariants?: boolean
     }
   });
   // 18 Oct 2026 (Zak): set img field for load-more cards — the card uses
-  // l.img ?? cardImage(l), and without img the fallback can fail on fast scroll.
+  // l.img || cardImage(l), and without img the fallback can fail on fast scroll.
   const d = doc as { photo_thumbs?: string[] };
   const thumbs = d.photo_thumbs;
   const img = (Array.isArray(thumbs) && thumbs[0]) || w320[0] || '';
-  return { ...doc, photoUrls: w320, img };
+  // 19 Oct 2026: infer photoVariants when w320 thumbnails exist — old
+  // listings published before the AT-3 fix lack the flag, but their
+  // photo_thumbs prove variants exist. This restores the LQIP blur-up
+  // fade (BlurUpImage gates on photoVariants).
+  const hasW320Thumbs =
+    Array.isArray(thumbs) &&
+    thumbs.some((t) => typeof t === 'string' && t.includes('/w320_'));
+  const out = { ...doc, photoUrls: w320, img };
+  if (hasW320Thumbs && !(doc as { photoVariants?: boolean }).photoVariants) {
+    (out as { photoVariants?: boolean }).photoVariants = true;
+  }
+  return out;
 }
 
 export async function GET(req: NextRequest) {
