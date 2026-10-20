@@ -110,8 +110,14 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
             flex-wrap: the price drops to its own full-width line (ms-auto
             keeps it at the inline-end, exactly where it sits today) ONLY
             when it can't fit beside the pill; short prices render
-            byte-identically. AR row is untouched (Zak-approved layout). */}
-        <div className={`flex items-center justify-between gap-2 ${lang !== 'ar' ? 'flex-wrap' : ''}`}>
+            byte-identically.
+            20 Oct 2026 (later): same micro-overflow measured in AR —
+            "1,110,000 دج" is 92.2px vs 75.3px beside the pill, extending
+            3.9–4.8px past the card's left edge (clipped by overflow-hidden).
+            Wrap + ms-auto extended to AR with the identical mechanism:
+            fitting prices keep the approved layout byte-identically, sold
+            cards (no pill) unchanged. */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           {/* Interactive favorite pill — Zak 21 Sep option B white-pill
               model (inline heart + count next to the price, pill first in
               RTL). Own listings and sold listings get no heart
@@ -126,7 +132,7 @@ function ListingCardView({ l, eager, priority, gold }: { l: ListingCard; eager?:
               photoUrl={img}
             />
           )}
-          <div className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'} ${lang !== 'ar' && l.status !== 'sold' ? 'ms-auto' : ''}`}>
+          <div className={`font-extrabold text-base ${gold ? 'text-amber-600' : 'text-[#0b6b4f]'} ${l.status !== 'sold' ? 'ms-auto' : ''}`}>
             {/* Zak 18 Oct 2026: price ALWAYS shown (even "1 دج"). Darija words
                 on line 2, never truncated. Negotiable badge moved to card bottom
                 opposite the date (Zak 18 Oct). */}
