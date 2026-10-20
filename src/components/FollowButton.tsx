@@ -243,7 +243,10 @@ export default function FollowButton({
       {toast && (
         <div
           role="status"
-          className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
+          // 20 Oct 2026: same guest-toast fix as FavoriteToggle — fixed,
+          // viewport-capped, wrapping (the nowrap absolute toast overflowed
+          // phone screens in FR/EN).
+          className="fixed bottom-4 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-zinc-900 px-4 py-2.5 text-center text-sm leading-snug text-white shadow-lg"
         >
           {toast}
         </div>

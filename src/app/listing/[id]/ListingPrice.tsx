@@ -27,8 +27,13 @@ export default function ListingPrice({
     <p className="mt-2 text-3xl font-bold text-emerald-700">
       {/* Zak 18 Oct 2026: ALWAYS show the price (even "1 دج") + badge.
           Clean 2-line layout: line 1 = price + دج + badge, line 2 = Darija. */}
-      <span className="whitespace-nowrap">
-        <span dir="ltr">{formatPrice(price || 0, lang)}</span>
+      {/* 20 Oct 2026: nowrap lives on the PRICE only, not on price+badge —
+          an 8-digit price + negotiable badge at 30px is ~330px and could
+          overflow a 360px screen as one rigid line; now the badge wraps
+          under the price in that extreme case. Identical rendering
+          whenever the line fits (all current live cases measured). */}
+      <span>
+        <span dir="ltr" className="whitespace-nowrap">{formatPrice(price || 0, lang)}</span>
         {(negotiable || Number(price) <= 1) && (
           <span className="ms-2 text-sm font-normal bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-3 py-1 whitespace-nowrap align-middle">{t('negotiable')}</span>
         )}

@@ -280,7 +280,12 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         {toast && (
           <span
             role="status"
-            className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
+            // 20 Oct 2026 (Zak): was absolute/nowrap centered on the pill —
+            // the FR login message is 472px wide, so the card's
+            // overflow-hidden clipped both ends ("…favoris Co…"). A fixed,
+            // viewport-capped, wrapping bottom toast always fits the screen
+            // in AR/FR/EN.
+            className="fixed bottom-4 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-zinc-900 px-4 py-2.5 text-center text-sm leading-snug text-white shadow-lg"
           >
             {toast}
             {toastIsAuth && (
@@ -341,7 +346,9 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       {toast && (
         <span
           role="status"
-          className="absolute -top-2 left-1/2 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg"
+          // 20 Oct 2026 (Zak): same fix as the compact variant above —
+          // fixed, viewport-capped, wrapping toast (was clipped both sides).
+          className="fixed bottom-4 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-zinc-900 px-4 py-2.5 text-center text-sm leading-snug text-white shadow-lg"
         >
           {toast}
           {toastIsAuth && (
