@@ -6,7 +6,7 @@
 
 'use client';
 
-import { createContext, useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useSyncExternalStore, type ReactNode } from 'react';
 
 import { t, type Lang } from './i18n-strings';
 
@@ -259,6 +259,16 @@ export function useLang(): { lang: Lang; setLang: (l: Lang) => void; t: (k: stri
     () => getAppLang(),
     () => 'ar', // server snapshot — SSR always renders Arabic
   );
+  // 21 Oct 2026 (switcher fix, part 3): guarantee a re-render on EVERY
+  // explicit switch. useSyncExternalStore re-renders only when its
+  // snapshot changes — but on a forced page the snapshot can already
+  // equal the tapped language (store 'ar' on /fr, user taps AR):
+  // snapshot 'ar' -> 'ar', React bails out, and the page stays in the
+  // forced language even though langOverride was set. This plain
+  // subscription bumps a local counter on every store notification, so
+  // the render below always re-reads the current langOverride.
+  const [, bumpLang] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => subscribeLang(bumpLang), []);
   // Precedence: an explicit user switch (this session) wins over the
   // URL-forced language, which wins over the cookie store. Before the
   // 21 Oct 2026 fix the forced language won unconditionally, which made
