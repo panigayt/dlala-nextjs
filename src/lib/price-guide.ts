@@ -204,12 +204,14 @@ export function priceSectionTable(
     .map((m) => ({ m, r: rowsByModel[m.key] }))
     .filter(({ r }) => r);
   if (!rows.length) return '';
+  // Zak (21 Oct 2026): no listing-count column — readers get model +
+  // median + range only. The ≥5-ads inclusion rule stays internal.
   const head =
     lang === 'fr'
-      ? `<tr><th>Modèle</th><th>Prix médian</th><th>Fourchette de prix</th><th>Annonces</th></tr>`
+      ? `<tr><th>Modèle</th><th>Prix médian</th><th>Fourchette de prix</th></tr>`
       : lang === 'en'
-        ? `<tr><th>Model</th><th>Median price</th><th>Price range</th><th>Listings</th></tr>`
-        : `<tr><th>الموديل</th><th>السعر المتوسط</th><th>النطاق السعري</th><th>عدد الإعلانات</th></tr>`;
+        ? `<tr><th>Model</th><th>Median price</th><th>Price range</th></tr>`
+        : `<tr><th>الموديل</th><th>السعر المتوسط</th><th>النطاق السعري</th></tr>`;
   // Bidi/nowrap fix (Zak, 21 Oct 2026): each price is an isolated LTR unit
   // (<bdi dir="ltr">, the ListingCardView pattern) with white-space:nowrap,
   // so a number can never wrap mid-digits and the Arabic currency word can
@@ -226,8 +228,7 @@ export function priceSectionTable(
       return (
         `<tr><td>${label}</td>` +
         `<td dir="ltr">${price(r.median, true)}</td>` +
-        `<td dir="ltr">${price(r.p25)} – ${price(r.p75)}</td>` +
-        `<td>${r.count}</td></tr>`
+        `<td dir="ltr">${price(r.p25)} – ${price(r.p75)}</td></tr>`
       );
     })
     .join('\n');
@@ -247,27 +248,27 @@ export function priceGuideFaqs(lang: GuideLang): Faq[] {
           a: 'Ces prix sont tirés des annonces publiées sur le site Dlala. Ils sont mis à jour en continu avec chaque nouvelle annonce.',
         },
         {
-          q: "Qu'est-ce que le prix médian ?",
-          a: 'C’est le prix du milieu des annonces publiées : la moitié des annonces sont moins chères, l’autre moitié plus chères. Il n’est guère affecté par les prix aberrants.',
+          q: 'Pourquoi les prix sont-ils en dinars alors que le marché parle en millions ?',
+          a: 'Parce que les annonces sont publiées en dinars ; un million vaut 10 000 DZD — divisez le prix par dix mille.',
         },
         {
-          q: 'Pourquoi certains modèles n’apparaissent-ils pas ?',
-          a: 'Aucun modèle n’est affiché avec moins de 5 annonces, afin de garantir la fiabilité du prix médian.',
+          q: 'Ces prix sont-ils les prix de vente définitifs ?',
+          a: 'Non : ce sont les prix demandés dans les annonces ; le prix final se négocie après inspection.',
         },
       ];
   if (lang === 'en')
     return [
         {
           q: 'Where do these prices come from?',
-          a: 'These prices are calculated from listings published on the Dlala website. They are updated continuously with every new listing.',
+          a: 'These prices are taken from listings published on the Dlala website. They are updated continuously with every new listing.',
         },
         {
-          q: 'What is the median price?',
-          a: 'It is the middle price of the published listings: half of the listings are cheaper, the other half more expensive. It is barely affected by outlier prices.',
+          q: 'Why are prices written in dinars while the market speaks in millions?',
+          a: 'Because listings are published in dinars; one million equals 10,000 DZD — divide the price by ten thousand.',
         },
         {
-          q: 'Why do some models not appear?',
-          a: 'No model is shown with fewer than 5 listings, to keep the median price reliable.',
+          q: 'Are these the final sale prices?',
+          a: 'No: they are the asking prices in the listings; the final price is negotiated after inspection.',
         },
       ];
   return [
@@ -276,12 +277,12 @@ export function priceGuideFaqs(lang: GuideLang): Faq[] {
           a: 'هذه الأسعار مأخوذة من الإعلانات المنشورة في موقع دلالة، وتُحدَّث باستمرار مع كل إعلان جديد.',
         },
         {
-          q: 'ما هو السعر المتوسط؟',
-          a: 'هو السعر الأوسط (الوسيط) للإعلانات المنشورة — نصف الإعلانات أرخص منه ونصفها أغلى، ولا يتأثر كثيراً بالأسعار الشاذة.',
+          q: 'لماذا تُكتب الأسعار بالدينار بينما السوق يتكلم بالمليون؟',
+          a: 'لأن الإعلانات تُنشر بالدينار؛ والمليون يساوي 10,000 دج — اقسم السعر على عشرة آلاف.',
         },
         {
-          q: 'لماذا لا تظهر بعض الموديلات؟',
-          a: 'لا يُعرض أي موديل بأقل من 5 إعلانات لضمان دقة السعر المتوسط.',
+          q: 'هل هذه أسعار البيع النهائية؟',
+          a: 'لا؛ هي أسعار العرض في الإعلانات، والسعر النهائي يُتفق عليه بعد المعاينة والتفاوض.',
         },
       ];
 }
@@ -349,10 +350,10 @@ export function renderPriceGuideData({
   // empty segment.
   const emptySegmentNote =
     lang === 'fr'
-      ? 'Pas encore assez d’annonces pour ce segment — les prix apparaîtront ici dès que 5 annonces seront publiées.'
+      ? 'Pas encore assez d’annonces pour ce segment — les prix apparaîtront ici bientôt.'
       : lang === 'en'
-        ? 'Not enough listings for this segment yet — prices will appear here once 5 listings are published.'
-        : 'لا توجد إعلانات كافية بعد لهذه الفئة — ستظهر الأسعار هنا فور توفر 5 إعلانات.';
+        ? 'Not enough listings for this segment yet — prices will appear here soon.'
+        : 'لا توجد إعلانات كافية بعد لهذه الفئة — ستظهر الأسعار هنا قريباً.';
   articleHtml = articleHtml.replace(
     /<p>&lt;!-- LIVE-PRICES:([a-z]+) --&gt;<\/p>/g,
     (mm: string, key: string) => {
@@ -363,22 +364,11 @@ export function renderPriceGuideData({
       );
     },
   );
-  const updatedNote = live
-    ? `<p class="live-note">${
-        lang === 'fr'
-          ? `Données calculées à partir de ${stats.totalAds} annonces · mises à jour en continu.`
-          : lang === 'en'
-            ? `Calculated from ${stats.totalAds} listings · updated continuously.`
-            : `محسوبة من ${stats.totalAds} إعلان · تُحدَّث باستمرار.`
-      }</p>`
-    : `<p class="live-note">${
-        lang === 'fr'
-          ? 'Les prix sont en cours de collecte à partir des annonces publiées — ils apparaîtront ici automatiquement.'
-          : lang === 'en'
-            ? 'Prices are being collected from published listings — they will appear here automatically.'
-            : 'الأسعار قيد الجمع من الإعلانات المنشورة — ستظهر هنا تلقائياً.'
-      }</p>`;
-  articleHtml = articleHtml.replace(/<p>&lt;!-- LIVE-UPDATED --&gt;<\/p>/g, () => updatedNote);
+  // Zak (21 Oct 2026): the total-listings note («محسوبة من N إعلان») is
+  // REMOVED — the article never states the site's total listing count.
+  // The LIVE-UPDATED marker (still present in the EN source file) now
+  // renders nothing.
+  articleHtml = articleHtml.replace(/<p>&lt;!-- LIVE-UPDATED --&gt;<\/p>/g, () => '');
 
   const faqs = priceGuideFaqs(lang);
   const faqHeading = lang === 'fr' ? 'Questions fréquentes' : lang === 'en' ? 'Frequently asked questions' : 'أسئلة شائعة';
