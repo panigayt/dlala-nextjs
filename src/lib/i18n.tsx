@@ -47,6 +47,17 @@ export function setLangStorage(lang: Lang) {
 // ---------------------------------------------------------------------------
 
 let appLang: Lang | null = null; // null = not initialized yet (SSR-safe)
+// Bug fix (21 Oct 2026, Zak report): explicit user switch vs URL-forced
+// language. On /fr and /en routes the whole subtree (header included, via
+// ChromeWithLang) sits inside <ForcedLang>, and useLang() returned
+// `forced ?? store` — so tapping AR/FR/EN updated the store, the cookie and
+// <html lang/dir> but changed NOTHING visible: the buttons looked dead.
+// langOverride records an explicit switch (header, settings, chat, or a
+// cross-tab storage event): once set, it wins over the URL-forced language
+// for the rest of the session. It is module state only — a fresh page load
+// resets it to null, so /fr and /en still land in their URL language and
+// SSR stays language-invariant (R54 untouched).
+let langOverride: Lang | null = null;
 const langListeners = new Set<() => void>();
 
 function readStoredLang(): Lang {
@@ -173,8 +184,11 @@ export function getAppLang(): Lang {
  *  (legacy js/i18n.js onLangChange() re-render parity). */
 export function setAppLang(l: Lang): void {
   ensureLangInit();
-  if (appLang === l) return;
+  // No early return when only the override changes: on a /fr page with the
+  // store already at 'ar', tapping AR must still lift the forced French.
+  if (appLang === l && langOverride === l) return;
   appLang = l;
+  langOverride = l;
   try {
     window.localStorage.setItem('dlala_lang', l);
   } catch {
@@ -209,6 +223,9 @@ export function subscribeLang(fn: () => void): () => void {
 // (or "en"): useLang() then returns the forced language (and localized t())
 // for every consumer inside — header, search bar, feed cards — while the
 // store, the cookie, and every other page behave exactly as before.
+// 21 Oct 2026: the forced language is the page's INITIAL language only —
+// an explicit switch via setAppLang sets langOverride, which outranks it
+// (see useLang) so the switcher works on prefixed pages too.
 // ---------------------------------------------------------------------------
 const ForcedLangContext = createContext<Lang | null>(null);
 
@@ -236,8 +253,11 @@ export function useLang(): { lang: Lang; setLang: (l: Lang) => void; t: (k: stri
     () => getAppLang(),
     () => 'ar', // server snapshot — SSR always renders Arabic
   );
-  // A forced URL-prefix language wins over the cookie store.
-  const lang = forced ?? storeLang;
+  // Precedence: an explicit user switch (this session) wins over the
+  // URL-forced language, which wins over the cookie store. Before the
+  // 21 Oct 2026 fix the forced language won unconditionally, which made
+  // the switcher a no-op on every /fr and /en page.
+  const lang = langOverride ?? forced ?? storeLang;
   const setLang = useCallback((l: Lang) => setAppLang(l), []);
   const tr = useCallback((k: string) => t(k, lang), [lang]);
   return { lang, setLang, t: tr };
