@@ -138,7 +138,7 @@ function seoForListing(
   l: ListingDetail,
   id: string,
   lang: Lang
-): { metadata: Metadata; jsonLd: Record<string, unknown> | null } {
+): { metadata: Metadata; jsonLd: Record<string, unknown>[] | null } {
   const title = cardTitle(l, lang).trim();
   // js/listing.js applyListingSeoHead: priceLabel + negotiable suffix,
   // wilayaLabel (allWilayas fallback), condLabel unless condition-exempt
@@ -398,8 +398,7 @@ async function ListingContent({
   // (R54: server computes ar/fr/en, the client picks via useLang()).
   let localizedTitles: Record<'ar' | 'fr' | 'en', string> = { ar: 'DLALA', fr: 'DLALA', en: 'DLALA' };
   try {
-    // 16 Oct 2026: listingJsonLd returns null for no-real-price listings
-    // (Google requires offers/review/aggregateRating on Product) — skip.
+    // (Titles only here — the JSON-LD itself renders once in the shell.)
     (['ar', 'fr', 'en'] as const).forEach((tlang) => {
       const seo = seoForListing(l, id, tlang);
       if (typeof seo.metadata.title === 'string' && seo.metadata.title) {
@@ -659,8 +658,9 @@ export default async function ListingPage({
   // (two byte-identical streamed chunks) — first inside <ListingDir>
   // (client boundary), then as a fragment sibling. The separate component
   // renders in the static shell. '<' is escaped (\u003c) so user content
-  // can never break out of the script. 1-DZD no-price listings emit zero
-  // JSON-LD (seoForListing returns null jsonLd — rule holds).
+  // can never break out of the script. 21 Oct 2026 (audit D1): 1-DZD
+  // no-price listings now emit Product (no offers — BW-1) + BreadcrumbList;
+  // seoForListing returns null only when there is no real photo/description.
   // R54 (18 Oct 2026): JSON-LD stays Arabic — crawlers never send the
   // dlala_lang cookie, and SSR must be language-invariant (see top).
   const pageLang = 'ar' as const;

@@ -173,14 +173,22 @@ export interface ListingJsonLdInput {
 }
 
 // Verbatim port of js/seo.js listingJsonLd().
-// 16 Oct 2026 (Google Search Console critical, 2nd round): Google now REQUIRES
-// Product markup to have offers/review/aggregateRating. Yesterday's fix (omit
-// offers when no real price) triggered this. Resolution: when there is no real
-// price (1-DZD negotiable convention), return null — no Product JSON-LD at all.
-// Honest: no fake "1 DZD" price, no validation errors, no rich snippet.
-export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> | null {
+// History: 16 Oct 2026 — when there was no real price (1-DZD negotiable
+// convention), this returned null: no Product JSON-LD at all (Google then
+// required offers/review/aggregateRating on Product markup, and a fake
+// "1 DZD" offers.price would have been a false price).
+// 21 Oct 2026 (audit round D1, Zak's fix order): that null took ALL
+// structured data off negotiable listings — a large class (7 of the first
+// 24 home-feed cards). Zak's standing BW-1 policy is only "NO offers block
+// for negotiable listings" — it never required zero JSON-LD. Resolution:
+// every listing with a real photo + description serves Product (WITHOUT
+// offers when there is no real price — still no fake price) plus a
+// BreadcrumbList. Real-priced listings are unchanged (Product + offers),
+// now with the same breadcrumb appended.
+// Returns the JSON-LD blocks for the page's single <script> tag, or null
+// when the listing cannot honestly carry Product markup at all.
+export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown>[] | null {
   const hasRealPrice = typeof o.price === 'number' && isFinite(o.price) && o.price > 1;
-  if (!hasRealPrice) return null;
   // 17 Oct 2026 (Google Search Console: "image" manquant, critical): Google's
   // merchant-listing validation rejects the site-icon fallback and category
   // placeholders as product images. No real photo → no Product JSON-LD at all.
@@ -190,45 +198,58 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown> | 
   // guard against empty descriptions.
   const description = (o.description || '').trim();
   if (!description) return null;
-  const offers: Record<string, unknown> = {
-    '@type': 'Offer',
-    url: o.url,
-    priceCurrency: 'DZD',
-    // 0.0.0.31 FIX-WEB-047: a sold listing is OutOfStock — never InStock.
-    availability:
-      o.status === 'sold'
-        ? 'https://schema.org/OutOfStock'
-        : o.status === 'negotiating'
-          ? 'https://schema.org/LimitedAvailability'
-          : 'https://schema.org/InStock',
-    // 0.0.0.30 (Zak): C2C classifieds — sales between individuals are
-    // final, no returns. Clears Google's "hasMerchantReturnPolicy
-    // manquant" merchant-listing warning.
-    hasMerchantReturnPolicy: {
-      '@type': 'MerchantReturnPolicy',
-      // 3 Oct 2026: "applicableCountry" manquant (non-critical).
-      // Dlala is Algeria-only C2C.
-      applicableCountry: 'DZ',
-      returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
-    },
-  };
-  // 15 Oct 2026 (Google Search Console critical): 1-DZD is the pipeline's
-  // no-price convention. Google now REQUIRES price inside offers — but emitting
-  // "1 DZD" would be a false price. Resolution: when there is no real price,
-  offers.price = o.price;
-  if (o.condition === 'new') offers.itemCondition = 'https://schema.org/NewCondition';
-  else if (o.condition === 'used') offers.itemCondition = 'https://schema.org/UsedCondition';
   const ld: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: o.title,
     description,
-    offers,
   };
+  // BW-1 (Zak): the offers block exists ONLY for a real price. Emitting
+  // "1 DZD" for a negotiable listing would be a false price.
+  if (hasRealPrice) {
+    const offers: Record<string, unknown> = {
+      '@type': 'Offer',
+      url: o.url,
+      priceCurrency: 'DZD',
+      // 0.0.0.31 FIX-WEB-047: a sold listing is OutOfStock — never InStock.
+      availability:
+        o.status === 'sold'
+          ? 'https://schema.org/OutOfStock'
+          : o.status === 'negotiating'
+            ? 'https://schema.org/LimitedAvailability'
+            : 'https://schema.org/InStock',
+      // 0.0.0.30 (Zak): C2C classifieds — sales between individuals are
+      // final, no returns. Clears Google's "hasMerchantReturnPolicy
+      // manquant" merchant-listing warning.
+      hasMerchantReturnPolicy: {
+        '@type': 'MerchantReturnPolicy',
+        // 3 Oct 2026: "applicableCountry" manquant (non-critical).
+        // Dlala is Algeria-only C2C.
+        applicableCountry: 'DZ',
+        returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted',
+      },
+    };
+    // 15 Oct 2026 (Google Search Console critical): Google REQUIRES price
+    // inside offers — present here because this branch is real-price only.
+    offers.price = o.price;
+    if (o.condition === 'new') offers.itemCondition = 'https://schema.org/NewCondition';
+    else if (o.condition === 'used') offers.itemCondition = 'https://schema.org/UsedCondition';
+    ld.offers = offers;
+  }
   if (o.image) ld.image = Array.isArray(o.image) ? o.image : [o.image];
   // 0.0.0.30 (Zak): brand only when honestly known.
   if (o.brand) ld.brand = { '@type': 'Brand', name: o.brand };
   // 0.0.0.30 (Zak): category REMOVED — localized category name was flagged
   // "Valeur non valide"; no honest Google-taxonomy mapping exists.
-  return ld;
+  // Breadcrumb: same shape as the guide/model pages (price-guide.ts).
+  // Listing JSON-LD is always Arabic (R54), so the home crumb is Arabic.
+  const breadcrumb: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: SITE + '/' },
+      { '@type': 'ListItem', position: 2, name: o.title, item: o.url },
+    ],
+  };
+  return [ld, breadcrumb];
 }
