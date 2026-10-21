@@ -210,6 +210,13 @@ export function priceSectionTable(
       : lang === 'en'
         ? `<tr><th>Model</th><th>Median price</th><th>Price range</th><th>Listings</th></tr>`
         : `<tr><th>الموديل</th><th>السعر المتوسط</th><th>النطاق السعري</th><th>عدد الإعلانات</th></tr>`;
+  // Bidi/nowrap fix (Zak, 21 Oct 2026): each price is an isolated LTR unit
+  // (<bdi dir="ltr">, the ListingCardView pattern) with white-space:nowrap,
+  // so a number can never wrap mid-digits and the Arabic currency word can
+  // never reorder its digits in the RTL table. The range cell may wrap only
+  // between the two price units (at the dash), never inside a number.
+  const price = (n: number, strong = false) =>
+    `<bdi dir="ltr" style="white-space:nowrap">${strong ? '<strong>' : ''}${escHtml(fmtDzd(n, lang))}${strong ? '</strong>' : ''}</bdi>`;
   const body = rows
     .map(({ m, r }) => {
       const name = lang === 'ar' ? m.ar : m.fr;
@@ -218,8 +225,8 @@ export function priceSectionTable(
         : escHtml(name);
       return (
         `<tr><td>${label}</td>` +
-        `<td dir="ltr"><strong>${escHtml(fmtDzd(r.median, lang))}</strong></td>` +
-        `<td dir="ltr">${escHtml(fmtDzd(r.p25, lang))} – ${escHtml(fmtDzd(r.p75, lang))}</td>` +
+        `<td dir="ltr">${price(r.median, true)}</td>` +
+        `<td dir="ltr">${price(r.p25)} – ${price(r.p75)}</td>` +
         `<td>${r.count}</td></tr>`
       );
     })
