@@ -10,6 +10,7 @@ import ChromeWithLang from "@/components/ChromeWithLang";
 import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
 import SwRegister from "@/components/SwRegister";
+import ErrorReporter from "@/components/ErrorReporter";
 
 // 12 Oct 2026 (Round 11 Team 1): FULLY STATIC root metadata.
 // Root cause fix for Round 10 T1: the previous root generateMetadata did
@@ -184,6 +185,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* 14 Oct 2026 (Zak ordered): register the image-cache service worker.
             Images only — repeat views load listing photos from cache. */}
         <SwRegister />
+        {/* 21 Oct 2026 (Zak approved): client error telemetry restored —
+            the 14 Oct cutover dropped the /report-error rewrite and the
+            reporter script. Tiny, lazy, no Firebase imports. */}
+        <ErrorReporter />
       </body>
     </html>
   );

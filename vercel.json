@@ -1,1 +1,1 @@
-{"framework":"nextjs","regions":["fra1"]}
+{"framework":"nextjs","regions":["fra1"],"rewrites":[{"destination":"https://europe-west3-dlala-85cea.cloudfunctions.net/reportError","source":"/report-error"},{"destination":"https://europe-west3-dlala-85cea.cloudfunctions.net/errorDigest","source":"/error-digest"}]}
