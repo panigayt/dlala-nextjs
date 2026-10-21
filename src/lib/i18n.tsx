@@ -173,10 +173,16 @@ function ensureLangInit(): void {
   }
 }
 
-/** Current app-wide language (initializes from localStorage on first call). */
+/** Current app-wide language (initializes from localStorage on first call).
+ *  Returns the EFFECTIVE store language — an explicit-switch override, when
+ *  present, is the user's current language. This is also the
+ *  useSyncExternalStore snapshot in useLang(): it must change whenever the
+ *  override changes, even when appLang itself does not (e.g. store already
+ *  'ar' on a /fr page, user taps AR) — otherwise React sees an identical
+ *  snapshot, skips the re-render, and the switch looks dead again. */
 export function getAppLang(): Lang {
   ensureLangInit();
-  return appLang as Lang;
+  return langOverride ?? (appLang as Lang);
 }
 
 /** Switch the app-wide language: persists to localStorage, updates
