@@ -10,11 +10,18 @@
 // or the lazy Firebase/gstatic boundary (this file imports nothing).
 //
 // Hosts: firebasestorage.googleapis.com (legacy listing photos) and
-// img.dzdlala.com (R2_PUBLIC_URL — new uploads). If R2_PUBLIC_URL ever changes,
-// update IMG_HOSTS below.
+// the R2 public bucket host (R2_PUBLIC_URL — new uploads; production value
+// is the pub-*.r2.dev host written into every R2 listing's photoUrls —
+// audit round 19 found IMG_HOSTS still named only the planned
+// img.dzdlala.com, so NO R2 photo was ever cached). If R2_PUBLIC_URL
+// changes, update IMG_HOSTS below.
 
 const IMG_CACHE = 'dlala-next-img-v1';
-const IMG_HOSTS = new Set(['firebasestorage.googleapis.com', 'img.dzdlala.com']);
+const IMG_HOSTS = new Set([
+  'firebasestorage.googleapis.com',
+  'img.dzdlala.com',
+  'pub-bf326f03c4774a4287a473be0a7de582.r2.dev',
+]);
 const IMG_CACHE_MAX = 100; // bound growth (production lesson 16 Sep 2026)
 
 self.addEventListener('install', (e) => {
