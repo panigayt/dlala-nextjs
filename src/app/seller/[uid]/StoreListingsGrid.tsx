@@ -48,7 +48,7 @@ export default function StoreListingsGrid({
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState(false);
   // Round 111: all strings follow the UI language (js/i18n.js parity).
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   useEffect(() => {
     onCountChange?.(listings.length);
@@ -141,7 +141,7 @@ export default function StoreListingsGrid({
               aria-pressed={activeCat === c}
               className={tabCls(activeCat === c)}
             >
-              {catName(c)}
+              {catName(c, lang)}
             </button>
           ))}
         </div>

@@ -135,7 +135,7 @@ function StoreHero({ s, uid }: { s: SellerProfile; uid: string }) {
           </div>
         )}
         <div className="bh-id">
-          <div className="bh-name">{displayName}</div>
+          <h1 className="bh-name">{displayName}</h1>
           <div className="bh-sub">
             <span className="pro-badge">★ {t('proMerchant')}</span>
           </div>
