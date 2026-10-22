@@ -167,16 +167,39 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
       const { db, fsMod } = client;
       // Zak 21 Sep tap-feedback fix: flip the heart AND the count on THIS
       // frame; reconcile with the real toggle result afterwards.
-      const wasOn = !!fav;
+      let wasOn = !!fav;
       const optimisticOn = !wasOn;
       setFav(optimisticOn);
       setDelta((d) => d + (optimisticOn ? 1 : -1));
       try {
         const favRef = fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`);
         const trackRef = fsMod.doc(db, `listingFavoriters/${listingId}/users/${user.uid}`);
-        const snap = await withTimeout(fsMod.getDoc(favRef), 15000);
+        // Round 14 fix (22 Oct 2026): WRITE FIRST, verify after. The old
+        // flow awaited a getDoc round trip BEFORE the batch was even
+        // created, so on a slow connection the write was dispatched
+        // seconds after the tap — and a page teardown inside that window
+        // (reload, tab close, full navigation) silently discarded the
+        // toggle while the UI already showed it applied (round-13b
+        // cross-session unfavorite loss; A/B-proven in round 14: linger →
+        // delete lands, immediate navigation → delete lost). The doc id
+        // is deterministic, so branching on the known state is
+        // idempotent: deleting an absent doc is a no-op and set
+        // overwrites in place — the tap intent is honored even if the
+        // local state was stale. Only when the initial check has not
+        // resolved yet (fav === null) do we still read first.
+        if (fav === null) {
+          const snap = await withTimeout(fsMod.getDoc(favRef), 15000);
+          wasOn = snap.exists();
+          if (wasOn && mounted.current) {
+            // The optimistic flip assumed "add"; this tap is a remove —
+            // correct the frame before the write lands.
+            setFav(false);
+            setDelta((d) => d - 2);
+          }
+        }
+        const target = !wasOn;
         const batch = fsMod.writeBatch(db);
-        if (snap.exists()) {
+        if (wasOn) {
           batch.delete(favRef);
           // 4 Oct 2026 (v113, legacy parity): also remove from
           // listingFavoriters.
@@ -201,14 +224,25 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           });
         }
         await withTimeout(batch.commit(), 15000);
-        const added = !snap.exists();
+        // Round 14 fix (22 Oct 2026): verify against the server truth and
+        // reconcile (BUG-5 class — never let the UI lie). If the verify
+        // read itself fails, the commit already landed — keep the
+        // intended state.
+        let added = target;
+        try {
+          const truth = await withTimeout(fsMod.getDoc(favRef), 8000);
+          added = truth.exists();
+        } catch {
+          /* commit landed; keep the intended state */
+        }
         // Round 19 BO-D2 (18 Oct 2026): GA4 favorite events.
         trackEvent(added ? 'add_to_favorites' : 'remove_from_favorites', {
           item_id: listingId,
         });
         if (mounted.current) {
-          if (added !== optimisticOn) {
-            // Server disagrees with the guess — correct the count too.
+          if (added !== target) {
+            // Server truth differs from the intent (e.g. toggled from
+            // another device mid-flight) — correct the count too.
             setFav(added);
             setDelta((d) => d + (added ? 1 : -1));
           } else {

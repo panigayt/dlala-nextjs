@@ -670,6 +670,22 @@ function AccountContent({ user }: { user: CompatUser }) {
                 className={inputCls + ' mb-4 text-left'}
               />
 
+              {/* Round 14 fix (22 Oct 2026): the signed-in email was rendered
+                  nowhere on this page (round-13b defect). Read-only — the
+                  email lives on the Auth profile (post-E1 the public
+                  users/{uid} doc carries no email field). */}
+              <label className="block text-sm font-medium text-zinc-700 mb-1" htmlFor="profEmail">
+                {t('email')}
+              </label>
+              <input
+                id="profEmail"
+                dir="ltr"
+                type="email"
+                readOnly
+                value={user.email || ''}
+                className={inputCls + ' mb-4 text-left bg-zinc-50'}
+              />
+
               <label className="block text-sm font-medium text-zinc-700 mb-1" htmlFor="profBio">
                 {t('bio')}
               </label>

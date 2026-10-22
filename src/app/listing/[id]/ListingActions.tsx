@@ -351,16 +351,32 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
     // v99 perf (js/listing.js): flip the heart on THIS frame; reconcile
     // with the server after. AY-1: emit so the StatRow count pill moves
     // optimistically too (feed card parity).
-    const wasOn = !!fav;
+    let wasOn = !!fav;
     setFav(!wasOn);
     emitFavChange(listingId, !wasOn);
     const { db, fsMod } = client;
     try {
       const favRef = fsMod.doc(db, `favorites/${user.uid}/items/${listingId}`);
       const trackRef = fsMod.doc(db, `listingFavoriters/${listingId}/users/${user.uid}`);
-      const snap = await withTimeout(fsMod.getDoc(favRef), 15000);
+      // Round 14 fix (22 Oct 2026): WRITE FIRST, verify after — same fix
+      // as FavoriteToggle. The old flow awaited a getDoc round trip
+      // before creating the batch, so a page teardown inside that window
+      // silently discarded the toggle (round-13b cross-session unfavorite
+      // loss). The deterministic doc id makes branching on the known
+      // state idempotent. Only an unresolved check (fav === null) still
+      // reads first.
+      if (fav === null) {
+        const snap = await withTimeout(fsMod.getDoc(favRef), 15000);
+        wasOn = snap.exists();
+        if (wasOn && mounted.current) {
+          // The optimistic flip assumed "add"; this tap is a remove.
+          setFav(false);
+          emitFavChange(listingId, false);
+        }
+      }
+      const target = !wasOn;
       const batch = fsMod.writeBatch(db);
-      if (snap.exists()) {
+      if (wasOn) {
         batch.delete(favRef);
         // 4 Oct 2026 (v113, legacy parity): also remove from listingFavoriters
         batch.delete(trackRef);
@@ -382,7 +398,16 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         batch.set(trackRef, { createdAt: fsMod.serverTimestamp() });
       }
       await withTimeout(batch.commit(), 15000);
-      const added = !snap.exists();
+      // Round 14 fix (22 Oct 2026): verify against the server truth; if
+      // the verify read fails, the commit already landed — keep the
+      // intended state.
+      let added = target;
+      try {
+        const truth = await withTimeout(fsMod.getDoc(favRef), 8000);
+        added = truth.exists();
+      } catch {
+        /* commit landed; keep the intended state */
+      }
       // AY-1: reconcile the StatRow count with the server truth.
       if (mounted.current) setFav(added);
       emitFavChange(listingId, added);
