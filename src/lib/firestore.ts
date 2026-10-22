@@ -1208,9 +1208,12 @@ async function fetchWantedZeroWilaya(f: SearchFilters): Promise<ListingCard[]> {
       .filter((x) => x.document)
       .map((x) => restDocToObj(x.document));
     // fetchWantedAllWilayasFilter (js/home.js, verbatim logic)
-    // 11 Oct 2026: auto-order min/max (was missed by the 4d008be fix).
-    const lo = f.min !== undefined && f.min !== '' ? Math.min(Number(f.min), Number(f.max || Infinity)) : -Infinity;
-    const hi = f.max !== undefined && f.max !== '' ? Math.max(Number(f.min || -Infinity), Number(f.max)) : Infinity;
+    // 22 Oct 2026 (audit R16): raw bounds — the 11 Oct auto-order silently
+    // reinterpreted an inverted range, which made the FIX-WEB-009 inverted-
+    // range empty state unreachable. An inverted range now matches nothing
+    // here too, consistent with runSearchPipeline below.
+    const lo = f.min !== undefined && f.min !== '' ? Number(f.min) : -Infinity;
+    const hi = f.max !== undefined && f.max !== '' ? Number(f.max) : Infinity;
     return docs.filter((d) => {
       if (!d.isWanted) return false;
       if (f.cat && d.categoryId !== f.cat) return false;
@@ -1257,11 +1260,17 @@ async function runSearchPipeline(
       },
     });
   }
-  // 11 Oct 2026: auto-order min/max — user entering max<min got zero results.
+  // 22 Oct 2026 (audit R16): raw bounds, NO auto-order. The 11 Oct swap
+  // silently reinterpreted an inverted range (min>max returned the swapped
+  // range's results), which made the FIX-WEB-009 dedicated empty state
+  // (HomeFilteredGrid: noResultsPriceRange + hint + reset) unreachable —
+  // FIX-WEB-009 mandates "never a silent reinterpretation of the user's
+  // bounds". With raw bounds an inverted range matches zero docs and the
+  // UI empty state fires as designed.
   const pMin = f.min !== undefined && f.min !== '' ? Number(f.min) : undefined;
   const pMax = f.max !== undefined && f.max !== '' ? Number(f.max) : undefined;
-  const lo = pMin !== undefined && pMax !== undefined ? Math.min(pMin, pMax) : pMin;
-  const hi = pMin !== undefined && pMax !== undefined ? Math.max(pMin, pMax) : pMax;
+  const lo = pMin;
+  const hi = pMax;
   if (lo !== undefined) {
     filters.push({
       fieldFilter: {
