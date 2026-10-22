@@ -1,7 +1,16 @@
 // GET /api/feed — paginated home feed (regular listings only).
 //
-// Query: ?offset=<number> — number of regular listings already shown.
-// Returns: { regular: ListingCard[], hasMore: boolean }
+// Primary contract (22 Oct 2026, reads-incident root fix):
+//   ?cursor=<opaque> — stream position after the last page's raw window
+//   (absent = first page). Returns { regular, hasMore, nextCursor }.
+//   Cursor pages bill ONLY the documents returned; the legacy OFFSET
+//   paging billed offset+limit per page (Firestore charges for skipped
+//   documents), which is the cost bomb this fix removes.
+//
+// Legacy compat: ?offset=<number> / ?page=<number> still page the old
+// way (existing contract from R12/AU-D1). No first-party client uses
+// them anymore — FeedWithLoadMore speaks cursors. Returns the same
+// { regular, hasMore } shape (plus nextCursor, ignored by old clients).
 //
 // The client interleaves wanted ads (from the server-rendered pool) using
 // the verbatim interleaveWanted() logic. This route only pages the regular
@@ -11,10 +20,32 @@
 // append path, adapted to the Next.js ISR architecture).
 
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchFeed } from '@/lib/firestore';
+import { cacheLife } from 'next/cache';
+import {
+  fetchFeed,
+  fetchFeedPage,
+  encodePageCursor,
+  decodePageCursor,
+  type ListingCard,
+  type PageCursor,
+} from '@/lib/firestore';
 import { variantUrlFor } from '@/lib/image-variants';
 
 const PAGE_SIZE = 24;
+
+// Guest shield (22 Oct 2026): a cursor page is identical for every
+// visitor, so cache it for the same 60s window the home SSR and the
+// response Cache-Control header already promise. Repeat scrolls by any
+// number of guests inside the window cost ONE Firestore page execution.
+// Keyed on (limit, opaque cursor string) — '' is the first page.
+async function getFeedPageCached(
+  limit: number,
+  cursorKey: string
+): Promise<{ docs: ListingCard[]; nextCursor: PageCursor | null }> {
+  'use cache';
+  cacheLife({ revalidate: 60 });
+  return fetchFeedPage(limit, decodePageCursor(cursorKey || null));
+}
 
 // Round 4 (18 Oct 2026, audit R-5): the feed payload carried full-size
 // photoUrls (~10x the bytes needed). Clients render cards with thumbnails,
@@ -61,6 +92,7 @@ export async function GET(req: NextRequest) {
   const limitRaw = params.get('limit');
   const pageRaw = params.get('page');
   const offsetRaw = params.get('offset');
+  const cursorRaw = params.get('cursor');
   let limit = PAGE_SIZE;
   if (limitRaw !== null) {
     const l = parseInt(limitRaw, 10);
@@ -69,30 +101,39 @@ export async function GET(req: NextRequest) {
     }
     limit = l;
   }
-  let offset: number;
-  if (offsetRaw !== null) {
-    offset = Math.max(0, parseInt(offsetRaw, 10) || 0);
-  } else if (pageRaw !== null) {
-    const p = parseInt(pageRaw, 10);
-    if (!Number.isFinite(p) || p < 1) {
-      return NextResponse.json({ error: 'invalid-page' }, { status: 400 });
+  // 22 Oct 2026: cursor mode is the default and the only mode the
+  // first-party client uses. ?offset=/?page= select the legacy branch
+  // (kept for contract compat — see the file header).
+  const legacyMode = offsetRaw !== null || pageRaw !== null;
+  let offset = 0;
+  if (legacyMode) {
+    if (offsetRaw !== null) {
+      offset = Math.max(0, parseInt(offsetRaw, 10) || 0);
+    } else if (pageRaw !== null) {
+      const p = parseInt(pageRaw, 10);
+      if (!Number.isFinite(p) || p < 1) {
+        return NextResponse.json({ error: 'invalid-page' }, { status: 400 });
+      }
+      offset = (p - 1) * limit;
     }
-    offset = (p - 1) * limit;
-  } else {
-    offset = 0;
-  }
-  // Sanity cap: never allow an absurd offset to trigger a huge scan.
-  if (offset > 10000) {
-    return NextResponse.json({ error: 'offset-too-large' }, { status: 400 });
+    // Sanity cap: never allow an absurd offset to trigger a huge scan.
+    if (offset > 10000) {
+      return NextResponse.json({ error: 'offset-too-large' }, { status: 400 });
+    }
+  } else if (cursorRaw !== null && cursorRaw !== '' && !decodePageCursor(cursorRaw)) {
+    return NextResponse.json({ error: 'invalid-cursor' }, { status: 400 });
   }
   try {
     // 11 Oct 2026: server-side timeout (was hanging until platform timeout).
-    const docs = await Promise.race([
-      fetchFeed(limit, offset),
+    const page = await Promise.race([
+      legacyMode
+        ? fetchFeed(limit, offset).then((docs) => ({ docs, nextCursor: null }))
+        : getFeedPageCached(limit, cursorRaw || ''),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('feed-timeout')), 15000)
       ),
     ]);
+    const docs = page.docs;
     // The feed query can return wanted docs mixed in (legacy splits them
     // client-side); the regular pool for pagination excludes them.
     // Round 4 (18 Oct 2026): rewrite photoUrls to w320 thumbnails —
@@ -105,7 +146,11 @@ export async function GET(req: NextRequest) {
     // claim more pages while the filtered list was exhausted (e.g. a page
     // that happened to be all-wanted).
     return NextResponse.json(
-      { regular, hasMore: regular.length >= limit },
+      {
+        regular,
+        hasMore: regular.length >= limit,
+        nextCursor: encodePageCursor(page.nextCursor),
+      },
       { headers: { 'Cache-Control': 'public, max-age=60' } }
     );
   } catch {

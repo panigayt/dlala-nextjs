@@ -116,9 +116,9 @@ import SellerPage from '@/components/SellerPage';
 import {
   fetchSeller,
   fetchSellerListingCount,
-  fetchSellerListings,
+  fetchSellerListingsPage,
   fetchSellerRatings,
-  SELLER_LISTINGS_PAGE_SIZE,
+  encodePageCursor,
   type ListingCard,
   type SellerProfile,
   type SellerRating,
@@ -135,10 +135,19 @@ async function _getSeller(uid: string): Promise<SellerProfile | null> {
 const getSeller = cache(_getSeller);
 
 // js/seller.js R3 parity: the grid starts at 30 ads; "Show more" adds +30.
-async function getSellerListings(uid: string): Promise<ListingCard[]> {
+// 22 Oct 2026: the first page comes from the cursor fetcher — identical
+// docs/order to fetchSellerListings (probe-verified stream), and it
+// yields the cursor the grid's "show more" continues from.
+async function getSellerListings(
+  uid: string
+): Promise<{ listings: ListingCard[]; nextCursor: string | null }> {
   'use cache';
   cacheLife({ revalidate: 60 });
-  return fetchSellerListings(uid, SELLER_LISTINGS_PAGE_SIZE);
+  const page = await fetchSellerListingsPage(uid);
+  return {
+    listings: page.listings,
+    nextCursor: encodePageCursor(page.nextCursor),
+  };
 }
 
 function SellerSkeleton() {
@@ -172,6 +181,7 @@ async function SellerContent({
   uid,
   seller,
   listings,
+  listingsCursor,
 }: {
   uid: string;
   // Round 12: the existence check ran in the page body (ONE read shared via
@@ -180,6 +190,7 @@ async function SellerContent({
   // (a failed fetch is never a 404).
   seller: SellerProfile | null;
   listings: ListingCard[];
+  listingsCursor: string | null;
 }) {
   let ratings: SellerRating[] | null = null;
   let ratingsFailed = false;
@@ -200,6 +211,7 @@ async function SellerContent({
       uid={uid}
       seller={seller}
       listings={listings}
+      listingsCursor={listingsCursor}
       ratings={ratings}
       ratingsFailed={ratingsFailed}
     />
@@ -223,13 +235,15 @@ export default async function SellerPageRoute({
   // Retained only as a harmless fallback for the no-proxy case.
   let seller: SellerProfile | null = null;
   let listings: ListingCard[] = [];
+  let listingsCursor: string | null = null;
   let sellerFailed = false;
   try {
     // Seller + listings fetched in parallel (js/seller.js parity); both
     // reads share the React-cache-deduped fetch with generateMetadata.
     const [s, ls] = await Promise.all([getSeller(uid), getSellerListings(uid)]);
     seller = s;
-    listings = ls;
+    listings = ls.listings;
+    listingsCursor = ls.nextCursor;
   } catch {
     // Fetch failure: render the in-page error view (not a 404 — a transient
     // error must not tell crawlers the profile is gone).
@@ -243,7 +257,12 @@ export default async function SellerPageRoute({
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
       <Suspense fallback={<SellerSkeleton />}>
-        <SellerContent uid={uid} seller={seller} listings={listings} />
+        <SellerContent
+          uid={uid}
+          seller={seller}
+          listings={listings}
+          listingsCursor={listingsCursor}
+        />
       </Suspense>
     </div>
   );

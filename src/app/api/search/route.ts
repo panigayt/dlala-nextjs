@@ -3,7 +3,8 @@
 // button (mirrors the /api/seller/[uid]/listings pattern from Round 69).
 
 import { NextRequest, NextResponse } from 'next/server';
-import { searchListingsWithCount, SEARCH_PAGE_SIZE } from '@/lib/firestore';
+import { SEARCH_PAGE_SIZE } from '@/lib/firestore';
+import { searchListingsWithCount } from '@/lib/search-pool';
 import { parseSearchFilters } from '@/app/search/filters';
 
 // Five legacy pages of 24 — enough for deep browsing, bounded reads.

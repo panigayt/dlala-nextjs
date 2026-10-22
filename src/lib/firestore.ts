@@ -164,6 +164,149 @@ export async function fetchFeed(limit = 24, offset = 0): Promise<ListingCard[]> 
   return rawDocs.map(restDocToObj);
 }
 
+// --- Cursor pagination (22 Oct 2026, reads-incident root fix) -------------
+//
+// Firestore bills an OFFSET query for every document it SKIPS, so feed
+// page N cost offset+limit reads (measured: 226 executions of
+// OFFSET 800/LIMIT 200 = 303,822 reads in 24h — Query Insights). A cursor
+// (startAt on the last document's [createdAt, __name__] position) bills
+// only the documents RETURNED. Verified empirically 22 Oct 2026 against
+// production data: orderBy [createdAt DESC, __name__ DESC] reproduces the
+// legacy single-orderBy sequence EXACTLY (250-doc window), and
+// startAt{values:[ts, name], before:false} continues it with zero
+// duplicates/gaps. The cursor carries the RAW timestampValue string from
+// the REST response (full nanosecond precision — a Date round-trip would
+// truncate to milliseconds and could strand a document that shares the
+// boundary millisecond).
+export interface PageCursor {
+  t: string; // raw Firestore timestampValue (RFC 3339, full precision)
+  id: string; // document id (last path segment)
+}
+
+function b64urlEncode(str: string): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(str, 'utf8').toString('base64url');
+  }
+  return btoa(unescape(encodeURIComponent(str)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function b64urlDecode(s: string): string {
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(s, 'base64url').toString('utf8');
+  }
+  const b = s.replace(/-/g, '+').replace(/_/g, '/');
+  return decodeURIComponent(escape(atob(b)));
+}
+
+// Opaque transport form of a PageCursor (API query param / RSC payload).
+export function encodePageCursor(c: PageCursor | null): string | null {
+  if (!c) return null;
+  return b64urlEncode(JSON.stringify(c));
+}
+
+// Strict parse: anything malformed or off-shape returns null — callers
+// distinguish "param absent" (legacy/first page) from "param present but
+// undecodable" (400) by checking the raw param themselves.
+export function decodePageCursor(s: string | null | undefined): PageCursor | null {
+  if (!s) return null;
+  try {
+    const o = JSON.parse(b64urlDecode(s)) as Partial<PageCursor>;
+    if (
+      o &&
+      typeof o.t === 'string' &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(o.t) &&
+      typeof o.id === 'string' &&
+      /^[A-Za-z0-9_-]+$/.test(o.id)
+    ) {
+      return { t: o.t, id: o.id };
+    }
+  } catch {
+    /* fall through to null */
+  }
+  return null;
+}
+
+function cursorStartAt(collectionId: string, cursor: PageCursor) {
+  return {
+    values: [
+      { timestampValue: cursor.t },
+      {
+        referenceValue:
+          FIRESTORE_RESOURCE_BASE + '/' + collectionId + '/' + cursor.id,
+      },
+    ],
+    before: false, // REST form of the SDK's startAfter()
+  };
+}
+
+// The default feed query with cursor pagination: identical filters and
+// projection to buildDefaultFeedQuery; orderBy gains the __name__
+// tiebreaker that makes the stream position addressable.
+function buildCursorFeedQuery(limit: number, cursor: PageCursor | null) {
+  const q: Record<string, unknown> = {
+    from: [{ collectionId: 'listings' }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: 'status' },
+        op: 'IN',
+        value: {
+          arrayValue: {
+            values: [{ stringValue: 'available' }, { stringValue: 'negotiating' }],
+          },
+        },
+      },
+    },
+    orderBy: [
+      { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' },
+      { field: { fieldPath: '__name__' }, direction: 'DESCENDING' },
+    ],
+    select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
+    limit,
+  };
+  if (cursor) q.startAt = cursorStartAt('listings', cursor);
+  return q;
+}
+
+// One page of the default feed via cursor. nextCursor is built from the
+// last RAW document of the window (pre-wanted-filter), so the stream
+// position is exact even when the window's tail is a wanted doc the API
+// layer filters out of the painted cards. nextCursor is null when the
+// window came back short (stream exhausted).
+export async function fetchFeedPage(
+  limit = 24,
+  cursor: PageCursor | null = null
+): Promise<{ docs: ListingCard[]; nextCursor: PageCursor | null }> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery: buildCursorFeedQuery(limit, cursor) }),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`feed-rest-${res.status}`);
+  }
+  const body = await res.json().catch(() => null);
+  const rawDocs = (Array.isArray(body) ? body : [])
+    .filter((r) => r.document)
+    .map((r) => r.document);
+  let nextCursor: PageCursor | null = null;
+  if (rawDocs.length === limit && rawDocs.length > 0) {
+    const last = rawDocs[rawDocs.length - 1] as {
+      name: string;
+      fields?: Record<string, { timestampValue?: unknown }>;
+    };
+    const ts = last.fields?.createdAt?.timestampValue;
+    const id = String(last.name.split('/').pop() || '');
+    if (typeof ts === 'string' && id) nextCursor = { t: ts, id };
+  }
+  return { docs: rawDocs.map(restDocToObj), nextCursor };
+}
+
 // js/seller.js — loadRatings (verbatim query shape): ratings where
 // rateeId == uid, limit 50, client-side createdAt DESC sort, slice 20.
 // No server orderBy: avoids the composite-index requirement (legacy parity).
@@ -412,6 +555,79 @@ export async function fetchSellerListings(
     .filter((r) => r.document)
     .map((r) => r.document);
   return rawDocs.map(restDocToObj);
+}
+
+// Cursor-paginated seller listings (22 Oct 2026, reads-incident root
+// fix): same filters/projection/order as fetchSellerListings plus the
+// __name__ tiebreaker, paged by startAt instead of the legacy
+// growing-limit re-query (which re-read every previously shown ad on
+// each "show more" click: 30 + 60 + 90 + ... reads).
+export async function fetchSellerListingsPage(
+  uid: string,
+  cursor: PageCursor | null = null,
+  limit = SELLER_LISTINGS_PAGE_SIZE
+): Promise<{ listings: ListingCard[]; nextCursor: PageCursor | null }> {
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const structuredQuery: Record<string, unknown> = {
+    from: [{ collectionId: 'listings' }],
+    where: {
+      compositeFilter: {
+        op: 'AND',
+        filters: [
+          {
+            fieldFilter: {
+              field: { fieldPath: 'sellerId' },
+              op: 'EQUAL',
+              value: { stringValue: uid },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: 'status' },
+              op: 'IN',
+              value: {
+                arrayValue: {
+                  values: [{ stringValue: 'available' }, { stringValue: 'negotiating' }],
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+    orderBy: [
+      { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' },
+      { field: { fieldPath: '__name__' }, direction: 'DESCENDING' },
+    ],
+    select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
+    limit,
+  };
+  if (cursor) structuredQuery.startAt = cursorStartAt('listings', cursor);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`seller-listings-rest-${res.status}`);
+  }
+  const body = await res.json().catch(() => null);
+  const rawDocs = (Array.isArray(body) ? body : [])
+    .filter((r) => r.document)
+    .map((r) => r.document);
+  let nextCursor: PageCursor | null = null;
+  if (rawDocs.length === limit && rawDocs.length > 0) {
+    const last = rawDocs[rawDocs.length - 1] as {
+      name: string;
+      fields?: Record<string, { timestampValue?: unknown }>;
+    };
+    const ts = last.fields?.createdAt?.timestampValue;
+    const id = String(last.name.split('/').pop() || '');
+    if (typeof ts === 'string' && id) nextCursor = { t: ts, id };
+  }
+  return { listings: rawDocs.map(restDocToObj), nextCursor };
 }
 
 // R13 AX-F3 (18 Oct 2026): exact count of a seller's ACTIVE listings
@@ -1137,36 +1353,21 @@ export interface SearchResult {
   hasMore: boolean;
 }
 
-// Server-side search: structured Firestore filters + client-side text match
-// (mirrors js/home.js renderFeed text-query branch).
-export async function searchListingsWithCount(
-  f: SearchFilters,
-  limit = SEARCH_PAGE_SIZE
-): Promise<SearchResult> {
-  // js/home.js feedShape(): deep-fetch the pool when the client refines it
-  // itself — price range, text query, or facet refinements. Structured
-  // filters page server-side (legacy PAGE_SIZE + cursor): fetch one extra
-  // row so hasMore mirrors `moreAvailable = fresh.length === limit`.
+// The full matched pool for a filter set (22 Oct 2026, reads-incident
+// root fix). The pipeline ALWAYS deep-fetches the bounded pool
+// (SEARCH_DEEP_POOL) — for every mode. The legacy structured mode
+// fetched limit+1 per request and the clients re-queried with a growing
+// limit on every "show more" click, re-reading the whole prefix plus the
+// boost batchGet each time (measured in the baseline session: the same
+// filter set executed at limit 25, then 49, then 73...). The pool is
+// mode-independent now; the slicing/total/hasMore shaping lives in
+// searchListingsWithCount (src/lib/search-pool.ts), which serves every
+// page of a filter set from ONE cached pool execution per 60s window —
+// the same freshness contract the /search SSR already had.
+export async function fetchSearchPool(f: SearchFilters): Promise<ListingCard[]> {
   const usePriceRange =
     (f.min !== undefined && f.min !== '') || (f.max !== undefined && f.max !== '');
-  const deepPool = usePriceRange || !!f.q?.trim() || hasFacetFilter(f);
-  const poolLimit = deepPool ? SEARCH_DEEP_POOL : limit + 1;
-  const matched = await runSearchPipeline(f, poolLimit, usePriceRange);
-  if (deepPool) {
-    // Legacy deepPool mode paints every matched doc — no load-more.
-    return { listings: matched, total: matched.length, hasMore: false };
-  }
-  const listings = matched.slice(0, limit);
-  // total = painted cards (legacy setResultsCount(shown.length)).
-  return { listings, total: listings.length, hasMore: matched.length > limit };
-}
-
-// Backward-compatible wrapper — the painted cards only.
-export async function searchListings(
-  f: SearchFilters,
-  limit = SEARCH_PAGE_SIZE
-): Promise<ListingCard[]> {
-  return (await searchListingsWithCount(f, limit)).listings;
+  return runSearchPipeline(f, SEARCH_DEEP_POOL, usePriceRange);
 }
 
 // HOM-1 (16 Sep 2026, production parity): background fetch of all-wilayas

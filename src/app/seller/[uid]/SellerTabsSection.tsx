@@ -13,13 +13,13 @@ export default function SellerTabsSection({
   uid,
   isPro,
   initialListings,
-  initialLimit,
+  initialNextCursor,
   infos,
 }: {
   uid: string;
   isPro: boolean;
   initialListings: ListingCard[];
-  initialLimit: number;
+  initialNextCursor: string | null;
   infos: ReactNode;
 }) {
   const [loadedCount, setLoadedCount] = useState(initialListings.length);
@@ -33,7 +33,7 @@ export default function SellerTabsSection({
         <StoreListingsGrid
           uid={uid}
           initialListings={initialListings}
-          initialLimit={initialLimit}
+          initialNextCursor={initialNextCursor}
           isPro={isPro}
           onCountChange={setLoadedCount}
         />

@@ -10,11 +10,23 @@
 // (legacy insertVitrineCards is wrapped in try/catch for the same reason).
 
 import { NextResponse } from 'next/server';
-import { fetchVitrineShowcases } from '@/lib/firestore';
+import { cacheLife } from 'next/cache';
+import { fetchVitrineShowcases, type VitrineShowcaseData } from '@/lib/firestore';
+
+// Guest shield (22 Oct 2026): the showcase payload is identical for
+// every visitor and the client fetches it on every home mount with
+// no-store, so each home view used to re-run the registry query plus
+// the per-seller profile/batchGet fan-out. Cache it for the same 60s
+// window the response Cache-Control header already promises.
+async function getShowcasesCached(): Promise<VitrineShowcaseData[]> {
+  'use cache';
+  cacheLife({ revalidate: 60 });
+  return fetchVitrineShowcases();
+}
 
 export async function GET() {
   try {
-    const showcases = await fetchVitrineShowcases();
+    const showcases = await getShowcasesCached();
     return NextResponse.json(
       { showcases },
       { headers: { 'Cache-Control': 'public, max-age=60' } }

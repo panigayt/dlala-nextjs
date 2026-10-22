@@ -16,11 +16,11 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { cacheLife } from 'next/cache';
 import {
-  searchListingsWithCount,
   hasFacetFilter,
   type SearchResult,
   type SearchFilters,
 } from '@/lib/firestore';
+import { searchListingsWithCount } from '@/lib/search-pool';
 import { parseSearchFilters, filtersToQuery } from './filters';
 import { t } from '@/lib/i18n-strings';
 import SearchPage from '@/components/SearchPage';

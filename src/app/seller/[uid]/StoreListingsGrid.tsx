@@ -9,7 +9,12 @@
 //   objects — search across every language variant, never String(obj).
 // - renderStoreAdsGrid: client-side filter by category + search text.
 // - R3 "Show more" (Zak ordered): the grid starts at SELLER_LISTINGS_PAGE_SIZE
-//   ads; the button adds +30 and re-queries the server with the new limit.
+//   ads; the button adds +30 more.
+// - 22 Oct 2026 (reads-incident root fix): "show more" now APPENDS the
+//   next cursor page instead of re-querying with a growing limit (the
+//   legacy pattern re-read every already-shown ad on each click:
+//   30 + 60 + 90 + ... reads). Pages are disjoint and ordered, so the
+//   rendered grid is identical to the old full-replace behavior.
 
 import { useEffect, useMemo, useState } from 'react';
 import { type ListingCard } from '@/lib/firestore';
@@ -25,24 +30,21 @@ function haystack(l: ListingCard): string {
     .join(' ');
 }
 
-// Legacy R3 verbatim: the 'Show more' button adds 30 to the limit.
-const SHOW_MORE_STEP = 30;
-
 export default function StoreListingsGrid({
   uid,
   initialListings,
-  initialLimit,
+  initialNextCursor,
   isPro,
   onCountChange,
 }: {
   uid: string;
   initialListings: ListingCard[];
-  initialLimit: number;
+  initialNextCursor: string | null;
   isPro: boolean;
   onCountChange?: (count: number) => void;
 }) {
   const [listings, setListings] = useState(initialListings);
-  const [limit, setLimit] = useState(initialLimit);
+  const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [searchText, setSearchText] = useState('');
   const [activeCat, setActiveCat] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
@@ -69,28 +71,33 @@ export default function StoreListingsGrid({
     return docs;
   }, [listings, activeCat, searchText]);
 
-  // js/seller.js R3 verbatim: the button renders when the server returned a
-  // full page (listings.length >= limit, so more may exist) AND the filtered
-  // grid is non-empty.
-  const showMore = listings.length >= limit && filtered.length > 0;
+  // The button renders when the stream has a next page (the server only
+  // hands out a cursor when the previous page came back full — the same
+  // condition the legacy listings.length >= limit expressed) AND the
+  // filtered grid is non-empty.
+  const showMore = nextCursor !== null && filtered.length > 0;
 
   async function handleShowMore() {
-    if (loadingMore) return;
-    const nextLimit = limit + SHOW_MORE_STEP;
+    if (loadingMore || !nextCursor) return;
     setLoadingMore(true);
     setMoreError(false);
     try {
       const res = await fetch(
-        `/api/seller/${encodeURIComponent(uid)}/listings?limit=${nextLimit}`
+        `/api/seller/${encodeURIComponent(uid)}/listings?cursor=${encodeURIComponent(nextCursor)}`
       );
       if (!res.ok) throw new Error('seller-listings-' + res.status);
       const data = await res.json();
       if (!Array.isArray(data.listings))
         throw new Error('seller-listings-bad-shape');
-      // Legacy re-queries with the full new limit (newest-first), so a full
-      // replace — not an append — is the correct client behavior.
-      setListings(data.listings);
-      setLimit(nextLimit);
+      // Append the next page (dedupe by id as a belt-and-braces guard —
+      // cursor pages are disjoint by construction).
+      setListings((prev) => {
+        const seen = new Set(prev.map((l) => l.id));
+        return [...prev, ...data.listings.filter((l: ListingCard) => !seen.has(l.id))];
+      });
+      setNextCursor(
+        typeof data.nextCursor === 'string' ? data.nextCursor : null
+      );
     } catch {
       setMoreError(true);
     } finally {

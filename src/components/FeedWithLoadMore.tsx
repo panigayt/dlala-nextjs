@@ -4,8 +4,15 @@
 //
 // The server renders the first page (24 regular + interleaved wanted ads).
 // This client component appends further pages: it fetches regular listings
-// from /api/feed?offset=N and interleaves the server-provided wanted pool
-// using the verbatim interleaveWanted() logic (js/market.js).
+// from /api/feed?cursor=<opaque> and interleaves the server-provided wanted
+// pool using the verbatim interleaveWanted() logic (js/market.js).
+//
+// 22 Oct 2026 (reads-incident root fix): cursor pagination replaces the
+// ?offset=N paging — Firestore billed every document an OFFSET query
+// skipped, so deep scrolling re-paid for the whole prefix on every page.
+// The cursor is the stream position after the previous page's raw
+// window (server-computed, opaque to the client); pages are disjoint
+// and ordered exactly as before (probe-verified against production).
 //
 // Legacy parity notes (js/home.js):
 // - "عرض المزيد" button (t('loadMore')) appears when moreAvailable.
@@ -43,28 +50,27 @@ import {
   type VitrineSeller,
 } from '@/lib/vitrine';
 
-const PAGE_SIZE = 24;
-
 interface FeedPage {
   regular: ListingCard[];
   hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export default function FeedWithLoadMore({
   initialCards,
   wantedPool,
-  initialRegularOffset,
+  initialCursor,
   initialWantedOffset,
   initialHasMore,
 }: {
   initialCards: ListingCard[];
   wantedPool: ListingCard[];
-  initialRegularOffset: number;
+  initialCursor: string | null;
   initialWantedOffset: number;
   initialHasMore: boolean;
 }) {
   const [cards, setCards] = useState<ListingCard[]>(initialCards);
-  const [regularOffset, setRegularOffset] = useState(initialRegularOffset);
+  const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [wantedOffset, setWantedOffset] = useState(initialWantedOffset);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
@@ -91,16 +97,16 @@ export default function FeedWithLoadMore({
   const followedRef = useRef<Set<string> | null>(null);
   // «جديد من متابَعيك» strip cards.
   const [stripCards, setStripCards] = useState<ListingCard[]>([]);
-  // Round 160: prefetched next page — { offset, page } when the upcoming
-  // /api/feed?offset=N JSON (plus its card images) was warmed in the
-  // background. loadMore() consumes it instead of fetching, so the new
-  // cards paint with their images already in the browser cache.
-  const prefetchRef = useRef<{ offset: number; page: FeedPage } | null>(null);
-  const prefetchingRef = useRef<number | null>(null); // offset currently warming
+  // Round 160: prefetched next page, keyed by its cursor. The ref holds
+  // the in-flight PROMISE (not just the resolved page): a tap that lands
+  // while the prefetch is still warming awaits the same promise instead
+  // of firing a duplicate request — the baseline measurement caught the
+  // old offset-keyed version double-fetching a page exactly that way.
+  const prefetchRef = useRef<{ cursor: string | null; promise: Promise<FeedPage> } | null>(null);
   const loadMoreWrapRef = useRef<HTMLDivElement | null>(null);
-  // Live copy of regularOffset for the prefetch observer (avoids a stale
+  // Live copy of the cursor for the prefetch observer (avoids a stale
   // closure — the observer effect runs once on mount).
-  const regularOffsetRef = useRef(initialRegularOffset);
+  const cursorRef = useRef<string | null>(initialCursor);
   const { t, lang } = useLang();
   const auth = useAuthState();
   const refreshedUid = useRef<string | null>(null);
@@ -258,10 +264,15 @@ export default function FeedWithLoadMore({
   // Round 160: fetch one feed page + revive the createdAt Date contract
   // (Round 139 fix, extracted so both click-load and background prefetch
   // share the exact same shaping).
-  async function fetchFeedPage(offset: number): Promise<FeedPage> {
+  async function fetchFeedPage(pageCursor: string | null): Promise<FeedPage> {
     // 11 Oct 2026: timeout — stuck load-more on weak connections.
     const res = await withTimeout(
-      fetch(`/api/feed?offset=${offset}`, { cache: 'no-store' }),
+      fetch(
+        pageCursor
+          ? `/api/feed?cursor=${encodeURIComponent(pageCursor)}`
+          : '/api/feed',
+        { cache: 'no-store' }
+      ),
       20000
     );
     if (!res.ok) throw new Error(`feed-${res.status}`);
@@ -274,20 +285,23 @@ export default function FeedWithLoadMore({
       }
       return c;
     });
-    return { regular: freshRegular, hasMore: page.hasMore };
+    return {
+      regular: freshRegular,
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor ?? null,
+    };
   }
 
   // Round 160: warm the next page in the background (data + card images)
   // so tapping «عرض المزيد» paints instantly. Only fires when the button
   // is near the viewport (strong tap intent) — no wasted Firestore reads
   // for users who never scroll that far.
-  function prefetchNextPage(offset: number) {
-    if (prefetchRef.current?.offset === offset) return; // already warm
-    if (prefetchingRef.current === offset) return; // warming in flight
-    prefetchingRef.current = offset;
-    fetchFeedPage(offset)
+  function prefetchNextPage(pageCursor: string | null) {
+    if (prefetchRef.current && prefetchRef.current.cursor === pageCursor) {
+      return; // already warm or warming
+    }
+    const promise = fetchFeedPage(pageCursor)
       .then((page) => {
-        prefetchRef.current = { offset, page };
         // Prewarm card images: the thumb URLs land in the browser HTTP
         // cache now, so the appended cards paint their images instantly
         // instead of trickling in one slow TTFB at a time.
@@ -303,13 +317,17 @@ export default function FeedWithLoadMore({
         } catch {
           /* prewarm is best-effort */
         }
+        return page;
       })
-      .catch(() => {
-        /* prefetch failure is silent — the click path fetches normally */
-      })
-      .finally(() => {
-        if (prefetchingRef.current === offset) prefetchingRef.current = null;
+      .catch((e) => {
+        // Prefetch failure is silent — free the slot so the click path
+        // fetches normally instead of awaiting a dead promise.
+        if (prefetchRef.current && prefetchRef.current.cursor === pageCursor) {
+          prefetchRef.current = null;
+        }
+        throw e;
       });
+    prefetchRef.current = { cursor: pageCursor, promise };
   }
 
   async function loadMore() {
@@ -317,13 +335,20 @@ export default function FeedWithLoadMore({
     setLoading(true);
     setError(null);
     try {
-      // Round 160: consume the warmed page when it matches this offset.
+      // Round 160: consume the warmed page when it matches this cursor.
+      // The ref holds the in-flight promise, so a tap during warming
+      // awaits the SAME request — never a duplicate fetch.
       let page: FeedPage;
-      if (prefetchRef.current && prefetchRef.current.offset === regularOffset) {
-        page = prefetchRef.current.page;
+      const pf = prefetchRef.current;
+      if (pf && pf.cursor === cursor) {
         prefetchRef.current = null;
+        try {
+          page = await pf.promise;
+        } catch {
+          page = await fetchFeedPage(cursor);
+        }
       } else {
-        page = await fetchFeedPage(regularOffset);
+        page = await fetchFeedPage(cursor);
       }
       const freshRegular: ListingCard[] = page.regular;
       // Taste append path (js/taste.js tasteRankDefault append): the FULL
@@ -372,9 +397,9 @@ export default function FeedWithLoadMore({
       const newCards = interleaveWanted(boostedFresh, wantedPool.slice(wantedOffset));
       const wantedUsed = newCards.filter((c) => c.isWanted).length;
       setCards((prev) => [...prev, ...newCards]);
-      const nextOffset = regularOffset + PAGE_SIZE;
-      setRegularOffset(nextOffset);
-      regularOffsetRef.current = nextOffset;
+      const nextCursor = page.nextCursor ?? null;
+      setCursor(nextCursor);
+      cursorRef.current = nextCursor;
       setWantedOffset((prev) => prev + wantedUsed);
       const more = page.hasMore && newCards.length > 0;
       setHasMore(more);
@@ -383,8 +408,8 @@ export default function FeedWithLoadMore({
       if (more) {
         try {
           const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
-          if (idle) idle(() => prefetchNextPage(nextOffset));
-          else setTimeout(() => prefetchNextPage(nextOffset), 1500);
+          if (idle) idle(() => prefetchNextPage(nextCursor));
+          else setTimeout(() => prefetchNextPage(nextCursor), 1500);
         } catch {
           /* best-effort */
         }
@@ -414,7 +439,7 @@ export default function FeedWithLoadMore({
           if (en.isIntersecting) {
             done = true;
             io.disconnect();
-            prefetchNextPage(regularOffsetRef.current);
+            prefetchNextPage(cursorRef.current);
             break;
           }
         }

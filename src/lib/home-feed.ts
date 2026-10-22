@@ -7,10 +7,11 @@
 
 import { cacheLife } from 'next/cache';
 import {
-  fetchFeed,
+  fetchFeedPage,
   fetchWanted,
   interleaveWanted,
   trimFeedCard,
+  encodePageCursor,
   type ListingCard,
 } from '@/lib/firestore';
 import type { HomeFeedData } from '@/components/HomePage';
@@ -26,11 +27,14 @@ export async function getHomeFeed(): Promise<HomeFeedData> {
   'use cache';
   cacheLife({ revalidate: 60 });
   const PAGE_SIZE = 24;
-  const [docs, wantedPool] = await Promise.all([
-    fetchFeed(PAGE_SIZE),
+  const [page, wantedPool] = await Promise.all([
+    // 22 Oct 2026: cursor page (was fetchFeed) — identical docs/order,
+    // plus the stream cursor for client load-more (see src/app/page.tsx).
+    fetchFeedPage(PAGE_SIZE),
     // Best-effort: a wanted-pool failure must never break the feed.
     fetchWanted(120).catch(() => [] as ListingCard[]),
   ]);
+  const docs = page.docs;
   // Legacy splits the fetched docs (js/home.js: regular/wanted filters).
   const regular = docs.filter((d) => !d.isWanted);
   // Round 62: trim the feed payload — resolve the canonical card image
@@ -42,7 +46,7 @@ export async function getHomeFeed(): Promise<HomeFeedData> {
   return {
     cards,
     wantedPool: wantedPool.map(trimFeedCard),
-    regularOffset: PAGE_SIZE,
+    feedCursor: encodePageCursor(page.nextCursor),
     wantedOffset,
     hasMore: docs.length >= PAGE_SIZE,
   };

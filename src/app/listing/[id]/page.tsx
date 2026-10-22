@@ -109,6 +109,37 @@ async function _getListing(id: string): Promise<ListingDetail | null> {
   return fetchListing(id);
 }
 
+// 22 Oct 2026 (reads-incident fix): the similar rail (52 reads: wilaya
+// window 12 + category window 40) and the seller profile re-executed on
+// EVERY listing render while the listing doc itself was cached 300s.
+// They now share the listing's own 300s freshness contract — repeat
+// views of a listing inside the window cost zero Firestore reads, and
+// the rail can lag a brand-new listing by at most the same 5 minutes
+// the listing page already accepts for edits.
+async function getSimilarCached(
+  categoryId: string,
+  wilayaCode: number,
+  excludeId: string
+): Promise<ListingCard[]> {
+  'use cache';
+  cacheLife({ revalidate: 300 });
+  return fetchSimilarListings(categoryId, wilayaCode, excludeId);
+}
+
+async function getSimilarWindowCached(
+  categoryId: string
+): Promise<ListingCard[]> {
+  'use cache';
+  cacheLife({ revalidate: 300 });
+  return fetchSimilarWindow(categoryId);
+}
+
+async function getSellerCached(uid: string): Promise<SellerProfile | null> {
+  'use cache';
+  cacheLife({ revalidate: 300 });
+  return fetchSeller(uid);
+}
+
 // Round 12 (12 Oct 2026): React cache() dedupes the existence check across
 // generateMetadata + the page body within one request — one Firestore read.
 const getListing = cache(_getListing);
@@ -424,12 +455,12 @@ async function ListingContent({
   // output, ~1 fewer serial Firestore round-trip.
   const [similar, similarWindow, profile] = await Promise.all([
     !isWanted && l.categoryId
-      ? fetchSimilarListings(l.categoryId, Number(l.wilayaCode) || 0, id).catch(
+      ? getSimilarCached(l.categoryId, Number(l.wilayaCode) || 0, id).catch(
           (): ListingCard[] | null => null
         )
       : Promise.resolve(null as ListingCard[] | null),
     isWanted && l.categoryId
-      ? fetchSimilarWindow(l.categoryId).catch(
+      ? getSimilarWindowCached(l.categoryId).catch(
           (): ListingCard[] | null => null
         )
       : Promise.resolve(null as ListingCard[] | null),
@@ -438,7 +469,7 @@ async function ListingContent({
     // best-effort, never breaks the page (legacy's background
     // fetchUserRest catch behavior).
     l.sellerId
-      ? fetchSeller(l.sellerId).catch((): SellerProfile | null => null)
+      ? getSellerCached(l.sellerId).catch((): SellerProfile | null => null)
       : Promise.resolve(null as SellerProfile | null),
   ]);
 

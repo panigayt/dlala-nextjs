@@ -42,7 +42,10 @@ import { useLang } from '@/lib/i18n';
 export interface HomeFeedData {
   cards: ListingCard[];
   wantedPool: ListingCard[];
-  regularOffset: number;
+  // 22 Oct 2026: stream cursor after the first page's raw window
+  // (replaces the numeric regularOffset — OFFSET paging billed every
+  // skipped document; see src/lib/firestore.ts fetchFeedPage).
+  feedCursor: string | null;
   wantedOffset: number;
   hasMore: boolean;
 }
@@ -330,7 +333,7 @@ export default function HomePage({
             <FeedWithLoadMore
               initialCards={cards}
               wantedPool={feed.wantedPool}
-              initialRegularOffset={feed.regularOffset}
+              initialCursor={feed.feedCursor}
               initialWantedOffset={feed.wantedOffset}
               initialHasMore={feed.hasMore}
             />

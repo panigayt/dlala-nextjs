@@ -24,7 +24,6 @@ import SellerActions, { ShareIconButton } from '@/app/seller/[uid]/SellerActions
 import RatingsList from '@/app/seller/[uid]/RatingsList';
 import SellerTabsSection from '@/app/seller/[uid]/SellerTabsSection';
 import {
-  SELLER_LISTINGS_PAGE_SIZE,
   type ListingCard,
   type SellerProfile,
   type SellerRating,
@@ -286,12 +285,14 @@ export default function SellerPage({
   uid,
   seller,
   listings,
+  listingsCursor,
   ratings,
   ratingsFailed,
 }: {
   uid: string;
   seller: SellerProfile | null;
   listings: ListingCard[];
+  listingsCursor: string | null;
   ratings: SellerRating[] | null;
   ratingsFailed: boolean;
 }) {
@@ -343,7 +344,7 @@ export default function SellerPage({
           uid={uid}
           isPro={seller.storeTier === 'verified'}
           initialListings={listings}
-          initialLimit={SELLER_LISTINGS_PAGE_SIZE}
+          initialNextCursor={listingsCursor}
           infos={
             <>
               <SellerInfosTab s={seller} />

@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { cacheLife } from 'next/cache';
-import { fetchFeed } from '@/lib/firestore';
+import { fetchFeedPage, type PageCursor } from '@/lib/firestore';
 import { GUIDE_SLUGS } from '@/lib/guides';
 import { priceGuideSlug, priceGuideYear } from '@/lib/price-guide';
 import {
@@ -34,11 +34,20 @@ async function fetchAllLiveListings() {
   // without a redeploy.
   'use cache';
   cacheLife('hours');
-  const all: Awaited<ReturnType<typeof fetchFeed>> = [];
+  // 22 Oct 2026 (reads-incident root fix): CURSOR paging, not offsets.
+  // The old loop (fetchFeed(200, page*200)) was the single largest read
+  // consumer in the 21 Oct incident — Firestore bills OFFSET queries for
+  // every skipped document, so one generation cost
+  // 200+400+...+1600 ≈ 7,200 reads instead of the 1,409 documents it
+  // actually returns (Query Insights' top row: OFFSET 800 LIMIT 200,
+  // 226 executions = this loop). Cursor pages bill only returned docs.
+  const all: Awaited<ReturnType<typeof fetchFeedPage>>['docs'] = [];
+  let cursor: PageCursor | null = null;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const batch = await fetchFeed(PAGE_SIZE, page * PAGE_SIZE);
-    all.push(...batch);
-    if (batch.length < PAGE_SIZE) break; // short page = exhausted
+    const batch = await fetchFeedPage(PAGE_SIZE, cursor);
+    all.push(...batch.docs);
+    if (!batch.nextCursor || batch.docs.length < PAGE_SIZE) break; // exhausted
+    cursor = batch.nextCursor;
   }
   return all;
 }
