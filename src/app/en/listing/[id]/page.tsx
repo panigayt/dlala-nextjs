@@ -1,4 +1,21 @@
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
+
+// Same metadata as src/app/not-found.tsx's generateMetadata (locale is
+// fixed by the route): a page that throws notFound() keeps its OWN
+// metadata chain in Next, so without this the tab title fell back to
+// the root default instead of the localized 404 title.
+export const metadata: Metadata = {
+  title: 'Page not found | Dlala',
+  description:
+    "عذراً، هذه الصفحة غير موجودة. / Désolé, cette page n'existe pas. / Sorry, this page does not exist.",
+  robots: { index: false, follow: false },
+  openGraph: {
+    title: 'Page not found | Dlala',
+    description: 'عذراً، هذه الصفحة غير موجودة.',
+  },
+};
+
 
 // Fix Round 3 (22 Oct 2026) — React errors #419/#418 root fix (together
 // with the src/proxy.ts fall-through wrap and ChromeWithLang).
