@@ -41,6 +41,7 @@ import { savePendingAction } from '@/lib/pending-action';
 
 import { useLang } from '@/lib/i18n';
 import { trackEvent } from '@/lib/analytics';
+import { armFavRescue, disarmFavRescue, setFavRescueToken } from '@/lib/fav-rescue';
 
 interface Props {
   listingId: string;
@@ -198,6 +199,19 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           }
         }
         const target = !wasOn;
+        // Round 14 (22 Oct 2026): arm the teardown rescue BEFORE dispatch
+        // (see @/lib/fav-rescue) — if the page dies while this commit is
+        // in flight, pagehide re-fires the mutation via keepalive REST.
+        // Disarmed the moment the commit acks; never fires otherwise.
+        armFavRescue({
+          uid: user.uid,
+          listingId,
+          target,
+          data: wasOn
+            ? null
+            : { title, price: price || 0, photoUrl: photoUrl || '', sellerId: sellerId || '' },
+        });
+        client.authMod.getIdToken(user).then(setFavRescueToken).catch(() => {});
         const batch = fsMod.writeBatch(db);
         if (wasOn) {
           batch.delete(favRef);
@@ -224,6 +238,7 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           });
         }
         await withTimeout(batch.commit(), 15000);
+        disarmFavRescue(listingId); // acked — the rescue must not fire
         // Round 14 fix (22 Oct 2026): verify against the server truth and
         // reconcile (BUG-5 class — never let the UI lie). If the verify
         // read itself fails, the commit already landed — keep the
@@ -259,6 +274,9 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
           }
         }
       } catch (err) {
+        // The page is alive and the recovery below owns the outcome —
+        // the teardown rescue is not needed.
+        disarmFavRescue(listingId);
         console.error(err);
         // BUG-5 class (legacy): never trust the in-memory state here. Ask
         // the server for the truth so the UI self-corrects instead of

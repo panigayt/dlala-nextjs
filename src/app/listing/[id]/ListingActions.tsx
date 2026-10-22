@@ -45,6 +45,7 @@ import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { tasteNoteFav } from '@/lib/taste';
 import { emitFavChange } from './ListingShell';
 import { useLang } from '@/lib/i18n';
+import { armFavRescue, disarmFavRescue, setFavRescueToken } from '@/lib/fav-rescue';
 
 // Report reasons — verbatim order from js/market.js REPORT_REASONS; labels
 // via t('reasonX') (legacy: t('reason' + r[0].toUpperCase() + r.slice(1))).
@@ -375,6 +376,18 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         }
       }
       const target = !wasOn;
+      // Round 14 (22 Oct 2026): arm the teardown rescue BEFORE dispatch
+      // (@/lib/fav-rescue), same as FavoriteToggle — pagehide re-fires
+      // the mutation via keepalive REST if the page dies mid-commit.
+      armFavRescue({
+        uid: user.uid,
+        listingId,
+        target,
+        data: wasOn
+          ? null
+          : { title, price: price || 0, photoUrl: photoUrl || '', sellerId: sellerId || '' },
+      });
+      client.authMod.getIdToken(user).then(setFavRescueToken).catch(() => {});
       const batch = fsMod.writeBatch(db);
       if (wasOn) {
         batch.delete(favRef);
@@ -398,6 +411,7 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         batch.set(trackRef, { createdAt: fsMod.serverTimestamp() });
       }
       await withTimeout(batch.commit(), 15000);
+      disarmFavRescue(listingId); // acked — the rescue must not fire
       // Round 14 fix (22 Oct 2026): verify against the server truth; if
       // the verify read fails, the commit already landed — keep the
       // intended state.
@@ -420,6 +434,8 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
         }
       }
     } catch (e) {
+      // Page alive; the recovery below owns the outcome — no rescue.
+      disarmFavRescue(listingId);
       console.error(e);
       // BUG-5 fix (legacy): never trust the in-memory state here. Ask the
       // server for the truth; if unreachable, report not-applied so the UI
