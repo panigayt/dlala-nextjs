@@ -61,6 +61,8 @@ function authErrorMessage(e: unknown, t: (k: string) => string, fallbackKey: str
       return t('loginError');
     case 'auth/invalid-email':
       return t('resetEmailInvalid');
+    case 'auth/missing-password':
+      return t('passwordRequired');
     case 'auth/network-request-failed':
     case 'auth/timeout':
     case 'deadline-exceeded':
@@ -283,6 +285,13 @@ function AuthPageInner() {
     const em = email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
       setError(t('resetEmailInvalid'));
+      return;
+    }
+    // Round 11 F1: an empty password must render its own localized message
+    // immediately — not a slow SDK round-trip that reports "incorrect
+    // credentials" for a field the user simply left blank.
+    if (!password) {
+      setError(t('passwordRequired'));
       return;
     }
     setLoading(true);
@@ -713,7 +722,7 @@ function AuthPageInner() {
             <div>
               <h1 className="text-xl font-bold text-zinc-900 mb-5">{t('login')}</h1>
               {error && (
-                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                <div role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
                 </div>
               )}
@@ -774,7 +783,7 @@ function AuthPageInner() {
             <div>
               <h1 className="text-xl font-bold text-zinc-900 mb-5">{t('signup')}</h1>
               {error && (
-                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                <div role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
                 </div>
               )}
@@ -870,7 +879,7 @@ function AuthPageInner() {
             <div>
               <h1 className="text-xl font-bold text-zinc-900 mb-5">{t('forgotPassword')}</h1>
               {error && (
-                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                <div role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
                 </div>
               )}
@@ -927,7 +936,7 @@ function AuthPageInner() {
                 </strong>
               </p>
               {error && (
-                <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                <div role="alert" className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                   {error}
                 </div>
               )}
