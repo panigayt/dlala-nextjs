@@ -51,7 +51,7 @@ function decodeRestValue(v: unknown): unknown {
 
 export async function getPriceStats(): Promise<PriceStats> {
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   try {
     const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
     // CF parity: status == 'available', categoryId == 'cars',

@@ -455,7 +455,7 @@ const MODEL_CAR_FIELDS = [
 
 export async function fetchAvailableCars(): Promise<ModelListingSummary[]> {
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const structuredQuery = {
     from: [{ collectionId: 'listings' }],

@@ -33,7 +33,7 @@ async function fetchAllLiveListings() {
   // segment config — the sitemap regenerates hourly so new listings appear
   // without a redeploy.
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   // 22 Oct 2026 (reads-incident root fix): CURSOR paging, not offsets.
   // The old loop (fetchFeed(200, page*200)) was the single largest read
   // consumer in the 21 Oct incident — Firestore bills OFFSET queries for

@@ -351,7 +351,7 @@ ${subSections}
 // POST per category, each with its own 'use cache' entry.
 export async function categoryCount(categoryId: string): Promise<number> {
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   const url = FIRESTORE_REST_BASE + ':runAggregationQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const body = {
     structuredAggregationQuery: {
@@ -412,7 +412,7 @@ function decodeRestValue(v: unknown): unknown {
 
 export async function fetchAvailableListings(categoryId?: string): Promise<ModelListingSummary[]> {
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const fields = [
     'title', 'price', 'negotiable', 'wilayaCode',
@@ -457,6 +457,6 @@ export async function fetchAvailableListings(categoryId?: string): Promise<Model
 
 export async function fetchListings() {
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   return fetchAvailableListings();
 }

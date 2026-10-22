@@ -402,7 +402,7 @@ ${ctaTopHtml(lang)}
 // Cached per-wilaya count (for sitemap + meta descriptions).
 export async function wilayaCarCounts(): Promise<Record<number, number>> {
   'use cache';
-  cacheLife('hours');
+  cacheLife('days');
   const listings = await fetchAvailableCars();
   const counts: Record<number, number> = Object.create(null);
   for (const l of listings) {
