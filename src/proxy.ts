@@ -130,17 +130,56 @@ export async function proxy(req: NextRequest) {
       if (check === 'missing') {
         return trilingual404(locale);
       }
-      // R19 BC-1 (18 Oct 2026): detail pages are single-locale — there are
-      // no /fr/listing/<id> or /en/listing/<id> routes (they 404 by design,
-      // see src/app/listing/[id]/page.tsx). So an EXISTING (or
-      // check-failed) doc under a locale prefix falls through to the app's
-      // not-found.tsx. Hand it the pathname via x-pathname so it renders
-      // the French/English variant instead of defaulting to Arabic (the
-      // design not-found.tsx's getLocale() expects).
+      // R19 BC-1 (18 Oct 2026): detail pages are single-locale — the
+      // /fr|en detail URLs 404 by design (see src/app/listing/[id]/page.tsx).
+      // So an EXISTING (or check-failed) doc under a locale prefix renders
+      // the app's not-found.tsx. Hand it the pathname via x-pathname so it
+      // renders the French/English variant instead of defaulting to Arabic
+      // (the design not-found.tsx's getLocale() expects).
       if (urlLocale) {
         const reqHeaders = new Headers(req.headers);
         reqHeaders.set('x-pathname', req.nextUrl.pathname);
-        return NextResponse.next({ request: { headers: reqHeaders } });
+        // Fix Round 3 (22 Oct 2026) — React errors #419/#418 root fix.
+        // The old fall-through resumed the generic pathname-less PPR
+        // not-found shell: the resume tree mismatched the shell (Context
+        // vs Suspense → Minified React error #419, live digest 916544469)
+        // and the shell's Arabic chrome hydrated against the French/
+        // English client render (→ error #418). The dedicated
+        // /fr|en/(listing|seller|announcement) routes now render the
+        // not-found UI cleanly in a fresh per-segment render — but under
+        // PPR their notFound() streams after the shell, so their HTTP
+        // status is 200. The proxy owns real-404 status (Round 14), so it
+        // fetches the rendered page internally (bypass header prevents
+        // recursion) and re-emits it with status 404. Any failure falls
+        // open to the previous fall-through.
+        if (req.headers.get('x-dlala-404-render') === '1') {
+          return NextResponse.next({ request: { headers: reqHeaders } });
+        }
+        try {
+          const renderUrl = new URL(
+            req.nextUrl.pathname + req.nextUrl.search,
+            req.url,
+          );
+          const cookie = req.headers.get('cookie');
+          const rendered = await fetch(renderUrl, {
+            method: req.method,
+            headers: {
+              'x-dlala-404-render': '1',
+              ...(cookie ? { cookie } : {}),
+            },
+          });
+          if (rendered.status >= 500) throw new Error('render failed');
+          const body = req.method === 'HEAD' ? null : await rendered.text();
+          const headers = new Headers(rendered.headers);
+          // fetch() already decompressed the body — don't let the outer
+          // response claim an encoding/length the plain body doesn't have.
+          headers.delete('content-encoding');
+          headers.delete('content-length');
+          headers.set('cache-control', 'private, no-store');
+          return new NextResponse(body, { status: 404, headers });
+        } catch {
+          return NextResponse.next({ request: { headers: reqHeaders } });
+        }
       }
       // Round 196 (F5): legacy "{id}.html" URLs serve the listing with a
       // self-canonical to the .html URL — a duplicate-content pair with the

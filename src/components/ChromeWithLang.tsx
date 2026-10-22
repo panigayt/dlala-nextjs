@@ -29,8 +29,20 @@ export default function ChromeWithLang({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const forced = forcedLangForPath(pathname);
   const chrome = <SiteChrome>{children}</SiteChrome>;
-  if (forced) {
-    return <ForcedLang value={forced}>{chrome}</ForcedLang>;
-  }
-  return chrome;
+  // Fix Round 3 (22 Oct 2026) — React error #419 root fix. This component
+  // used to branch: /fr|en paths returned <ForcedLang> (a Context
+  // provider) as the root element, other paths returned <SiteChrome>
+  // directly. The root layout's <Suspense> boundary is prerendered into
+  // the generic not-found shell WITHOUT a pathname (forced = null → the
+  // slot's tree starts at SiteChrome's first <Suspense>). At request
+  // time, the only app-rendered not-found pages are the proxy's
+  // /fr|en detail fall-throughs (src/proxy.ts), whose resume render
+  // inserted the <Context> provider where the shell recorded <Suspense>
+  // — React aborted the resume ("Expected the resume to render
+  // <Suspense> in this slot but instead it rendered <Context>"), fell
+  // back to client rendering, and threw Minified React error #419
+  // (digest 916544469 live). Always rendering the provider makes the
+  // tree shape pathname-independent; value=null is the context default,
+  // so unprefixed rendering is byte-identical in behavior.
+  return <ForcedLang value={forced}>{chrome}</ForcedLang>;
 }

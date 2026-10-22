@@ -239,7 +239,10 @@ export function ForcedLang({
   value,
   children,
 }: {
-  value: Lang;
+  // Fix Round 3 (22 Oct 2026): Lang | null — ChromeWithLang now renders
+  // the provider unconditionally (see ChromeWithLang.tsx); a null value
+  // is semantically identical to no provider (the context default).
+  value: Lang | null;
   children: ReactNode;
 }) {
   return (
