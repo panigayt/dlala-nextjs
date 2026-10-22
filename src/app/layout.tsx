@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Suspense } from "react";
 import "./globals.css";
 import "./chrome.css";
@@ -11,6 +10,7 @@ import PendingActionApplier from "@/components/PendingActionApplier";
 import ScrollRestoreArmer from "@/components/ScrollRestoreArmer";
 import SwRegister from "@/components/SwRegister";
 import ErrorReporter from "@/components/ErrorReporter";
+import GaLoader from "@/components/GaLoader";
 
 // 12 Oct 2026 (Round 11 Team 1): FULLY STATIC root metadata.
 // Root cause fix for Round 10 T1: the previous root generateMetadata did
@@ -106,15 +106,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ar" dir="rtl">
       <head>
         {/* 16 Oct 2026: Google Analytics 4 (dlala-85cea property).
-            strategy="afterInteractive" = non-blocking; page renders first,
-            analytics loads after. Zero impact on perceived speed. */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-VTX14GJMFL"
-          strategy="afterInteractive"
-        />
-        <Script id="ga4-init" strategy="afterInteractive">
-          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-VTX14GJMFL');`}
-        </Script>
+            Fix Round 3 (22 Oct 2026): gtag/js (159.8 KB) no longer loads
+            here — GaLoader (mounted in <body>) injects it only after the
+            window load event + idle, or first interaction, so it never
+            competes with first paint on weak connections. */}
         {/* 12 Oct 2026: pre-paint lang/dir from the dlala_lang cookie.
             The root layout must stay a SYNC server component — awaiting
             cookies() here forces every route dynamic and breaks the
@@ -189,6 +184,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             the 14 Oct cutover dropped the /report-error rewrite and the
             reporter script. Tiny, lazy, no Firebase imports. */}
         <ErrorReporter />
+        {/* Fix Round 3 (22 Oct 2026): deferred GA4 — see GaLoader.tsx. */}
+        <GaLoader />
       </body>
     </html>
   );
