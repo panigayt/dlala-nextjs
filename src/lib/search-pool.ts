@@ -31,7 +31,7 @@
 import { cacheLife } from 'next/cache';
 import {
   fetchSearchPool,
-  runSearchPipelineFromIndex,
+  runSearchPipelineFromIndexWithSliver,
   hasFacetFilter,
   SEARCH_PAGE_SIZE,
   type ListingCard,
@@ -74,11 +74,17 @@ function canonicalSearchKey(f: SearchFilters): string {
 // for slow filtering). The pool is computed from the precomputed
 // siteStats/search dataset (every live listing as a compact entry +
 // seller boost verdict inputs, refreshed by the CF every 12h) by
-// runSearchPipelineFromIndex — zero Firestore queries per search, no
-// 120-doc live pool fetch, no per-search :batchGet. Freshness is the
-// feed's model: the dataset is ≤12h old, and the index payload itself
-// is cached for 1h per instance below (a dataset cache, not a result
-// cache — per-filter results keep the 60s pool cache above).
+// runSearchPipelineFromIndex — no 120-doc live pool fetch, no
+// per-search seller :batchGet for indexed docs. Freshness is the
+// feed's hybrid model: the dataset is ≤12h old, the index payload
+// itself is cached for 1h per instance below (a dataset cache, not a
+// result cache — per-filter results keep the 60s pool cache above),
+// and post-watermark arrivals are merged live by
+// runSearchPipelineFromIndexWithSliver (firestore.ts): ONE bounded
+// sliver query (≤24 docs) + ONE verdict :batchGet (≤24 sellers) per
+// pool execution — ≤48 added reads worst case, typical 1–6 — so a
+// just-published listing is findable immediately, exactly as on the
+// home feed. Sliver failure degrades to the pure index pool.
 //
 // Fallback policy (package-2 discipline, claimStatsScan): the head doc
 // is probed on every pool execution (1 read) so the classification is
@@ -111,7 +117,7 @@ async function fetchSearchPoolRouted(f: SearchFilters): Promise<ListingCard[]> {
   );
   if (head.kind === 'ok') {
     const idx = await fetchSearchIndexCached();
-    if (idx) return runSearchPipelineFromIndex(idx.entries, idx.boost, f);
+    if (idx) return runSearchPipelineFromIndexWithSliver(idx.entries, idx.boost, f);
     return [];
   }
   if (head.kind === 'missing') {

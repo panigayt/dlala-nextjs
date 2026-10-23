@@ -2310,6 +2310,177 @@ export function runSearchPipelineFromIndex(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Search live sliver (23 Oct 2026, reads-reduction 3 — Zak's follow-up
+// order «أضف الشريحة الحية أولاً ثم انشر»: the feed hybrid's discipline
+// applied to /search, so a just-published listing is findable at once
+// instead of at the next CF tick).
+//
+// When the pool is served from the index, the post-watermark live
+// arrivals are ALSO fetched and merged into the entries BEFORE the
+// replica runs — an arrival filters / ranks / paginates exactly as if
+// the CF had indexed it. The discipline mirrors fetchFeedSliver's:
+//   - watermark = the index's newest entry's createdAt, carried as its
+//     createdAtRaw string (full RFC 3339 precision end-to-end, so the
+//     >= predicate is exact — no coarser clock is involved anywhere:
+//     the search head's computedAt is a millisecond Date once decoded
+//     and is deliberately NOT used as the watermark, since a watermark
+//     rounded to a coarser clock would need a fudge factor to stay
+//     gapless);
+//   - predicate createdAt >= watermark, i.e. the ENTIRE boundary tie
+//     group is re-fetched; dedupe by id with the sliver copy winning
+//     (it is also the fresher read of the boundary docs);
+//   - ONE bounded runQuery per pool execution (status IN + createdAt
+//     >= watermark, createdAt DESC + __name__ DESC, LIMIT
+//     SEARCH_SLIVER_LIMIT), issued from inside the caller's 60s pool
+//     cache — never per-request uncached;
+//   - boost verdicts for the sliver's sellers are resolved live (one
+//     :batchGet, distinct sellers only), mirroring the live pipeline's
+//     fetchSellerBoostMap; every other seller keeps the head's
+//     verdict inputs.
+// Read bound per pool execution: ≤ 24 listing reads (the sliver query
+// bills the documents it returns) + ≤ 24 user reads (the verdict
+// :batchGet over the sliver docs' distinct sellers) = ≤ 48 added reads
+// worst case, on top of the pre-existing 1 head probe; typical is 1–6
+// (the watermark doc itself + however many ads arrived since the
+// tick). Arrivals beyond the newest 24 in one inter-tick window wait
+// for the next CF run (the same bounded-burst shape as the feed's).
+// Degradation is one-directional: a sliver or verdict failure serves
+// the pure index pool — never a full scan, never an error to search.
+// Removals / edits of already-indexed docs still land at the next CF
+// tick (the accepted precompute trade-off), except the boundary group,
+// whose sliver copies are live.
+// ---------------------------------------------------------------------------
+
+export const SEARCH_SLIVER_LIMIT = 24;
+
+// The sliver watermark: the newest createdAtRaw among the index
+// entries, compared at full (seconds, nanoseconds) precision. Null
+// when no entry carries a timestamp — the sliver then runs
+// status-only, i.e. it IS the whole live head (the feed's
+// empty-corpus branch).
+export function searchIndexWatermark(entries: SearchIndexEntry[]): string | null {
+  let best: string | null = null;
+  let bestKey: [number, number] | null = null;
+  for (const e of entries) {
+    const k = rawTsKey(e.createdAtRaw);
+    if (!k) continue;
+    if (
+      !bestKey ||
+      k[0] > bestKey[0] ||
+      (k[0] === bestKey[0] && k[1] > bestKey[1])
+    ) {
+      bestKey = k;
+      best = e.createdAtRaw as string;
+    }
+  }
+  return best;
+}
+
+// Post-watermark live arrivals as search index entries — the feed
+// sliver's query (fetchFeedSliver, verbatim shape) re-projected to the
+// index entry shape. Throws on HTTP failure; the caller degrades to
+// the pure index pool.
+export async function fetchSearchSliver(
+  watermarkRaw: string | null
+): Promise<SearchIndexEntry[]> {
+  const docs = await fetchFeedSliver(watermarkRaw, SEARCH_SLIVER_LIMIT);
+  return docs.map((s) => ({ ...s.doc, createdAtRaw: s.rawTs }));
+}
+
+// Fresh boost verdict INPUTS ({t, u}) for the given sellers — the live
+// pipeline's :batchGet (same endpoint, same field mask as
+// fetchSellerBoostMap), decoded to the search head's input shape
+// instead of a pre-evaluated boolean, so the replica's stage 6
+// evaluates vitrineBoostUntil expiry against Date.now() exactly as on
+// the pure index path. Every requested seller gets an entry: {} when
+// its users doc is missing or carries neither input — a definitive
+// "not boosted" that overrides a stale head entry. Returns null on
+// request failure (caller keeps the head's verdicts).
+export async function fetchSellerVerdictInputs(
+  sellerIds: string[]
+): Promise<SearchBoostVerdicts | null> {
+  const sids = [...new Set(sellerIds.filter(Boolean))];
+  if (!sids.length) return {};
+  const url =
+    FIRESTORE_REST_BASE + ':batchGet?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        documents: sids.map(
+          (id) => `${FIRESTORE_RESOURCE_BASE}/users/${encodeURIComponent(id)}`
+        ),
+        mask: { fieldPaths: ['storeTier', 'vitrineBoostUntil'] },
+      }),
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as unknown;
+    const found = new Map<string, Record<string, unknown>>();
+    for (const row of Array.isArray(body) ? body : []) {
+      const f = (row as Record<string, unknown> | null)?.found as
+        | { name?: string; fields?: Record<string, unknown> }
+        | undefined;
+      if (!f) continue;
+      const uid = String(f.name || '').split('/').pop() || '';
+      if (uid) found.set(uid, f.fields || {});
+    }
+    const out: SearchBoostVerdicts = {};
+    for (const sid of sids) {
+      const fields = found.get(sid);
+      const v: { t?: string; u?: number } = {};
+      if (fields) {
+        // Verbatim input extraction (the CF's extractSellerVerdict
+        // shape): t only for a non-empty storeTier string, u as epoch
+        // ms from the decoded timestamp.
+        const tier = restValue(fields.storeTier);
+        if (typeof tier === 'string' && tier !== '') v.t = tier;
+        const bu = restValue(fields.vitrineBoostUntil);
+        if (bu instanceof Date) v.u = bu.getTime();
+      }
+      out[sid] = v;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+// The index-path pool WITH the live sliver merged (see the block
+// header above). All failure modes degrade one-directionally to
+// runSearchPipelineFromIndex over the untouched index inputs.
+export async function runSearchPipelineFromIndexWithSliver(
+  entries: SearchIndexEntry[],
+  boost: SearchBoostVerdicts,
+  f: SearchFilters
+): Promise<ListingCard[]> {
+  let sliver: SearchIndexEntry[] | null = null;
+  try {
+    sliver = await fetchSearchSliver(searchIndexWatermark(entries));
+  } catch {
+    sliver = null;
+  }
+  if (!sliver || sliver.length === 0) {
+    return runSearchPipelineFromIndex(entries, boost, f);
+  }
+  const sliverIds = new Set(sliver.map((s) => String(s.id)));
+  const merged: SearchIndexEntry[] = [
+    ...sliver,
+    ...entries.filter((e) => !sliverIds.has(String(e.id))),
+  ];
+  let mergedBoost = boost;
+  const sids = [
+    ...new Set(sliver.map((s) => String(s.sellerId || '')).filter(Boolean)),
+  ];
+  if (sids.length) {
+    const fresh = await fetchSellerVerdictInputs(sids).catch(() => null);
+    if (fresh) mergedBoost = { ...boost, ...fresh };
+  }
+  return runSearchPipelineFromIndex(merged, mergedBoost, f);
+}
+
 // Helpers for card rendering (mirror client-side formatting)
 
 export function cardTitle(l: ListingCard, lang = 'ar'): string {
