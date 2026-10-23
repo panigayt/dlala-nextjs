@@ -10,6 +10,11 @@
 // 97 → 121 reads, plus a fresh seller-boost :batchGet per click), and
 // every visitor repeated the full cost independently.
 //
+// 23 Oct 2026 (reads-reduction 3): the pool computation itself moved
+// onto the siteStats precompute seam — see fetchSearchPoolRouted below.
+// The live Firestore pipeline (fetchSearchPool) remains as the
+// circuit-broken fallback for a genuinely missing index dataset.
+//
 // Behavior contract (identical outputs to the legacy shaping):
 // - deep-pool mode (text query, price range, or facet filters): every
 //   matched doc is painted, total = matched count, hasMore = false.
@@ -26,12 +31,20 @@
 import { cacheLife } from 'next/cache';
 import {
   fetchSearchPool,
+  runSearchPipelineFromIndex,
   hasFacetFilter,
   SEARCH_PAGE_SIZE,
   type ListingCard,
+  type SearchBoostVerdicts,
   type SearchFilters,
+  type SearchIndexEntry,
   type SearchResult,
 } from './firestore';
+import {
+  claimStatsScan,
+  readStatsDocDetailed,
+  readStatsSearchIndexDetailed,
+} from './site-stats';
 
 // Canonical cache key for a filter set. The cached function below takes
 // ONLY this string — measured on the fixed build (22 Oct 2026): keying
@@ -57,11 +70,62 @@ function canonicalSearchKey(f: SearchFilters): string {
   return JSON.stringify(pairs);
 }
 
+// Search index routing (23 Oct 2026, reads-reduction 3 — the root fix
+// for slow filtering). The pool is computed from the precomputed
+// siteStats/search dataset (every live listing as a compact entry +
+// seller boost verdict inputs, refreshed by the CF every 12h) by
+// runSearchPipelineFromIndex — zero Firestore queries per search, no
+// 120-doc live pool fetch, no per-search :batchGet. Freshness is the
+// feed's model: the dataset is ≤12h old, and the index payload itself
+// is cached for 1h per instance below (a dataset cache, not a result
+// cache — per-filter results keep the 60s pool cache above).
+//
+// Fallback policy (package-2 discipline, claimStatsScan): the head doc
+// is probed on every pool execution (1 read) so the classification is
+// always fresh even though the payload is cached.
+//   head ok      → serve the index; if the payload read then fails
+//                  (chunk corruption / transient), serve [] — a
+//                  malformed index is never a scan licence.
+//   head missing → the live pipeline may run ONCE per process per
+//                  cooldown (breaker); beyond that, serve [].
+//   head error   → transient: serve [], never scan.
+interface SearchIndexData {
+  entries: SearchIndexEntry[];
+  boost: SearchBoostVerdicts;
+}
+
+async function fetchSearchIndexCached(): Promise<SearchIndexData | null> {
+  'use cache';
+  cacheLife({ revalidate: 3600 });
+  const r = await readStatsSearchIndexDetailed().catch(() => null);
+  if (!r || r.kind !== 'ok') return null;
+  return {
+    entries: r.value.entries as unknown as SearchIndexEntry[],
+    boost: r.value.boost,
+  };
+}
+
+async function fetchSearchPoolRouted(f: SearchFilters): Promise<ListingCard[]> {
+  const head = await readStatsDocDetailed('search').catch(
+    () => ({ kind: 'error' }) as const
+  );
+  if (head.kind === 'ok') {
+    const idx = await fetchSearchIndexCached();
+    if (idx) return runSearchPipelineFromIndex(idx.entries, idx.boost, f);
+    return [];
+  }
+  if (head.kind === 'missing') {
+    if (claimStatsScan('search')) return fetchSearchPool(f);
+    return [];
+  }
+  return [];
+}
+
 async function fetchSearchPoolCached(key: string): Promise<ListingCard[]> {
   'use cache';
   cacheLife({ revalidate: 60 });
   const f: SearchFilters = Object.fromEntries(JSON.parse(key));
-  return fetchSearchPool(f);
+  return fetchSearchPoolRouted(f);
 }
 
 // Server-side search: structured Firestore filters + client-side text

@@ -2037,6 +2037,279 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
   return map;
 }
 
+// ---------------------------------------------------------------------------
+// Search pool from the precomputed index (23 Oct 2026, reads-reduction 3).
+//
+// runSearchPipelineFromIndex reproduces runSearchPipeline EXACTLY over
+// the siteStats/search entries (every live listing, CARD_FIELDS
+// projection + createdAtRaw, written by the siteStats CF — see
+// src/lib/site-stats.ts). Stage correspondence with the live pipeline:
+//   1. server filter plan (status is the dataset's membership rule;
+//      cat / wilaya / raw price bounds / facet plan when eligible /
+//      qBrand brand pre-filter) as in-memory predicates with Firestore
+//      semantics over decoded values — strict equality, IN membership,
+//      range comparisons in Firestore's total type order (the harness
+//      stub's matchFilter is the semantics reference, as for every
+//      siteStats package).
+//   2. orderBy (price ASC/DESC, price ASC for range shapes, else
+//      createdAt DESC) with the orderBy existence rule and the implicit
+//      __name__ tiebreak in the order's direction; LIMIT = poolLimit.
+//   3. price-range newest-first resort (stable, createdAt ms) — verbatim.
+//   4. all-wilayas wanted merge: the live path's separate query has no
+//      orderBy, i.e. __name__ ASC, limit 100, then the verbatim
+//      fetchWantedZeroWilaya client filter — reproduced over entries.
+//   5. matchFacets, text match + relevanceRank — the same functions.
+//   6. boost partition via partitionWithBoostMap, with verdicts from
+//      the index head's precomputed inputs ({t: storeTier, u:
+//      vitrineBoostUntilMs}) evaluated against Date.now() exactly as
+//      fetchSellerBoostMap evaluates the live :batchGet fields.
+// The ONE stage with no counterpart is the live path's missing-index
+// fallback (HTTP 400 → status-only query + client filter): it exists
+// only because a live query can be rejected; an in-memory pass cannot
+// be. The replica always implements the primary (designed) semantics.
+// Entries are never mutated; createdAtRaw is stripped from the output
+// (the feed's pattern), so results are indistinguishable from the live
+// pool's ListingCards.
+// ---------------------------------------------------------------------------
+
+export interface SearchIndexEntry extends ListingCard {
+  createdAtRaw?: string | null;
+}
+
+export type SearchBoostVerdicts = Record<string, { t?: string; u?: number }>;
+
+// RFC 3339 → [seconds, nanoseconds], or null. Full precision (unlike
+// Date's milliseconds) — pool ordering ties break on nanoseconds
+// before they break on document id, exactly as in Firestore.
+function rawTsKey(raw: unknown): [number, number] | null {
+  if (typeof raw !== 'string') return null;
+  const m = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/
+  );
+  if (!m) return null;
+  const sec = Math.floor(
+    Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`) / 1000
+  );
+  const nanos = m[7] ? Number(m[7].padEnd(9, '0')) : 0;
+  return [sec, nanos];
+}
+
+function entryTsKey(e: SearchIndexEntry): [number, number] | null {
+  const raw = rawTsKey(e.createdAtRaw);
+  if (raw) return raw;
+  const c = e.createdAt;
+  if (c instanceof Date && !isNaN(c.getTime())) {
+    const ms = c.getTime();
+    return [Math.floor(ms / 1000), (ms % 1000) * 1e6];
+  }
+  return null;
+}
+
+// Firestore's total value order — null < boolean < number < string <
+// timestamp — as implemented by the harness stub's cmpVal. A total
+// order is load-bearing here: a comparator with mixed-type cycles
+// (e.g. comparing a legacy string price against numbers by string
+// form) makes sort output depend on input order, which differs
+// between a collection scan and the index — the one input-order
+// sensitivity the replica must not have.
+function searchTypeRank(v: unknown, k: [number, number] | null): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'boolean') return 1;
+  if (typeof v === 'number') return 2;
+  if (typeof v === 'string') return 3;
+  if (k) return 4;
+  return 5;
+}
+
+// ASC value comparison mirroring the harness stub's cmpVal:
+// timestamps by (seconds, nanoseconds) first, then the total type
+// order, then the within-type comparison.
+function cmpSearchVal(
+  a: unknown,
+  b: unknown,
+  ka: [number, number] | null,
+  kb: [number, number] | null
+): number {
+  if (ka && kb) return ka[0] - kb[0] || ka[1] - kb[1];
+  const ra = searchTypeRank(a, ka);
+  const rb = searchTypeRank(b, kb);
+  if (ra !== rb) return ra - rb;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return a === b ? 0 : a ? 1 : -1;
+  }
+  const sa = String(a);
+  const sb = String(b);
+  return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+export function runSearchPipelineFromIndex(
+  entries: SearchIndexEntry[],
+  boost: SearchBoostVerdicts,
+  f: SearchFilters
+): ListingCard[] {
+  const poolLimit = SEARCH_DEEP_POOL;
+  // js/home.js feedShape() deep-pool condition — same expression as
+  // fetchSearchPool computes for runSearchPipeline.
+  const usePriceRange =
+    (f.min !== undefined && f.min !== '') || (f.max !== undefined && f.max !== '');
+  const qBrandKey = f.q && f.q.trim() ? resolveQueryBrand(f.q).qBrand : '';
+
+  // Raw price bounds, NO auto-order (22 Oct 2026 audit R16 — an
+  // inverted range matches zero docs, as the live primary query does).
+  const pMin = f.min !== undefined && f.min !== '' ? Number(f.min) : undefined;
+  const pMax = f.max !== undefined && f.max !== '' ? Number(f.max) : undefined;
+
+  // Facet server plan eligibility — verbatim condition from
+  // runSearchPipeline (recent sort, no price range).
+  const facetServerEligible = (!f.sort || f.sort === 'recent') && !usePriceRange;
+
+  const answerOf = (d: SearchIndexEntry, k: string): unknown =>
+    d.answers && typeof d.answers === 'object'
+      ? (d.answers as Record<string, unknown>)[k]
+      : undefined;
+
+  // --- stage 1+2: server filter plan, ordering, pool LIMIT ------------
+  let docs = entries.filter((d) => {
+    // status IN (available, negotiating) is the dataset's membership.
+    if (f.cat && d.categoryId !== f.cat) return false;
+    if (f.wilaya && d.wilayaCode !== Number(f.wilaya)) return false;
+    // Range comparisons follow Firestore's total type order (a legacy
+    // string price satisfies >= any number, never <= one) — the stub's
+    // matchFilter semantics, via cmpSearchVal.
+    if (pMin !== undefined && !(cmpSearchVal(d.price, pMin, null, null) >= 0)) {
+      return false;
+    }
+    if (pMax !== undefined && !(cmpSearchVal(d.price, pMax, null, null) <= 0)) {
+      return false;
+    }
+    if (facetServerEligible) {
+      if (f.cat === 'phones') {
+        if (f.fOs && answerOf(d, 'os') !== f.fOs) return false;
+        if (f.fBrand && answerOf(d, 'brand') !== f.fBrand) return false;
+      } else if (f.cat === 'cars') {
+        if (f.fCarBrand) {
+          const inValues = [f.fCarBrand, ...(CB_TO_LEGACY_BRAND[f.fCarBrand] || [])];
+          if (!inValues.includes(answerOf(d, 'brand') as string)) return false;
+        }
+        if (f.fFuel && answerOf(d, 'fuel') !== f.fFuel) return false;
+        if (f.fGear && answerOf(d, 'gear') !== f.fGear) return false;
+      }
+    }
+    if (qBrandKey) {
+      const legacy = qBrandKey.startsWith('pb')
+        ? PB_TO_LEGACY_BRAND[qBrandKey] || []
+        : CB_TO_LEGACY_BRAND[qBrandKey] || [];
+      const inValues = [qBrandKey, ...legacy.filter((s) => s !== qBrandKey)];
+      if (!inValues.includes(answerOf(d, 'brand') as string)) return false;
+    }
+    return true;
+  });
+
+  const priceDir =
+    f.sort === 'priceAsc' ? 'ASCENDING' : f.sort === 'priceDesc' ? 'DESCENDING' : null;
+  const orderField: 'price' | 'createdAt' =
+    priceDir || usePriceRange ? 'price' : 'createdAt';
+  const descending = priceDir ? priceDir === 'DESCENDING' : !usePriceRange;
+  // orderBy existence rule (docs missing the ordered field are excluded).
+  docs = docs.filter(
+    (d) => (orderField === 'price' ? d.price : d.createdAt) !== undefined
+  );
+  docs.sort((a, b) => {
+    const c =
+      orderField === 'createdAt'
+        ? cmpSearchVal(a.createdAt, b.createdAt, entryTsKey(a), entryTsKey(b))
+        : cmpSearchVal(a.price, b.price, null, null);
+    if (c !== 0) return descending ? -c : c;
+    const ic = a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    return descending ? -ic : ic;
+  });
+  docs = docs.slice(0, poolLimit);
+
+  // --- stage 3: price-range newest-first resort (verbatim) ------------
+  if (!priceDir && usePriceRange) {
+    docs.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+  }
+
+  // --- stage 4: all-wilayas wanted merge (verbatim filter) ------------
+  if (f.wilaya) {
+    const lo = f.min !== undefined && f.min !== '' ? Number(f.min) : -Infinity;
+    const hi = f.max !== undefined && f.max !== '' ? Number(f.max) : Infinity;
+    const wantedZero = entries
+      .filter((d) => d.wilayaCode === 0)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, 100)
+      .filter((d) => {
+        if (!d.isWanted) return false;
+        if (f.cat && d.categoryId !== f.cat) return false;
+        const p = Number(d.price || 0);
+        if (p < lo || p > hi) return false;
+        return true;
+      });
+    if (wantedZero.length) {
+      const seen = new Set(docs.map((d) => d.id));
+      for (const w of wantedZero) {
+        if (!seen.has(w.id)) {
+          docs.push(w);
+          seen.add(w.id);
+        }
+      }
+    }
+  }
+
+  // --- stage 5: facet refinement + text match (same functions) --------
+  if (hasFacetFilter(f)) {
+    docs = docs.filter((d) => matchFacets(d, f));
+  }
+  if (f.q && f.q.trim()) {
+    const { qBrand, textQ } = resolveQueryBrand(f.q);
+    const matched: SearchIndexEntry[] = [];
+    for (const d of docs) {
+      if (matched.length >= SEARCH_MAX_MATCHES) break;
+      const answers = (d.answers || {}) as Record<string, unknown>;
+      const docBrand = qBrand.startsWith('pb')
+        ? normalizePhoneBrand(answers.brand)
+        : normalizeCarBrand(answers.brand);
+      if (qBrand && docBrand !== qBrand) continue;
+      if (textQ) {
+        const title = normSearchText(allTextVariants(d.title));
+        const desc = normSearchText(allTextVariants(d.description));
+        if (!title.includes(textQ) && !desc.includes(textQ)) continue;
+      }
+      matched.push(d);
+    }
+    docs = (
+      !f.sort || f.sort === 'recent' ? relevanceRank(matched, f.q, qBrand) : matched
+    ) as SearchIndexEntry[];
+  }
+
+  // --- stage 6: boost partition (verdicts from the index head) --------
+  const needBoost = (!f.sort || f.sort === 'recent') && !(f.q && f.q.trim());
+  if (needBoost) {
+    const nowMs = Date.now();
+    const boostMap = new Map<string, boolean>();
+    for (const d of docs) {
+      if (d.isWanted) continue;
+      const sid = String(d.sellerId || '');
+      if (!sid || boostMap.has(sid)) continue;
+      const v = boost[sid];
+      boostMap.set(
+        sid,
+        !!v && (v.t === 'verified' || (typeof v.u === 'number' && v.u > nowMs))
+      );
+    }
+    docs = partitionWithBoostMap(docs, boostMap) as SearchIndexEntry[];
+  }
+
+  // Strip the index-internal cursor field (feed pattern) — output is
+  // indistinguishable from the live pool's cards.
+  return docs.map((d) => {
+    if (!('createdAtRaw' in d)) return d;
+    const { createdAtRaw: _raw, ...rest } = d;
+    return rest as unknown as ListingCard;
+  });
+}
+
 // Helpers for card rendering (mirror client-side formatting)
 
 export function cardTitle(l: ListingCard, lang = 'ar'): string {

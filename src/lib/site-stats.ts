@@ -25,7 +25,9 @@
 //   <base>          head { computedAt, sourceCount, runId, count, chunks }
 //   <base>__<runId>_<i>  { items: [...] }   (chunk docs, runId-versioned)
 // Bases: cars, live, all, feed (+ head.truncated), related (items are
-// [listingId, cards] pairs; head carries chunkFirstIds), cat_<categoryId>.
+// [listingId, cards] pairs; head carries chunkFirstIds), search (every
+// live listing as a card-projection entry; head carries boost verdict
+// inputs), cat_<categoryId>.
 
 import { FIREBASE_API_KEY, FIRESTORE_REST_BASE } from './firestore';
 
@@ -340,4 +342,54 @@ export async function readStatsRelated(
     }
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Search index (23 Oct 2026, reads-reduction 3).
+//
+// siteStats/search holds EVERY live listing (status available /
+// negotiating) as a CARD_FIELDS-projection entry (+ createdAtRaw), in
+// the same chunked layout as the other array datasets. The head also
+// carries `boost`: per-seller boost verdict inputs { t: storeTier,
+// u: vitrineBoostUntilMs } for the sellers of live listings — only
+// sellers WITH at least one input are present; an absent seller is
+// not boosted, exactly as a users doc without those fields reads in
+// the live pipeline's fetchSellerBoostMap. src/lib/search-pool.ts
+// routes the /search pool through these entries (the pipeline itself
+// is reproduced in memory in src/lib/firestore.ts); the live pipeline
+// remains the fallback for a genuinely missing dataset, governed by
+// the claimStatsScan('search') circuit breaker.
+// ---------------------------------------------------------------------------
+
+export interface StatsSearchIndex {
+  entries: Record<string, unknown>[];
+  boost: Record<string, { t?: string; u?: number }>;
+  computedAt: Date | null;
+}
+
+export async function readStatsSearchIndexDetailed(): Promise<StatsRead<StatsSearchIndex>> {
+  const r = await readStatsArrayDetailed('search');
+  if (r.kind !== 'ok') return r;
+  const raw = r.value.head.boost;
+  const boost: Record<string, { t?: string; u?: number }> = {};
+  if (raw !== undefined && raw !== null) {
+    // A present-but-malformed boost map is corruption, not absence:
+    // classify 'error' so the caller serves its safe empty instead of
+    // silently partitioning with wrong verdicts.
+    if (typeof raw !== 'object' || Array.isArray(raw)) return { kind: 'error' };
+    for (const [uid, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (v == null || typeof v !== 'object' || Array.isArray(v)) {
+        return { kind: 'error' };
+      }
+      const rec = v as Record<string, unknown>;
+      const out: { t?: string; u?: number } = {};
+      if (typeof rec.t === 'string') out.t = rec.t;
+      if (typeof rec.u === 'number') out.u = rec.u;
+      boost[uid] = out;
+    }
+  }
+  return {
+    kind: 'ok',
+    value: { entries: r.value.items, boost, computedAt: r.value.computedAt },
+  };
 }
