@@ -52,7 +52,7 @@ import {
   fmtPriceText,
 } from '@/lib/seo';
 import { t, type Lang } from '@/lib/i18n-strings';
-import { LocaleDir, RetryLabel } from '@/components/LocaleBits';
+import { LoadErrorText, LocaleDir, RetryLabel } from '@/components/LocaleBits';
 import type { MatchOfferDoc } from './MatchingOffers';
 import BackLink from '@/components/BackLink';
 import OwnerSellerCard from './OwnerSellerCard';
@@ -336,17 +336,20 @@ export async function generateMetadata({
 // client island is needed.
 async function TransientErrorView({ id }: { id: string }) {
   // R54: language-invariant SSR (Arabic) — the edge cache cannot vary by
-  // cookie, so no dlala_lang read here. dir + retry label follow the UI
-  // language client-side (LocaleBits); the messages stay trilingual.
+  // cookie, so no dlala_lang read here. dir, the retry label AND the
+  // heading/body follow the UI language client-side (LocaleBits).
+  // R25-3 (24 Oct 2026): the heading/body used to be an unconditional
+  // Arabic block with the FR/EN texts stacked below — they render in
+  // the active language now (LoadErrorText + the i18n tables).
   return (
     <LocaleDir className="max-w-2xl mx-auto px-4 py-16 text-center">
       <div className="text-6xl font-bold text-emerald-700">D</div>
-      <h1 className="mt-4 text-2xl font-bold" lang="ar" dir="rtl">تعذّر تحميل الإعلان</h1>
-      <p className="mt-2 text-zinc-600" lang="ar" dir="rtl">
-        حدث خطأ مؤقت أثناء تحميل هذا الإعلان. قد يكون الإعلان موجوداً — حاول مرة أخرى.
-      </p>
-      <p className="mt-1 text-zinc-600" lang="fr">Impossible de charger cette annonce pour le moment. Veuillez réessayer.</p>
-      <p className="mt-1 text-zinc-600" lang="en">This listing could not be loaded right now. Please try again.</p>
+      <LoadErrorText
+        titleKey="listingLoadErrorTitle"
+        bodyKey="listingLoadErrorBody"
+        titleClassName="mt-4 text-2xl font-bold"
+        bodyClassName="mt-2 text-zinc-600"
+      />
       <div className="mt-6 flex items-center justify-center gap-3">
         <a
           href={`/listing/${encodeURIComponent(id)}`}

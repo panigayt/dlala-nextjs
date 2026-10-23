@@ -15,9 +15,9 @@
 //     server-rendered HTML), but a bot-UA guard stays as defense in depth.
 //   - Signed-in OWNERS are excluded (js/listing.js parity — viewing your
 //     own ad must not inflate its view count).
-// Local YYYYMMDD like the app (the ~23:00-00:00 edge is the accepted
-// standing tradeoff). Best-effort: a denied/failed write is silently
-// ignored and must never break the listing page.
+// The date is Europe/Paris YYYYMMDD — NOT the device-local date
+// (R25-2, 24 Oct 2026; see viewDateStr). Best-effort: a denied/failed
+// write is silently ignored and must never break the listing page.
 
 import { useEffect } from 'react';
 import { getFirebaseCdn } from '@/lib/firebase';
@@ -25,9 +25,34 @@ import { getFirebaseCdn } from '@/lib/firebase';
 import { withTimeout } from '@/lib/timeout';
 
 function viewDateStr(): string {
-  const now = new Date();
-  const p2 = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}`;
+  // R25-2 (24 Oct 2026): the date MUST be Europe/Paris "today" — the
+  // recordView function's m-9 defense counts a view only when the doc's
+  // date (field AND trailing id segment) equals Europe/Paris today, and
+  // DELETES a mismatched doc uncounted. This used to be the browser's
+  // LOCAL date: for the core Algerian audience (UTC+1 year-round) the
+  // local date differs from Paris on every CEST evening (~29 Mar –
+  // 25 Oct), so every view between 23:00 and 00:00 local — prime
+  // browsing hours — was silently discarded (behaviorally proven in
+  // audit round 25 with UTC / New-York / Paris clock fixtures).
+  // Intl with an explicit timeZone converts the current instant to
+  // the Paris calendar day regardless of the device's own zone —
+  // the same computation the server performs (en-CA parts assembled
+  // as YYYYMMDD, the 8-digit string the rules' validViewDoc requires).
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  let y = '';
+  let m = '';
+  let d = '';
+  for (const p of parts) {
+    if (p.type === 'year') y = p.value;
+    else if (p.type === 'month') m = p.value;
+    else if (p.type === 'day') d = p.value;
+  }
+  return `${y}${m}${d}`;
 }
 
 const BOT_RE =

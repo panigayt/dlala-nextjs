@@ -22,7 +22,7 @@ import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import { fetchAnnouncement, annLocalized, type Announcement } from '@/lib/firestore';
 import { t } from '@/lib/i18n-strings';
-import { LocaleDir, RetryLabel } from '@/components/LocaleBits';
+import { LoadErrorText, LocaleDir, RetryLabel } from '@/components/LocaleBits';
 import AnnouncementDetail, { type AnnouncementDetailData } from './AnnouncementDetail';
 
 // Trilingual strings — verbatim from js/i18n.{ar,en,fr}.js (Round 120:
@@ -112,25 +112,28 @@ export async function generateMetadata({
 }
 
 // Round 11 (12 Oct 2026): transient-error UI — port of the Round 9
-// listing TransientErrorView (src/app/listing/[id]/page.tsx). Trilingual
-// static messaging (AR/FR/EN all rendered, same wording pattern) plus a
+// listing TransientErrorView (src/app/listing/[id]/page.tsx), plus a
 // native <a> retry link: a full document reload re-runs the server
 // component and retries the Firestore fetch. Genuinely missing
 // announcements (null) never reach this — they get notFound() above.
+// R25-3 (24 Oct 2026): the heading/body were an unconditional Arabic
+// block with FR/EN stacked below (the Round-11 "trilingual static
+// messaging"); they now render in the active UI language via
+// LoadErrorText + the i18n tables, like the listing view.
 async function TransientErrorView({ id }: { id: string }) {
   // R54: language-invariant SSR (Arabic) — no dlala_lang cookie read (edge
-  // cache cannot vary by cookie). dir + retry label follow the UI language
-  // client-side; the messages stay trilingual.
+  // cache cannot vary by cookie). dir, the retry label AND the
+  // heading/body follow the UI language client-side (LocaleBits).
   return (
     <LocaleDir>
       <div className="rounded-xl bg-white p-8 text-center">
         <div className="text-4xl">📢</div>
-        <h1 className="mt-3 text-lg font-semibold text-zinc-800" lang="ar" dir="rtl">تعذّر تحميل الإعلان</h1>
-        <p className="mt-2 text-zinc-600" lang="ar" dir="rtl">
-          حدث خطأ مؤقت أثناء تحميل هذا الإعلان. قد يكون الإعلان موجوداً — حاول مرة أخرى.
-        </p>
-        <p className="mt-1 text-zinc-600" lang="fr">Impossible de charger cette annonce pour le moment. Veuillez réessayer.</p>
-        <p className="mt-1 text-zinc-600" lang="en">This announcement could not be loaded right now. Please try again.</p>
+        <LoadErrorText
+          titleKey="announcementLoadErrorTitle"
+          bodyKey="announcementLoadErrorBody"
+          titleClassName="mt-3 text-lg font-semibold text-zinc-800"
+          bodyClassName="mt-2 text-zinc-600"
+        />
         <div className="mt-6">
           <a
             href={`/announcement/${encodeURIComponent(id)}`}

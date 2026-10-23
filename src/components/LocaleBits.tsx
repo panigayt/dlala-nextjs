@@ -35,3 +35,40 @@ export function RetryLabel() {
   const { t } = useLang();
   return <>{t('retry')}</>;
 }
+
+/**
+ * Localized heading + body for the transient load-failure views
+ * (listing + announcement pages). R25-3 (24 Oct 2026): these views used
+ * to render an unconditional Arabic heading/body (lang="ar" dir="rtl")
+ * with the FR/EN texts stacked underneath — a French/English user hit
+ * by a fetch failure got an Arabic-headed page. Now the copy follows
+ * the UI language like every other string on those pages: the keys
+ * live in the i18n tables, the active language renders alone (the
+ * Round-9 error.tsx pattern), and lang follows it. SSR stays
+ * language-invariant Arabic (useLang's server snapshot — R54), the
+ * client flips to the user's language on hydration, exactly like
+ * RetryLabel and LocaleDir.
+ */
+export function LoadErrorText({
+  titleKey,
+  bodyKey,
+  titleClassName,
+  bodyClassName,
+}: {
+  titleKey: string;
+  bodyKey: string;
+  titleClassName?: string;
+  bodyClassName?: string;
+}) {
+  const { lang, t } = useLang();
+  return (
+    <>
+      <h1 className={titleClassName} lang={lang}>
+        {t(titleKey)}
+      </h1>
+      <p className={bodyClassName} lang={lang}>
+        {t(bodyKey)}
+      </p>
+    </>
+  );
+}

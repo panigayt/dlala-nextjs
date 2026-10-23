@@ -106,6 +106,11 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Team announcements (Round 120) — verbatim from js/i18n.ar.js unless noted.
     share: 'مشاركة', readMore: 'اقرأ المزيد',
     announcementNotFound: 'الإعلان غير موجود.', announcementLink: 'زيارة الرابط',
+    // Load-failure states (R25-3) — listing/announcement transient error views.
+    listingLoadErrorTitle: 'تعذّر تحميل الإعلان',
+    listingLoadErrorBody: 'حدث خطأ مؤقت أثناء تحميل هذا الإعلان. قد يكون الإعلان موجوداً — حاول مرة أخرى.',
+    announcementLoadErrorTitle: 'تعذّر تحميل الإعلان',
+    announcementLoadErrorBody: 'حدث خطأ مؤقت أثناء تحميل هذا الإعلان. قد يكون الإعلان موجوداً — حاول مرة أخرى.',
     noAnnouncements: 'لا توجد إعلانات رسمية حالياً',
     annSearchPh: 'ابحث في الإعلانات...', // port-added (AnnList search placeholder)
     annSearchEmpty: 'لا توجد إعلانات مطابقة لبحثك.', // port-added (AnnList search empty state)
@@ -468,6 +473,11 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Team announcements (Round 120) — verbatim from js/i18n.fr.js unless noted.
     share: 'Partager', readMore: 'Lire la suite',
     announcementNotFound: 'Annonce introuvable.', announcementLink: 'Visiter le lien',
+    // Load-failure states (R25-3) — listing/announcement transient error views.
+    listingLoadErrorTitle: 'Impossible de charger cette annonce',
+    listingLoadErrorBody: 'Impossible de charger cette annonce pour le moment. Veuillez réessayer.',
+    announcementLoadErrorTitle: 'Impossible de charger cette annonce',
+    announcementLoadErrorBody: 'Impossible de charger cette annonce pour le moment. Veuillez réessayer.',
     noAnnouncements: 'Aucune annonce officielle pour le moment',
     annSearchPh: 'Rechercher dans les annonces...', // port-added (AnnList search placeholder)
     annSearchEmpty: 'Aucune annonce ne correspond à votre recherche.', // port-added (AnnList search empty state)
@@ -829,6 +839,11 @@ export const STRINGS: Record<Lang, Record<string, string>> = {
     // Team announcements (Round 120) — verbatim from js/i18n.en.js unless noted.
     share: 'Share', readMore: 'Read more',
     announcementNotFound: 'Announcement not found.', announcementLink: 'Visit link',
+    // Load-failure states (R25-3) — listing/announcement transient error views.
+    listingLoadErrorTitle: 'This listing could not be loaded',
+    listingLoadErrorBody: 'This listing could not be loaded right now. Please try again.',
+    announcementLoadErrorTitle: 'This announcement could not be loaded',
+    announcementLoadErrorBody: 'This announcement could not be loaded right now. Please try again.',
     noAnnouncements: 'No official announcements right now',
     annSearchPh: 'Search announcements...', // port-added (AnnList search placeholder)
     annSearchEmpty: 'No announcements match your search.', // port-added (AnnList search empty state)

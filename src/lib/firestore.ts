@@ -1331,10 +1331,21 @@ export function allTextVariants(v: unknown): string {
 // relying on the 120-doc global deep pool — pure brand queries like
 // q=samsung returned ZERO while 13 Samsung phones existed, because none
 // landed in the 120 newest docs. Verbatim logic, moved unchanged.
-export function resolveQueryBrand(rawQ: string): { qBrand: string; textQ: string } {
+// R25-1 (24 Oct 2026): also returns brandText — the normalized query text
+// that produced the brand key (the mapped token, or the whole normalized
+// query when only the whole-string pass mapped). The stage-5 matcher uses
+// it as the title/description fallback for docs whose answers.brand is
+// missing (see makeTextMatcher). The Round-52 server IN pre-filter itself
+// is gone (R25-1): brand selection is stage 5's alone now.
+export function resolveQueryBrand(rawQ: string): {
+  qBrand: string;
+  textQ: string;
+  brandText: string;
+} {
   const q = normSearchText(rawQ);
   const tokens = q.split(' ').filter(Boolean);
   let qBrand = '';
+  let brandText = '';
   const textTokens: string[] = [];
   for (const t of tokens) {
     // AZ-1 (18 Oct 2026): phone brands had no mapping at all — try the
@@ -1344,15 +1355,20 @@ export function resolveQueryBrand(rawQ: string): { qBrand: string; textQ: string
     // known brand gets one conservative edit-distance attempt
     // (peugot → cbPeugeot). Still '' for genuine unknowns.
     if (!b && !qBrand) b = fuzzyBrandKey(t);
-    if (b) qBrand = b;
-    else textTokens.push(t);
+    if (b) {
+      qBrand = b;
+      brandText = t;
+    } else textTokens.push(t);
   }
   if (!qBrand) {
     const b = normalizeCarBrand(rawQ.trim()) || normalizePhoneBrand(rawQ.trim())
       || fuzzyBrandKey(rawQ.trim());
-    if (b) qBrand = b;
+    if (b) {
+      qBrand = b;
+      brandText = q;
+    }
   }
-  return { qBrand, textQ: textTokens.join(' ') };
+  return { qBrand, textQ: textTokens.join(' '), brandText };
 }
 
 export function hasFacetFilter(f: SearchFilters): boolean {
@@ -1430,6 +1446,73 @@ function relevanceRank(docs: ListingCard[], q: string, brandKey = ''): ListingCa
   return out;
 }
 
+// R25-1 (24 Oct 2026): the stage-5 text matcher — ONE implementation
+// shared verbatim by runSearchPipeline and runSearchPipelineFromIndex
+// (the parity harness deep-equals the two pipelines; a single matcher
+// makes their text semantics identical by construction). Precondition:
+// f.q is a non-empty query (both call sites guard on it).
+//
+// A doc matches when:
+//   - brand: if the query resolved to a brand key, the doc's own brand
+//     (same map family — AZ-1) must equal it, OR the doc's
+//     title/description names the brand word itself (brandText). The
+//     fallback exists because the gate used to consult answers.brand
+//     ONLY: an import whose brand answer is missing was invisible even
+//     to its own brand query (R25-1 casualty mct69569034bc104, a
+//     Samsung-titled phone with no answers.brand, unreachable by
+//     q=samsung). relevanceRank already scores such a doc as a title
+//     hit; the gate now lets it reach the ranker. A doc of ANOTHER
+//     brand whose text merely mentions the word also passes —
+//     substring semantics; relevanceRank ranks it below true brand
+//     docs (description hit 10 < brand hit 30).
+//   - text: the remaining tokens (textQ) as one normalized substring
+//     of the title or description, ALL language variants (R16).
+export function makeTextMatcher(f: SearchFilters): {
+  qBrand: string;
+  matches: (d: ListingCard) => boolean;
+} {
+  const { qBrand, textQ, brandText } = resolveQueryBrand(f.q || '');
+  const matches = (d: ListingCard): boolean => {
+    const answers = (d.answers || {}) as Record<string, unknown>;
+    // AZ-1 (18 Oct 2026): the doc-side brand must use the same map family
+    // as the query key — pb* keys (phone brands) normalize via the phone
+    // map, cb* via the car map. Either map returns '' for the other
+    // family's values, so cross-category docs are correctly excluded.
+    const docBrand = qBrand.startsWith('pb')
+      ? normalizePhoneBrand(answers.brand)
+      : normalizeCarBrand(answers.brand);
+    // R16 (18 Oct 2026): search ALL language variants (was .ar only).
+    const title = normSearchText(allTextVariants(d.title));
+    const desc = normSearchText(allTextVariants(d.description));
+    if (qBrand && docBrand !== qBrand) {
+      if (!brandText || (!title.includes(brandText) && !desc.includes(brandText))) {
+        return false;
+      }
+    }
+    if (textQ && !title.includes(textQ) && !desc.includes(textQ)) return false;
+    return true;
+  };
+  return { qBrand, matches };
+}
+
+// Stage 5 (both pipelines): collect matches in pool order up to
+// SEARCH_MAX_MATCHES, then relevance-rank for the recent sort
+// (FIX-WEB-021: relevance leads, recency breaks ties; price sorts keep
+// pool order — the legacy renderFeed sort branch). R5-1: the brandKey
+// is passed through so brand-matched docs score as title-contains (30)
+// and a pure brand query orders by recency instead of all-zero scores.
+export function textMatchStage<T extends ListingCard>(docs: T[], f: SearchFilters): T[] {
+  const { qBrand, matches } = makeTextMatcher(f);
+  const matched: T[] = [];
+  for (const d of docs) {
+    if (matched.length >= SEARCH_MAX_MATCHES) break;
+    if (matches(d)) matched.push(d);
+  }
+  return ((!f.sort || f.sort === 'recent')
+    ? relevanceRank(matched, f.q || '', qBrand)
+    : matched) as T[];
+}
+
 // 0.0.0.31 FIX-WEB-014 (+050): result-count text with proper Arabic plurals.
 // Verbatim port of js/home.js resultsCountText — pure, unit-tested there.
 export function resultsCountText(n: number, lang = 'ar'): string {
@@ -1473,6 +1556,19 @@ export function viewsText(n: number | null | undefined, lang = 'ar'): string {
 export const SEARCH_DEEP_POOL = 120;
 export const SEARCH_MAX_MATCHES = 120;
 export const SEARCH_PAGE_SIZE = 24;
+
+// R25-1 (24 Oct 2026): the live pipeline's text-scan bound. On the
+// index path the stage-5 text match runs over the whole catalog in
+// memory (zero reads). The live Firestore path cannot substring-match
+// server-side, so for a text query it cursor-paginates the filtered
+// query in SEARCH_DEEP_POOL pages until the match cap is reached or
+// this many docs have been scanned — the newest 600 docs of the
+// filtered set. That window is the ONE residual divergence from the
+// index path, and it is reachable only on the breaker-gated fallback
+// (the index dataset genuinely missing): text matches older than the
+// window wait for the index to return. Brand selection semantics
+// (makeTextMatcher) are identical on both paths within the window.
+export const SEARCH_TEXT_SCAN_CAP = 600;
 
 export interface SearchResult {
   listings: ListingCard[];
@@ -1565,10 +1661,9 @@ async function runSearchPipeline(
   poolLimit: number,
   usePriceRange: boolean
 ): Promise<ListingCard[]> {
-  // Round 52 (18 Oct 2026): pre-resolve the query's brand key so the server
-  // plan can filter on it below — pure brand queries (q=samsung, q=سامسونج)
-  // no longer depend on the brand's docs landing in the 120 newest docs.
-  const qBrandKey = f.q && f.q.trim() ? resolveQueryBrand(f.q).qBrand : '';
+  // Round 52's qBrandKey pre-resolution lived here (it fed the server
+  // brand IN filter below). R25-1 (24 Oct 2026) removed that filter —
+  // stage 5 resolves the query itself (makeTextMatcher).
   const filters: unknown[] = [{
     fieldFilter: {
       field: { fieldPath: 'status' },
@@ -1676,25 +1771,14 @@ async function runSearchPipeline(
     }
   }
 
-  // Round 52 (18 Oct 2026): server-side brand pre-filter for free-text brand
-  // queries (q=بيجو / q=samsung / q=peugot). Equality on answers.brand keeps
-  // the query index-friendly in every sort/range shape — the missing-index
-  // fallback below degrades to the old client-only behavior, and the
-  // client-side qBrand check further down stays the correctness layer.
-  // Legacy spellings mirror the fCarBrand facet plan (CB_TO_LEGACY_BRAND)
-  // and its phone equivalent (PB_TO_LEGACY_BRAND).
-  if (qBrandKey) {
-    const legacy = qBrandKey.startsWith('pb')
-      ? (PB_TO_LEGACY_BRAND[qBrandKey] || [])
-      : (CB_TO_LEGACY_BRAND[qBrandKey] || []);
-    const inValues = [qBrandKey, ...legacy.filter((s) => s !== qBrandKey)];
-    filters.push({
-      fieldFilter: {
-        field: { fieldPath: 'answers.brand' }, op: 'IN',
-        value: { arrayValue: { values: inValues.map((s) => ({ stringValue: s })) } },
-      },
-    });
-  }
+  // Round 52's server-side brand IN pre-filter is GONE (R25-1,
+  // 24 Oct 2026). It hard-dropped every doc whose answers.brand was
+  // absent or spelled outside the IN list before stage 5 could see it
+  // — a Samsung-titled phone with no brand answer was invisible to
+  // q=samsung — and it bounded brand reach to the fetched pool. Brand
+  // selection now lives entirely in stage 5 (makeTextMatcher: brand
+  // gate + title fallback), and the paginated fetch below gives stage
+  // 5 a bounded-but-deep candidate set (SEARCH_TEXT_SCAN_CAP).
 
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   // Sort: legacy fSort (الأحدث / السعر من الأقل / السعر من الأعلى).
@@ -1711,7 +1795,10 @@ async function runSearchPipeline(
     : usePriceRange
       ? [{ field: { fieldPath: 'price' }, direction: 'ASCENDING' }]
       : [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }];
-  const runQuery = async (useFilters: unknown[]) => {
+  const runQuery = async (
+    useFilters: unknown[],
+    startAt?: { values: unknown[]; before: boolean }
+  ) => {
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1722,6 +1809,7 @@ async function runSearchPipeline(
             ? { compositeFilter: { op: 'AND', filters: useFilters } }
             : useFilters[0],
           orderBy,
+          ...(startAt ? { startAt } : {}),
           select: { fields: CARD_REST_FIELDS.map((x) => ({ fieldPath: x })) },
           // Deep-pool shapes scan a fixed pool (js/home.js DEEP_POOL);
           // structured shapes fetch one extra row for the hasMore heuristic.
@@ -1741,23 +1829,83 @@ async function runSearchPipeline(
   // Same merge point and same merge logic below: identical output.
   const wantedZeroP = f.wilaya ? fetchWantedZeroWilaya(f) : null;
 
-  let res;
+  // R25-1 (24 Oct 2026): text queries paginate. Firestore cannot
+  // substring-match server-side, so stage 5 matches client-side — over
+  // a single 120-doc pool that made every match older than the 120
+  // newest filtered docs unreachable (q=galaxy → 0 with 14 matches in
+  // the catalog, q=sandero → 1 of 27). For a text query the fetch now
+  // follows startAt cursors (the orderBy field's raw REST value +
+  // the page-last doc's reference — strictly-after semantics) until
+  // the filtered set is exhausted, SEARCH_TEXT_SCAN_CAP docs have
+  // been scanned, or the matches stage 5 could keep are already full.
+  // Non-text shapes keep the single-page fetch, byte-identical.
+  // The early stop is only sound when stage 5 iterates in fetch
+  // order — recent sort (any facet state) or an explicit price sort.
+  // The price-RANGE shape re-sorts newest-first after the fetch, so
+  // it always scans to the cap/exhaustion. The missing-index fallback
+  // re-paginates its status-only query WITHOUT the early stop (its
+  // client-side filter runs after the fetch, so a fetched-order match
+  // count would not be stage 5's count).
+  const isTextQuery = !!(f.q && f.q.trim());
+  const textMatcher = isTextQuery ? makeTextMatcher(f) : null;
+  // Stage 5's match count over the docs accumulated so far — decoded
+  // and facet-refined on the fly, minus the wanted merge (whose docs
+  // iterate after the main pool and can never displace a main match).
+  const countMatchesSoFar = (raw: unknown[]): number => {
+    if (!textMatcher) return 0;
+    let acc = raw.map((r) => restDocToObj(r as { name: string; fields?: Record<string, unknown> }));
+    if (hasFacetFilter(f)) acc = acc.filter((d) => matchFacets(d, f));
+    let n = 0;
+    for (const d of acc) if (textMatcher.matches(d)) n++;
+    return n;
+  };
+  const cursorOf = (doc: unknown) => {
+    const d = doc as { name?: string; fields?: Record<string, unknown> } | null;
+    if (!d || typeof d.name !== 'string') return undefined;
+    const v = d.fields?.[priceDir || usePriceRange ? 'price' : 'createdAt'];
+    if (!v || typeof v !== 'object') return undefined;
+    return { values: [v, { referenceValue: d.name }], before: false };
+  };
+  const runPagedQuery = async (
+    useFilters: unknown[],
+    into: unknown[],
+    countMatches: ((raw: unknown[]) => number) | null
+  ): Promise<void> => {
+    let startAt: { values: unknown[]; before: boolean } | undefined;
+    for (;;) {
+      const r = await runQuery(useFilters, startAt);
+      const body = await r.json().catch(() => null);
+      const page = (Array.isArray(body) ? body : []).filter((x) => x.document);
+      for (const row of page) into.push(row.document);
+      if (!isTextQuery || page.length < poolLimit) break;
+      if (into.length >= SEARCH_TEXT_SCAN_CAP) break;
+      if (countMatches && countMatches(into) >= SEARCH_MAX_MATCHES) break;
+      startAt = cursorOf(page[page.length - 1].document);
+      if (!startAt) break;
+    }
+  };
+
+  const rawDocs: unknown[] = [];
   let usedFallback = false;
+  const earlyStopOk = !!priceDir || !usePriceRange;
   try {
-    res = await runQuery(filters);
+    await runPagedQuery(
+      filters,
+      rawDocs,
+      isTextQuery && earlyStopOk ? countMatchesSoFar : null
+    );
   } catch (e) {
     // Missing composite index: fall back to status-only query + client-side filtering
     // (mirrors js/home.js index-error fallback).
     const msg = e instanceof Error ? e.message : '';
     if (!msg.includes('400') && !msg.includes('FAILED_PRECONDITION')) throw e;
     usedFallback = true;
-    res = await runQuery([filters[0]]);
+    rawDocs.length = 0;
+    await runPagedQuery([filters[0]], rawDocs, null);
   }
-  const body = await res.json().catch(() => null);
-  const rawDocs = (Array.isArray(body) ? body : [])
-    .filter((r) => r.document)
-    .map((r) => r.document);
-  let docs = rawDocs.map(restDocToObj);
+  let docs = rawDocs.map((r) =>
+    restDocToObj(r as { name: string; fields?: Record<string, unknown> })
+  );
 
   // Round 17 T6: boost verdicts are per-seller and identical for any subset
   // of this pool, so start fetching them as soon as the main query resolves —
@@ -1838,34 +1986,12 @@ async function runSearchPipeline(
   // token that maps to a cb* key acts as a brand filter, remaining tokens
   // match title/description as before. q=بيجو → all Peugeot; q=بيجو 2016
   // → Peugeot with 2016 in title/desc.
+  // R25-1 (24 Oct 2026): the matcher lives in textMatchStage now —
+  // shared verbatim with the index replica — and the pool it sees is
+  // no longer the 120 newest: the fetch above paginates text queries
+  // (SEARCH_TEXT_SCAN_CAP). No slice here — the caller paints.
   if (f.q && f.q.trim()) {
-    const { qBrand, textQ } = resolveQueryBrand(f.q);
-    const matched: ListingCard[] = [];
-    for (const d of docs) {
-      if (matched.length >= SEARCH_MAX_MATCHES) break;
-      const answers = (d.answers || {}) as Record<string, unknown>;
-      // AZ-1 (18 Oct 2026): the doc-side brand must use the same map family
-      // as the query key — pb* keys (phone brands) normalize via the phone
-      // map, cb* via the car map. Either map returns '' for the other
-      // family's values, so cross-category docs are correctly excluded.
-      const docBrand = qBrand.startsWith('pb')
-        ? normalizePhoneBrand(answers.brand)
-        : normalizeCarBrand(answers.brand);
-      if (qBrand && docBrand !== qBrand) continue;
-      if (textQ) {
-        // R16 (18 Oct 2026): search ALL language variants (was .ar only).
-        const title = normSearchText(allTextVariants(d.title));
-        const desc = normSearchText(allTextVariants(d.description));
-        if (!title.includes(textQ) && !desc.includes(textQ)) continue;
-      }
-      matched.push(d);
-    }
-    // FIX-WEB-021: with a text query, relevance leads (exact title first) —
-    // recency only breaks ties. Price sorts keep their own order instead
-    // (legacy renderFeed sort branch). No slice here — the caller paints.
-    // R5-1: brand-matched docs score as title-contains so a pure brand
-    // query (q=بيجو) orders by recency instead of all-zero scores.
-    docs = (!f.sort || f.sort === 'recent') ? relevanceRank(matched, f.q, qBrand) : matched;
+    docs = textMatchStage(docs, f);
   }
 
   // 0.0.0.39 D-7 parity (Round 164): boosted/pro sellers lead the regular
@@ -1962,15 +2088,15 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
 // projection + createdAtRaw, written by the siteStats CF — see
 // src/lib/site-stats.ts). Stage correspondence with the live pipeline:
 //   1. server filter plan (status is the dataset's membership rule;
-//      cat / wilaya / raw price bounds / facet plan when eligible /
-//      qBrand brand pre-filter) as in-memory predicates with Firestore
-//      semantics over decoded values — strict equality, IN membership,
-//      range comparisons in Firestore's total type order (the harness
-//      stub's matchFilter is the semantics reference, as for every
-//      siteStats package).
+//      cat / wilaya / raw price bounds / facet plan when eligible)
+//      as in-memory predicates with Firestore semantics over decoded
+//      values — strict equality, IN membership, range comparisons in
+//      Firestore's total type order (the harness stub's matchFilter is
+//      the semantics reference, as for every siteStats package).
 //   2. orderBy (price ASC/DESC, price ASC for range shapes, else
 //      createdAt DESC) with the orderBy existence rule and the implicit
-//      __name__ tiebreak in the order's direction; LIMIT = poolLimit.
+//      __name__ tiebreak in the order's direction; LIMIT = poolLimit
+//      for every mode EXCEPT text queries (R25-1, below).
 //   3. price-range newest-first resort (stable, createdAt ms) — verbatim.
 //   4. all-wilayas wanted merge: the live path's separate query has no
 //      orderBy, i.e. __name__ ASC, limit 100, then the verbatim
@@ -1980,6 +2106,20 @@ async function fetchSellerBoostMap(docs: ListingCard[]): Promise<Map<string, boo
 //      the index head's precomputed inputs ({t: storeTier, u:
 //      vitrineBoostUntilMs}) evaluated against Date.now() exactly as
 //      fetchSellerBoostMap evaluates the live :batchGet fields.
+// R25-1 (24 Oct 2026) — the text-query reach fix, both paths: stage 5
+// used to run over a pool sliced to the 120 newest (stage 2's LIMIT
+// here; the LIMIT 120 runQuery there), so any token that was not a
+// known brand — model names, sub-brands — could only match the newest
+// 120 listings (q=galaxy → 0 of 14, q=sandero → 1 of 27). Now: the
+// Round-52 brand IN pre-filter is removed from BOTH paths (it also
+// hard-dropped docs whose answers.brand is missing — the gate is
+// stage 5's alone, with its title fallback), this replica skips the
+// stage-2 LIMIT for text queries and matches over the full candidate
+// set (zero added reads — the entries are already in memory), and the
+// live path cursor-paginates its filtered query up to
+// SEARCH_TEXT_SCAN_CAP docs. The pipelines therefore return identical
+// pools whenever the live window covers the matches (always, on the
+// harness's corpus); the scan cap is the one documented divergence.
 // The ONE stage with no counterpart is the live path's missing-index
 // fallback (HTTP 400 → status-only query + client filter): it exists
 // only because a live query can be rejected; an in-memory pass cannot
@@ -2070,7 +2210,6 @@ export function runSearchPipelineFromIndex(
   // fetchSearchPool computes for runSearchPipeline.
   const usePriceRange =
     (f.min !== undefined && f.min !== '') || (f.max !== undefined && f.max !== '');
-  const qBrandKey = f.q && f.q.trim() ? resolveQueryBrand(f.q).qBrand : '';
 
   // Raw price bounds, NO auto-order (22 Oct 2026 audit R16 — an
   // inverted range matches zero docs, as the live primary query does).
@@ -2113,13 +2252,9 @@ export function runSearchPipelineFromIndex(
         if (f.fGear && answerOf(d, 'gear') !== f.fGear) return false;
       }
     }
-    if (qBrandKey) {
-      const legacy = qBrandKey.startsWith('pb')
-        ? PB_TO_LEGACY_BRAND[qBrandKey] || []
-        : CB_TO_LEGACY_BRAND[qBrandKey] || [];
-      const inValues = [qBrandKey, ...legacy.filter((s) => s !== qBrandKey)];
-      if (!inValues.includes(answerOf(d, 'brand') as string)) return false;
-    }
+    // R25-1: no qBrand predicate here — the live path's server IN
+    // filter is gone too; stage 5 (makeTextMatcher) owns brand
+    // selection, including docs whose answers.brand is missing.
     return true;
   });
 
@@ -2141,7 +2276,12 @@ export function runSearchPipelineFromIndex(
     const ic = a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     return descending ? -ic : ic;
   });
-  docs = docs.slice(0, poolLimit);
+  // R25-1 (24 Oct 2026): the pool LIMIT does not apply to text queries
+  // — stage 5 matches over the FULL candidate set (zero added reads in
+  // memory) and its SEARCH_MAX_MATCHES cap bounds the returned pool
+  // exactly as this slice did. Every other mode keeps the slice:
+  // structured browsing's 120 cap is a product contract (R21-3).
+  if (!(f.q && f.q.trim())) docs = docs.slice(0, poolLimit);
 
   // --- stage 3: price-range newest-first resort (verbatim) ------------
   if (!priceDir && usePriceRange) {
@@ -2179,25 +2319,9 @@ export function runSearchPipelineFromIndex(
     docs = docs.filter((d) => matchFacets(d, f));
   }
   if (f.q && f.q.trim()) {
-    const { qBrand, textQ } = resolveQueryBrand(f.q);
-    const matched: SearchIndexEntry[] = [];
-    for (const d of docs) {
-      if (matched.length >= SEARCH_MAX_MATCHES) break;
-      const answers = (d.answers || {}) as Record<string, unknown>;
-      const docBrand = qBrand.startsWith('pb')
-        ? normalizePhoneBrand(answers.brand)
-        : normalizeCarBrand(answers.brand);
-      if (qBrand && docBrand !== qBrand) continue;
-      if (textQ) {
-        const title = normSearchText(allTextVariants(d.title));
-        const desc = normSearchText(allTextVariants(d.description));
-        if (!title.includes(textQ) && !desc.includes(textQ)) continue;
-      }
-      matched.push(d);
-    }
-    docs = (
-      !f.sort || f.sort === 'recent' ? relevanceRank(matched, f.q, qBrand) : matched
-    ) as SearchIndexEntry[];
+    // R25-1: the shared matcher (textMatchStage) over the UNSLICED
+    // candidate set — see the stage-2 note above.
+    docs = textMatchStage(docs, f) as SearchIndexEntry[];
   }
 
   // --- stage 6: boost partition (verdicts from the index head) --------
