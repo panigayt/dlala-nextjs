@@ -50,6 +50,16 @@ export function generateMetadata(): Metadata {
     title: t('title_search', 'ar'),
     alternates: { canonical: `${SITE}/search` },
     robots: { index: false, follow: true },
+    // R23-6 fix (24 Oct 2026): with no openGraph of its own, the route
+    // inherited the root layout's og:url ("/" — the homepage) and had
+    // no og:image. Own canonical as og:url + the standard site og
+    // image, like every other page type.
+    openGraph: {
+      title: t('title_search', 'ar'),
+      url: `${SITE}/search`,
+      type: 'website',
+      images: [{ url: `${SITE}/icon-512.png` }],
+    },
   };
 }
 

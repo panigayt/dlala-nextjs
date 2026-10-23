@@ -24,6 +24,7 @@
 export const SITE = 'https://www.dzdlala.com';
 
 import { t, type Lang } from './i18n-strings';
+import { normalizeCarBrand, normalizePhoneBrand } from './brand-normalize';
 
 // Brand keys (cb*/pb*) -> Latin proper-noun label. Copied verbatim from
 // js/i18n.{ar,fr,en}.js (identical in all three): brand only when honestly
@@ -68,7 +69,17 @@ export function brandLatinName(key: string, lang: Lang = 'ar'): string {
   return BRAND_LATIN[key] || key;
 }
 
-// Verbatim port of js/listing.js listingBrandName().
+// Verbatim port of js/listing.js listingBrandName() + R23-1 fix
+// (24 Oct 2026): the port only accepted cb*/pb* KEYS, so every listing
+// whose answers.brand is a legacy plain spelling ("Renault",
+// "Volkswagen", Arabic رونو…) — 1,143 of 1,455 listings at audit time —
+// silently lost its JSON-LD brand even though the brand IS honestly
+// known. Legacy values now resolve through the SAME normalization the
+// search pipeline uses (normalizeCarBrand/normalizePhoneBrand in
+// ./brand-normalize — the LEGACY_*_BRAND_MAP single source of truth),
+// or by exact match against a BRAND_LATIN display value ("Citroën"
+// written in full). A value no map knows still returns '' — a brand is
+// never invented.
 export function listingBrandName(
   answers: Record<string, unknown> | undefined
 ): string {
@@ -76,9 +87,25 @@ export function listingBrandName(
     const b = answers && (answers as Record<string, unknown>).brand;
     if (!b || typeof b !== 'string') return '';
     if (/Other$/.test(b)) return '';
-    if (!/^(cb|pb)[A-Z]/.test(b)) return '';
-    const name = BRAND_LATIN[b];
-    if (!name || name === b) return '';
+    let key = '';
+    if (/^(cb|pb)[A-Z]/.test(b)) {
+      key = b;
+    } else {
+      key = normalizeCarBrand(b) || normalizePhoneBrand(b);
+      if (!key) {
+        // Full display spelling stored verbatim (e.g. "Citroën",
+        // "Mercedes-Benz"): honestly known, use it directly.
+        const v = b.trim().toLowerCase();
+        const hit = Object.values(BRAND_LATIN).find(
+          (name) => name.toLowerCase() === v
+        );
+        if (hit) return hit;
+        return '';
+      }
+    }
+    if (/Other$/.test(key)) return '';
+    const name = BRAND_LATIN[key];
+    if (!name || name === key) return '';
     // Allow Latin accented chars (Citroën) — 14 Oct 2026: 'ë' was rejected,
     // dropping brand from JSON-LD on every Citroen listing.
     if (!/^[A-Za-z0-9À-ÿ][A-Za-z0-9À-ÿ .&'\-]*$/.test(name)) return '';

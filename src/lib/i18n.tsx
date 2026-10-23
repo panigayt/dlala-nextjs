@@ -212,6 +212,27 @@ export function setAppLang(l: Lang): void {
   });
 }
 
+/** R23-4 fix (24 Oct 2026): prefix→locale sync for localized APP routes
+ *  (/fr/publish, /en/publish). Every other /fr|/en surface self-corrects
+ *  from its URL prefix because its visible content is entirely
+ *  ForcedLang-driven (home, guides, landings). The publish routes were
+ *  the exception: their gate detours through the UNPREFIXED /auth page,
+ *  whose language comes from this store — and the store is cookie-first,
+ *  so any visitor carrying a dlala_lang cookie for another language
+ *  (the audit's crawl state; any returning user opening a shared
+ *  localized link) got an Arabic login wall under a French/English
+ *  title, with <html lang/dir> flipped to ar/rtl by applyDocLang.
+ *  Syncing the store to the URL language on mount makes the whole
+ *  journey — publish page, auth detour, post-login return — end in the
+ *  URL's language + dir, in both the cookie and cookie-less branches.
+ *  An explicit in-session switch (langOverride) still wins: this sync
+ *  only repairs a store that was never deliberately set this session. */
+export function syncAppLangToUrl(l: Lang): void {
+  ensureLangInit();
+  if (langOverride !== null) return;
+  if (appLang !== l) setAppLang(l);
+}
+
 /** Subscribe to app-wide language changes. Returns an unsubscribe function. */
 export function subscribeLang(fn: () => void): () => void {
   langListeners.add(fn);

@@ -43,7 +43,15 @@ export function generateMetadata(): Metadata {
       canonical: url,
       languages: { ar: url, 'x-default': url },
     },
-    openGraph: { title, url, type: 'website' },
+    // R23-6 fix (24 Oct 2026): og:image was missing — shared links
+    // rendered without the Dlala image card. Standard site og image,
+    // same as the other page types.
+    openGraph: {
+      title,
+      url,
+      type: 'website',
+      images: [{ url: `${SITE}/icon-512.png` }],
+    },
   };
 }
 

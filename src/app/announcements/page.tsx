@@ -47,6 +47,12 @@ export function generateMetadata(): Metadata {
       title,
       description: desc,
       type: 'website',
+      // R23-6 fix (24 Oct 2026): og:url + og:image were missing (the
+      // route inherited neither correctly from the root layout), so
+      // shared links rendered without the Dlala image card. Same
+      // pattern as the other page types: own canonical + /icon-512.png.
+      url: 'https://www.dzdlala.com/announcements',
+      images: [{ url: 'https://www.dzdlala.com/icon-512.png' }],
     },
     twitter: {
       card: 'summary',

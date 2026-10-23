@@ -7,6 +7,7 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { ForcedLang } from '@/lib/i18n';
 import PublishPage from '@/app/publish/page';
+import UrlLangSync from '@/components/UrlLangSync';
 
 export function generateMetadata(): Metadata {
   return {
@@ -28,6 +29,9 @@ export function generateMetadata(): Metadata {
 export default function FrPublishPage() {
   return (
     <ForcedLang value="fr">
+      {/* R23-4: sync the language store to the URL language so the
+          auth-gate detour through /auth also renders French. */}
+      <UrlLangSync lang="fr" />
       <Suspense>
         <PublishPage />
       </Suspense>

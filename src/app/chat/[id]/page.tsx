@@ -132,12 +132,45 @@ function fmtChatTime(ts: number): string {
   return `${hh}:${mm}`;
 }
 
-function systemText(m: Msg, lang: Lang): string {
+// R23-3 fix (24 Oct 2026): the phone_requested actor label is resolved
+// per VIEWER, never trusted from storage alone. Legacy writers froze
+// st('you') — in the WRITER's language at write time — into
+// systemArgs.name whenever the requester's Auth displayName was empty,
+// so FR/EN viewers read «أنت a demandé votre numéro» and the RECIPIENT
+// saw the requester mislabeled as "you". Frozen 'you' values (any of
+// the three languages) and a missing name now resolve from the
+// message's senderId: the actor viewing their own notice gets the
+// localized 'you'; the other party gets the actor's display name (the
+// peer profile name this page already loads), falling back to the
+// localized generic 'unknownUser'. A REAL stored first name is
+// language-neutral and still renders verbatim for both viewers.
+const FROZEN_YOU_LABELS = ['أنت', 'vous', 'you'];
+
+interface SystemViewer {
+  myUid?: string;
+  peerName?: string;
+}
+
+function phoneRequestedText(m: Msg, lang: Lang, viewer?: SystemViewer): string {
+  const stored = ((m.systemArgs || {}).name || '').trim();
+  let actor = '';
+  if (stored && !FROZEN_YOU_LABELS.includes(stored.toLowerCase())) {
+    actor = stored;
+  } else if (viewer && m.senderId && viewer.myUid === m.senderId) {
+    actor = chatSt(lang, 'you');
+  } else {
+    actor =
+      ((viewer && viewer.peerName) || '').trim().split(' ')[0] ||
+      chatSt(lang, 'unknownUser');
+  }
+  return actor + ' ' + chatSt(lang, 'phoneRequestedSuffix');
+}
+
+function systemText(m: Msg, lang: Lang, viewer?: SystemViewer): string {
   const kind = m.systemKind || '';
-  const args = m.systemArgs || {};
   switch (kind) {
     case 'phone_requested':
-      return (args.name || '') + ' ' + chatSt(lang, 'phoneRequestedSuffix');
+      return phoneRequestedText(m, lang, viewer);
     case 'phone_accepted':
       return chatSt(lang, 'phoneAcceptedMsg');
     case 'phone_declined':
@@ -1336,7 +1369,11 @@ function ChatInner() {
         systemKind: kind,
         systemArgs: args,
       },
-      lang
+      lang,
+      // R23-3: the list preview stays in the sender's language AND the
+      // sender's perspective (FIX-ROUND-37 M3 design, R23-5) — the actor
+      // label resolves exactly as the sender sees it in-chat.
+      { myUid: user.uid, peerName: otherName }
     );
     const convUpdate: Record<string, unknown> = {
       updatedAt: fsMod.serverTimestamp(),
@@ -1386,9 +1423,18 @@ function ChatInner() {
         phoneRequestCount: fsMod.increment(1),
         updatedAt: fsMod.serverTimestamp(),
       });
-      await appendSystem('phone_requested', {
-        name: (user.displayName || '').trim().split(' ')[0] || st('you'),
-      }).catch(() => {});
+      // R23-3 fix: store ONLY a real first name (language-neutral).
+      // The old `|| st('you')` fallback froze the writer-language word
+      // for "you" into the stored message, mislabeling the actor for
+      // every other viewer/language. With no name stored, the renderer
+      // resolves the label per viewer from senderId (see
+      // phoneRequestedText). Rules allow systemArgs absent or
+      // {name}-only for phone_* kinds (systemMessageOk).
+      const reqFirst = (user.displayName || '').trim().split(' ')[0];
+      await appendSystem(
+        'phone_requested',
+        reqFirst ? { name: reqFirst } : {}
+      ).catch(() => {});
     } catch {
       const rb = { ...c, phoneRequestBy: prevBy, phoneRequestStatus: prevStatus };
       convRef.current = rb;
@@ -1844,7 +1890,7 @@ function ChatInner() {
       nodes.push(
         <div key={m.id} className="flex justify-center my-2">
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-500">
-            {systemText(m, lang)}
+            {systemText(m, lang, { myUid, peerName: otherName })}
           </span>
         </div>
       );

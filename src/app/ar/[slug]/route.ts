@@ -1,63 +1,20 @@
-import {
-  findCategoryBySlug,
-  filterCategoryItems,
-  buildCategoryPage,
-  notFoundPage,
-  fetchAvailableListings,
-  CATEGORY_MIN_LISTINGS,
-  categoryCount,
-  categorySubLinks,
-} from '@/lib/category-pages';
+import { notFoundPage } from '@/lib/category-pages';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
-// Category SEO landing page (AR) — /ar/{fr-slug}. Arabic is the default
-// locale; renders the same canonical AR page as /{fr-slug}.
-export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
-  const { slug } = await ctx.params;
-  const cat = findCategoryBySlug(slug);
-  if (!cat) {
-    return new Response(notFoundPage('category'), {
-      status: 404,
-      headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
-    });
-  }
-  try {
-    const listings = await fetchAvailableListings(cat.id);
-    const items = filterCategoryItems(listings, cat.id);
-    let total = 0;
-    for (const l of listings) {
-      const f = l as unknown as Record<string, unknown>;
-      if (String(f.categoryId) !== cat.id) continue;
-      if (f.status !== 'available' || f.hidden === true) continue;
-      total++;
-    }
-    if (total < CATEGORY_MIN_LISTINGS) {
-      return new Response(notFoundPage('thin'), {
-        status: 404,
-        headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
-      });
-    }
-    // R53 Team B (18 Oct 2026): the 500-doc fetch window capped the count
-    // shown in title/description (live "500" vs 1,287 real cars). Use a
-    // server-side aggregation for the displayed total (single-category
-    // helper — independent cache entry from the sitemap batch helper);
-    // the thin-content guard keeps using the visible window count.
-    const aggTotal = await categoryCount(cat.id).catch(() => 0);
-    const displayTotal = aggTotal > 0 ? aggTotal : total;
-    // R53 Team B (18 Oct 2026): internal-link fix — the category hub
-    // now cross-links its model/wilaya sub-landing pages (cars only).
-    const sub = categorySubLinks(listings, 'ar');
-    const html = buildCategoryPage(cat, items, displayTotal, 'ar', sub);
-    return new Response(html, {
-      status: 200,
-      headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=3600, s-maxage=3600' },
-    });
-  } catch (e) {
-    console.error('category page failed:', e instanceof Error ? e.message : e);
-    return new Response('temporarily unavailable', {
-      status: 500,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    });
-  }
+// R23-2 fix (24 Oct 2026): this route used to render the full category
+// landing page under /ar/{fr-slug} (200, duplicate of the unprefixed
+// canonical) for the four category slugs — while every other /ar/*
+// route answers 404 (Arabic is the default locale at UNPREFIXED
+// canonicals; /ar/* is never linked or indexed). The route now mirrors
+// the established /ar discipline exactly: the same 404 page this route
+// already served for non-category slugs, for every slug. The canonical
+// category pages live at /{fr-slug} (src/app/[slug]/route.ts) and are
+// untouched; the legacy /ar/voitures/{wilaya} 301s live in
+// src/app/ar/voitures/[slug]/route.ts and are untouched.
+export async function GET() {
+  return new Response(notFoundPage('category'), {
+    status: 404,
+    headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
+  });
 }
