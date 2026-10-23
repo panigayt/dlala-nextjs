@@ -23,7 +23,7 @@ import ListingCardView from '@/components/ListingCardView';
 // Round 4 (18 Oct 2026, audit R-1): VitrineShowcase is below-fold and
 // conditional — lazy-load it to reduce home first-load JS.
 const VitrineShowcase = lazy(() => import('@/components/VitrineShowcase'));
-import { interleaveWanted, resultsCountText, cardImage, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
+import { interleaveWanted, cardImage, type ListingCard, type VitrineShowcaseData } from '@/lib/firestore';
 import { tasteRankDefault } from '@/lib/taste';
 // Round 12: this file is a firebase-compat user → bundled path. Type-only
 // imports are erased at compile time (zero bundle cost); the loader module
@@ -470,18 +470,8 @@ export default function FeedWithLoadMore({
 
   return (
     <>
-      {/* 0.0.0.31 FIX-WEB-014: results counter — verbatim js/home.js
-          setResultsCount(shown.length) parity: counts the painted grid
-          cards (regular + interleaved wanted), not the follows strip or
-          vitrine showcases. role="status" + aria-live announces the
-          count to screen readers after every load-more, like legacy. */}
-      <div
-        role="status"
-        aria-live="polite"
-        className="text-[13px] text-zinc-500 px-0.5 py-1.5 min-h-[1.2em]"
-      >
-        {resultsCountText(cards.length, lang)}
-      </div>
+      {/* Results counter («24 نتيجة») REMOVED 23 Oct 2026 on Zak's order —
+          supersedes the 0.0.0.31 FIX-WEB-014 legacy parity. */}
       {/* «جديد من متابَعيك» strip (js/home.js renderFollowsSection, Zak
           16 Sep 2026): latest listings from followed users — last 7 days,
           max 3 per user, newest first. Prepended to the default feed. */}

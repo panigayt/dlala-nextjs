@@ -31,7 +31,6 @@ import { withTimeout } from '@/lib/timeout';
 // bundle; next/dynamic was measured +2.9KB net (its loadable runtime).
 const StoreMatchCards = lazy(() => import('@/app/search/StoreMatchCards'));
 import {
-  resultsCountText,
   SEARCH_PAGE_SIZE,
   type ListingCard,
   type SearchFilters,
@@ -101,13 +100,7 @@ function HomeFilteredGrid({
     !!f.min && !!f.max && Number(f.min) > Number(f.max);
   return (
     <>
-      <div
-        role="status"
-        aria-live="polite"
-        className="text-[13px] text-zinc-500 px-0.5 py-1.5 min-h-[1.2em]"
-      >
-        {resultsCountText(state.total, lang)}
-      </div>
+      {/* Results counter REMOVED 23 Oct 2026 on Zak's order. */}
       {/* Round 166 (0.0.0.39 parity, js/home.js 0.0.0.1m insertStoreCards):
           verified-store gold cards prepended atop the feed when the text
           query matches a storeName/@username. Best-effort background fetch;
@@ -315,15 +308,6 @@ export default function HomePage({
           </div>
         ) : cards.length === 0 ? (
           <>
-            {/* FIX-WEB-014 parity: legacy still paints resultsMeta with
-                the zero-count above the empty state. */}
-            <div
-              role="status"
-              aria-live="polite"
-              className="text-[13px] text-zinc-500 px-0.5 py-1.5 min-h-[1.2em]"
-            >
-              {resultsCountText(0, lang)}
-            </div>
             <div className="rounded-xl bg-white p-6 text-center text-zinc-500">
               {t('feedEmpty')}
             </div>
