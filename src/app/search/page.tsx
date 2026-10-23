@@ -23,6 +23,7 @@ import {
 import { searchListingsWithCount } from '@/lib/search-pool';
 import { parseSearchFilters, filtersToQuery } from './filters';
 import { t } from '@/lib/i18n-strings';
+import { SITE } from '@/lib/seo';
 import SearchPage from '@/components/SearchPage';
 import FeedPreloadHints from '@/components/FeedPreloadHints';
 
@@ -39,9 +40,16 @@ import FeedPreloadHints from '@/components/FeedPreloadHints';
 // settling on the page title.
 export function generateMetadata(): Metadata {
   // 11 Oct 2026: noindex — query-param search URLs are thin content.
+  // 23 Oct 2026 (reads-reduction 2, crawler-fragment discipline): every
+  // parameterized variant (q/cat/wilaya/min/max/sort + facet combos)
+  // canonicalizes to the single clean /search URL, and links stay
+  // followable (follow: true) so crawlers still reach the real landing
+  // pages linked from results — the URL class itself stays out of the
+  // index. robots.txt also disallows /search outright.
   return {
     title: t('title_search', 'ar'),
-    robots: { index: false, follow: false },
+    alternates: { canonical: `${SITE}/search` },
+    robots: { index: false, follow: true },
   };
 }
 

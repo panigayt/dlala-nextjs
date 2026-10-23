@@ -13,9 +13,15 @@
 // (cacheComponents) pattern already used by src/app/sitemap.ts.
 //
 // 22 Oct 2026 (reads-incident root fix): getPriceStats() now reads the
-// siteStats/priceStats document precomputed every 6h by the siteStats
-// Cloud Function (ONE listings pass) — the live scan below remains ONLY
-// as a fallback for when the document is missing/unparseable.
+// siteStats/priceStats document precomputed by the siteStats Cloud
+// Function (ONE listings pass) — the live scan below remains ONLY as a
+// cold-start fallback.
+// 23 Oct 2026 (reads-reduction 2 hardening): the scan may run ONLY when
+// the document is genuinely missing (404) and the circuit breaker
+// (claimStatsScan) grants the one bounded scan for this process; a
+// malformed document or a transient read failure serves the same
+// ok:false empty result the scan itself returns on error — never a
+// repeated 1,356-doc scan.
 
 import { cacheLife } from 'next/cache';
 
@@ -26,7 +32,7 @@ import {
   type PriceRow,
   type PriceStats,
 } from './price-guide';
-import { readStatsDoc } from './site-stats';
+import { claimStatsScan, readStatsDocDetailed } from './site-stats';
 
 export type { PriceRow, PriceStats };
 
@@ -55,14 +61,17 @@ function decodeRestValue(v: unknown): unknown {
   return null;
 }
 
+const EMPTY_STATS: PriceStats = { ok: false, rows: [], totalAds: 0, fetchedAt: null };
+
 export async function getPriceStats(): Promise<PriceStats> {
   'use cache';
   cacheLife('days');
   // siteStats precompute first (1 read). fetchedAt becomes the stats'
   // computedAt — the moment the data was computed — which is what
   // renderPriceGuideData publishes as the guide's dateModified.
-  const doc = await readStatsDoc('priceStats');
-  if (doc) {
+  const r = await readStatsDocDetailed('priceStats');
+  if (r.kind === 'ok') {
+    const doc = r.value;
     if (Array.isArray(doc.rows) && typeof doc.totalAds === 'number') {
       return {
         ok: true,
@@ -74,13 +83,25 @@ export async function getPriceStats(): Promise<PriceStats> {
             : new Date().toISOString(),
       };
     }
-    console.warn('siteStats/priceStats malformed — falling back to live scan');
+    // Malformed is not missing: the CF owns this document's shape; a
+    // bad shape is a bug to surface in logs, not a reason to scan.
+    console.warn('siteStats/priceStats malformed — serving empty stats (no scan)');
+    return EMPTY_STATS;
   }
-  return getPriceStatsScan();
+  if (r.kind === 'missing' && claimStatsScan('priceStats')) {
+    console.warn('siteStats/priceStats missing — one bounded cold-start scan');
+    return getPriceStatsScan();
+  }
+  console.warn(
+    r.kind === 'missing'
+      ? 'siteStats/priceStats missing — scan suppressed by circuit breaker'
+      : 'siteStats/priceStats read failed — serving empty stats (no scan)'
+  );
+  return EMPTY_STATS;
 }
 
 // The original live-scan implementation, kept verbatim as the fallback
-// for when the siteStats document is missing or unparseable.
+// for when the siteStats document is genuinely missing (breaker-gated).
 async function getPriceStatsScan(): Promise<PriceStats> {
   try {
     const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);

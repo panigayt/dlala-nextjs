@@ -8,6 +8,11 @@
 //   ~/workspace/dlala-040/js/home.js    (buildFeedRestQuery default branch)
 
 import type { Lang } from './i18n';
+import {
+  pageStatsFeed,
+  readStatsFeedArray,
+  readStatsRelated,
+} from './site-stats';
 
 // Round 16 T6: env-first (deploy source of truth). Fallback = production
 // key from dlala-040/js/config.js (0.0.0.39). Keep in sync with src/proxy-404.ts.
@@ -270,12 +275,204 @@ function buildCursorFeedQuery(limit: number, cursor: PageCursor | null) {
   return q;
 }
 
+// --- Hybrid default feed (23 Oct 2026, reads-reduction 2) ---------------
+//
+// Zak's correction: the default feed must stay INSTANT for new listings.
+// The siteStats CF precomputes the newest 240 live listings into
+// siteStats/feed every 12h; page 1 merges that doc with a small LIVE
+// sliver — every listing at or newer than the doc's newest item
+// (createdAt >= watermark), newest-first, LIMIT 24 — so a just-published
+// ad leads the homepage on the next 60s cache regeneration, at the cost
+// of the handful of documents the sliver actually returns instead of a
+// full page scan. Pages ≥2 are served from the doc alone (zero reads);
+// the live cursor query remains for cursors the doc cannot resolve
+// (a page-1 cursor minted on a sliver item, a listing sold since the
+// last run, pages straddling the 240 window) — it continues the SAME
+// stream exactly, because sliver/doc cursors carry the raw timestamp
+// + id the live query's startAt consumes.
+//
+// Exactness of the merge: the sliver predicate is >= the watermark
+// (the doc's newest item's createdAt), so the sliver contains the
+// ENTIRE boundary tie group; every sliver item is ≥ every doc item,
+// both segments are internally in feed order, and dedupe by id (sliver
+// copy wins) removes the overlap — the concatenation IS the global
+// newest-first stream. The sliver runs only inside the callers'
+// existing 'use cache' wrappers (60s home/API, days sitemap) — never
+// per-request uncached.
+const FEED_SLIVER_LIMIT = 24;
+
+interface SliverDoc {
+  doc: ListingCard;
+  rawTs: string | null;
+}
+
+async function fetchFeedSliver(
+  watermarkRaw: string | null,
+  limit: number
+): Promise<SliverDoc[]> {
+  const statusFilter = {
+    fieldFilter: {
+      field: { fieldPath: 'status' },
+      op: 'IN',
+      value: {
+        arrayValue: {
+          values: [{ stringValue: 'available' }, { stringValue: 'negotiating' }],
+        },
+      },
+    },
+  };
+  const where = watermarkRaw
+    ? {
+        compositeFilter: {
+          op: 'AND',
+          filters: [
+            statusFilter,
+            {
+              fieldFilter: {
+                field: { fieldPath: 'createdAt' },
+                op: 'GREATER_THAN_OR_EQUAL',
+                value: { timestampValue: watermarkRaw },
+              },
+            },
+          ],
+        },
+      }
+    : statusFilter;
+  const structuredQuery = {
+    from: [{ collectionId: 'listings' }],
+    where,
+    orderBy: [
+      { field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' },
+      { field: { fieldPath: '__name__' }, direction: 'DESCENDING' },
+    ],
+    select: { fields: CARD_REST_FIELDS.map((f) => ({ fieldPath: f })) },
+    limit,
+  };
+  const url =
+    FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`feed-sliver-rest-${res.status}`);
+  }
+  const body = await res.json().catch(() => null);
+  const rawDocs = (Array.isArray(body) ? body : [])
+    .filter((r) => r.document)
+    .map((r) => r.document);
+  return rawDocs.map((d) => {
+    const ts = (d as { fields?: Record<string, { timestampValue?: unknown }> })
+      .fields?.createdAt?.timestampValue;
+    return { doc: restDocToObj(d), rawTs: typeof ts === 'string' ? ts : null };
+  });
+}
+
+// One page of the default feed. Stats-hybrid first (see above); the
+// original live cursor implementation (renamed fetchFeedPageLive) is
+// the fallback for every position the precomputed doc cannot serve.
+export async function fetchFeedPage(
+  limit = 24,
+  cursor: PageCursor | null = null
+): Promise<{ docs: ListingCard[]; nextCursor: PageCursor | null }> {
+  if (cursor) {
+    // Pages ≥2: precomputed doc only.
+    const feed = await readStatsFeedArray().catch(() => null);
+    if (feed) {
+      const page = pageStatsFeed(feed, limit, cursor);
+      if (page) {
+        return {
+          docs: page.docs as unknown as ListingCard[],
+          nextCursor: page.nextCursor,
+        };
+      }
+    }
+    return fetchFeedPageLive(limit, cursor);
+  }
+  // Page 1: precomputed doc + live sliver merge.
+  const feed = await readStatsFeedArray().catch(() => null);
+  if (feed) {
+    const watermark =
+      feed.items.length > 0 ? String(feed.items[0].createdAtRaw || '') : null;
+    if (watermark !== null && watermark !== '') {
+      const sliver = await fetchFeedSliver(
+        watermark,
+        Math.min(limit, FEED_SLIVER_LIMIT)
+      ).catch(() => null);
+      if (sliver) {
+        const sliverIds = new Set(sliver.map((s) => s.doc.id));
+        const rawTsById = new Map(
+          sliver.map((s) => [s.doc.id, s.rawTs] as const)
+        );
+        const rest = feed.items.filter((it) => !sliverIds.has(String(it.id)));
+        const merged: ListingCard[] = [
+          ...sliver.map((s) => s.doc),
+          ...(rest as unknown as ListingCard[]),
+        ];
+        const pageDocs = merged.slice(0, limit);
+        let nextCursor: PageCursor | null = null;
+        if (pageDocs.length === limit && pageDocs.length > 0) {
+          const last = pageDocs[pageDocs.length - 1];
+          const raw = rawTsById.get(last.id);
+          if (raw) {
+            nextCursor = { t: raw, id: last.id };
+          } else {
+            const item = feed.items.find((it) => String(it.id) === last.id);
+            if (item && typeof item.createdAtRaw === 'string') {
+              nextCursor = { t: item.createdAtRaw, id: last.id };
+            }
+          }
+        }
+        // Strip the doc-internal cursor field from doc-sourced cards.
+        const docs = pageDocs.map((d) => {
+          const rec = d as unknown as Record<string, unknown>;
+          if (!('createdAtRaw' in rec)) return d;
+          const { createdAtRaw: _raw, ...stripped } = rec;
+          return stripped as unknown as ListingCard;
+        });
+        return { docs, nextCursor };
+      }
+      // Sliver unavailable (transient): degrade to the doc alone —
+      // content exact as of the last compute, zero extra reads.
+      const page = pageStatsFeed(feed, limit, null);
+      if (page) {
+        return {
+          docs: page.docs as unknown as ListingCard[],
+          nextCursor: page.nextCursor,
+        };
+      }
+    } else if (watermark === null) {
+      // Empty precomputed corpus: the sliver IS the whole live head.
+      const sliver = await fetchFeedSliver(null, limit).catch(() => null);
+      if (sliver) {
+        const pageDocs = sliver.slice(0, limit);
+        let nextCursor: PageCursor | null = null;
+        if (pageDocs.length === limit && pageDocs.length > 0) {
+          const last = pageDocs[pageDocs.length - 1];
+          if (last.rawTs) nextCursor = { t: last.rawTs, id: last.doc.id };
+        }
+        return { docs: pageDocs.map((s) => s.doc), nextCursor };
+      }
+      const page = pageStatsFeed(feed, limit, null);
+      if (page) {
+        return {
+          docs: page.docs as unknown as ListingCard[],
+          nextCursor: page.nextCursor,
+        };
+      }
+    }
+  }
+  return fetchFeedPageLive(limit, cursor);
+}
+
 // One page of the default feed via cursor. nextCursor is built from the
 // last RAW document of the window (pre-wanted-filter), so the stream
 // position is exact even when the window's tail is a wanted doc the API
 // layer filters out of the painted cards. nextCursor is null when the
 // window came back short (stream exhausted).
-export async function fetchFeedPage(
+async function fetchFeedPageLive(
   limit = 24,
   cursor: PageCursor | null = null
 ): Promise<{ docs: ListingCard[]; nextCursor: PageCursor | null }> {
@@ -864,7 +1061,24 @@ export function trimFeedCard(l: ListingCard): ListingCard {
   };
 }
 
+// Similar rail, stats-first (23 Oct 2026, reads-reduction 2): the
+// siteStats CF precomputes every live listing's rail verbatim (see
+// computeRelatedFor in the CF) into siteStats/related — a head + one
+// chunk read instead of the 12+40 live reads below. An entry is used
+// only when present (an explicitly EMPTY rail is honored as-is); the
+// live implementation remains the fallback for listings the last run
+// did not cover (published since, or the dataset absent/malformed).
 export async function fetchSimilarListings(
+  categoryId: string,
+  wilayaCode: number,
+  excludeId: string
+): Promise<ListingCard[]> {
+  const stats = await readStatsRelated(excludeId).catch(() => null);
+  if (stats) return stats as unknown as ListingCard[];
+  return fetchSimilarListingsLive(categoryId, wilayaCode, excludeId);
+}
+
+async function fetchSimilarListingsLive(
   categoryId: string,
   wilayaCode: number,
   excludeId: string

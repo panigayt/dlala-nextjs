@@ -18,7 +18,7 @@ import { cacheLife } from 'next/cache';
 import { SITE } from './seo';
 import { WILAYAS } from './wilayas';
 import { FIREBASE_API_KEY, FIRESTORE_REST_BASE } from './firestore';
-import { readStatsArray } from './site-stats';
+import { claimStatsScan, readStatsArrayDetailed } from './site-stats';
 
 // ---------------------------------------------------------------------------
 // seoCategories/index.js — helpers (verbatim logic, typed)
@@ -457,18 +457,32 @@ const MODEL_CAR_FIELDS = [
 export async function fetchAvailableCars(): Promise<ModelListingSummary[]> {
   'use cache';
   cacheLife('days');
-  // siteStats precompute (22 Oct 2026 reads fix): the 6-hourly Cloud
-  // Function writes this exact window (same query semantics, same order)
-  // to siteStats/cars — read it (a few chunk docs) instead of re-running
+  // siteStats precompute (22 Oct 2026 reads fix): the Cloud Function
+  // writes this exact window (same query semantics, same order) to
+  // siteStats/cars — read it (a few chunk docs) instead of re-running
   // the 1,356-doc scan on every cache regeneration.
-  const stats = await readStatsArray('cars');
-  if (stats) return stats.items as unknown as ModelListingSummary[];
-  console.warn('siteStats/cars missing or malformed — falling back to live scan');
-  return fetchAvailableCarsScan();
+  // 23 Oct 2026 hardening: the scan may run ONLY when the dataset is
+  // genuinely missing (head 404) and the circuit breaker grants this
+  // process its one bounded scan; malformed data or a transient read
+  // failure serves [] — the safe empty the consumers already handle
+  // (thin/empty landing behavior for one cache window) — never a
+  // repeated full scan.
+  const r = await readStatsArrayDetailed('cars');
+  if (r.kind === 'ok') return r.value.items as unknown as ModelListingSummary[];
+  if (r.kind === 'missing' && claimStatsScan('cars')) {
+    console.warn('siteStats/cars missing — one bounded cold-start scan');
+    return fetchAvailableCarsScan();
+  }
+  console.warn(
+    r.kind === 'missing'
+      ? 'siteStats/cars missing — scan suppressed by circuit breaker'
+      : 'siteStats/cars malformed/unreadable — serving [] (no scan)'
+  );
+  return [];
 }
 
 // The original live-scan implementation, kept verbatim as the fallback
-// for when the siteStats documents are missing or unparseable.
+// for when the siteStats dataset is genuinely missing (breaker-gated).
 async function fetchAvailableCarsScan(): Promise<ModelListingSummary[]> {
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const structuredQuery = {
