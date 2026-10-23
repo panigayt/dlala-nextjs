@@ -15,6 +15,7 @@ import {
   CATEGORY_MIN_LISTINGS,
 } from '@/lib/category-pages';
 import { CATEGORIES } from '@/lib/categories';
+import { readStatsArray } from '@/lib/site-stats';
 
 const BASE = 'https://www.dzdlala.com';
 
@@ -27,13 +28,28 @@ const PAGE_SIZE = 200;
 const MAX_PAGES = 50; // 10,000 listings headroom
 
 async function fetchAllLiveListings() {
+  'use cache';
+  cacheLife('days');
+  // siteStats precompute (22 Oct 2026 reads fix): the 6-hourly Cloud
+  // Function writes the full live list (status IN available/negotiating,
+  // createdAt DESC + id DESC, cap 10,000) to siteStats/live — read those
+  // chunk docs instead of re-paging the whole listings collection on
+  // every sitemap regeneration. The sitemap reads only id +
+  // updatedAt||createdAt from each entry.
+  const stats = await readStatsArray('live');
+  if (stats) {
+    return stats.items as unknown as Awaited<ReturnType<typeof fetchFeedPage>>['docs'];
+  }
+  console.warn('siteStats/live missing or malformed — falling back to cursor scan');
+  return fetchAllLiveListingsScan();
+}
+
+async function fetchAllLiveListingsScan() {
   // Production parity (0.0.0.39): the production sitemap is a DYNAMIC Cloud
   // Function with max-age=3600. 'use cache' + cacheLife('hours') is the
   // Next 16 (cacheComponents) replacement for the removed `revalidate`
   // segment config — the sitemap regenerates hourly so new listings appear
   // without a redeploy.
-  'use cache';
-  cacheLife('days');
   // 22 Oct 2026 (reads-incident root fix): CURSOR paging, not offsets.
   // The old loop (fetchFeed(200, page*200)) was the single largest read
   // consumer in the 21 Oct incident — Firestore bills OFFSET queries for

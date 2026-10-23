@@ -27,6 +27,7 @@ import {
   type ModelCardItem,
   type ModelListingSummary,
 } from './model-pages';
+import { readStatsArray, readStatsDoc } from './site-stats';
 import { popularWilayas, wilayaDisplayName } from './wilaya-pages';
 
 export { notFoundPage };
@@ -352,6 +353,25 @@ ${subSections}
 export async function categoryCount(categoryId: string): Promise<number> {
   'use cache';
   cacheLife('days');
+  // siteStats precompute (22 Oct 2026 reads fix): all category counts are
+  // computed by the 6-hourly Cloud Function in its single listings pass
+  // and stored in ONE document — a category absent from the map genuinely
+  // has zero available listings (same answer the aggregation gives).
+  const doc = await readStatsDoc('categoryCounts');
+  if (doc) {
+    const counts = doc.counts;
+    if (counts && typeof counts === 'object' && !Array.isArray(counts)) {
+      const n = (counts as Record<string, unknown>)[categoryId];
+      return typeof n === 'number' ? n : 0;
+    }
+    console.warn('siteStats/categoryCounts malformed — falling back to aggregation query');
+  }
+  return categoryCountScan(categoryId);
+}
+
+// The original aggregation-query implementation, kept verbatim as the
+// fallback for when the siteStats document is missing or unparseable.
+async function categoryCountScan(categoryId: string): Promise<number> {
   const url = FIRESTORE_REST_BASE + ':runAggregationQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const body = {
     structuredAggregationQuery: {
@@ -413,6 +433,21 @@ function decodeRestValue(v: unknown): unknown {
 export async function fetchAvailableListings(categoryId?: string): Promise<ModelListingSummary[]> {
   'use cache';
   cacheLife('days');
+  // siteStats precompute (22 Oct 2026 reads fix): per-category newest-500
+  // windows (and the global newest-500 window for the no-arg call) are
+  // written by the 6-hourly Cloud Function — read those chunk docs
+  // instead of re-running the scan on every cache regeneration.
+  const stats = await readStatsArray(categoryId ? `cat_${categoryId}` : 'all');
+  if (stats) return stats.items as unknown as ModelListingSummary[];
+  console.warn(
+    `siteStats/${categoryId ? `cat_${categoryId}` : 'all'} missing or malformed — falling back to live scan`,
+  );
+  return fetchAvailableListingsScan(categoryId);
+}
+
+// The original live-scan implementation, kept verbatim as the fallback
+// for when the siteStats documents are missing or unparseable.
+async function fetchAvailableListingsScan(categoryId?: string): Promise<ModelListingSummary[]> {
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const fields = [
     'title', 'price', 'negotiable', 'wilayaCode',

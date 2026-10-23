@@ -18,6 +18,7 @@ import { cacheLife } from 'next/cache';
 import { SITE } from './seo';
 import { WILAYAS } from './wilayas';
 import { FIREBASE_API_KEY, FIRESTORE_REST_BASE } from './firestore';
+import { readStatsArray } from './site-stats';
 
 // ---------------------------------------------------------------------------
 // seoCategories/index.js — helpers (verbatim logic, typed)
@@ -456,6 +457,19 @@ const MODEL_CAR_FIELDS = [
 export async function fetchAvailableCars(): Promise<ModelListingSummary[]> {
   'use cache';
   cacheLife('days');
+  // siteStats precompute (22 Oct 2026 reads fix): the 6-hourly Cloud
+  // Function writes this exact window (same query semantics, same order)
+  // to siteStats/cars — read it (a few chunk docs) instead of re-running
+  // the 1,356-doc scan on every cache regeneration.
+  const stats = await readStatsArray('cars');
+  if (stats) return stats.items as unknown as ModelListingSummary[];
+  console.warn('siteStats/cars missing or malformed — falling back to live scan');
+  return fetchAvailableCarsScan();
+}
+
+// The original live-scan implementation, kept verbatim as the fallback
+// for when the siteStats documents are missing or unparseable.
+async function fetchAvailableCarsScan(): Promise<ModelListingSummary[]> {
   const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
   const structuredQuery = {
     from: [{ collectionId: 'listings' }],

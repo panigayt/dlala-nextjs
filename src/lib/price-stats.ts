@@ -11,6 +11,11 @@
 // ./price-guide.ts). Caching mirrors the function (1h in-memory +
 // 1h HTTP): 'use cache' + cacheLife('hours') is the Next 16
 // (cacheComponents) pattern already used by src/app/sitemap.ts.
+//
+// 22 Oct 2026 (reads-incident root fix): getPriceStats() now reads the
+// siteStats/priceStats document precomputed every 6h by the siteStats
+// Cloud Function (ONE listings pass) — the live scan below remains ONLY
+// as a fallback for when the document is missing/unparseable.
 
 import { cacheLife } from 'next/cache';
 
@@ -21,6 +26,7 @@ import {
   type PriceRow,
   type PriceStats,
 } from './price-guide';
+import { readStatsDoc } from './site-stats';
 
 export type { PriceRow, PriceStats };
 
@@ -52,6 +58,30 @@ function decodeRestValue(v: unknown): unknown {
 export async function getPriceStats(): Promise<PriceStats> {
   'use cache';
   cacheLife('days');
+  // siteStats precompute first (1 read). fetchedAt becomes the stats'
+  // computedAt — the moment the data was computed — which is what
+  // renderPriceGuideData publishes as the guide's dateModified.
+  const doc = await readStatsDoc('priceStats');
+  if (doc) {
+    if (Array.isArray(doc.rows) && typeof doc.totalAds === 'number') {
+      return {
+        ok: true,
+        rows: doc.rows as PriceRow[],
+        totalAds: doc.totalAds,
+        fetchedAt:
+          doc.computedAt instanceof Date
+            ? doc.computedAt.toISOString()
+            : new Date().toISOString(),
+      };
+    }
+    console.warn('siteStats/priceStats malformed — falling back to live scan');
+  }
+  return getPriceStatsScan();
+}
+
+// The original live-scan implementation, kept verbatim as the fallback
+// for when the siteStats document is missing or unparseable.
+async function getPriceStatsScan(): Promise<PriceStats> {
   try {
     const url = FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
     // CF parity: status == 'available', categoryId == 'cars',
