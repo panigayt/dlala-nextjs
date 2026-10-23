@@ -196,12 +196,21 @@ export function StatRow({
     0,
     base + (favOn === true ? 1 : favOn === false ? -1 : 0)
   );
+  // 23 Oct 2026 (Zak): public counters render only past their proof
+  // thresholds — views >= 100, favorites >= 1. Below them the stat-row is
+  // absent entirely (zero counts read as an empty site). Counting itself,
+  // the seller's private stats and the ranking signal are untouched.
+  const showViews = (Number(views) || 0) >= 100;
+  const showFav = count >= 1;
+  if (!showViews && !showFav) return null;
   return (
     <div className="mt-2.5 flex flex-wrap gap-x-[18px] gap-y-1 text-[13px] text-zinc-500">
-      <span>👁 {viewsText(views, lang)}</span>
-      <span>
-        ♥ {count} {t('inFavorites')}
-      </span>
+      {showViews && <span>👁 {viewsText(views, lang)}</span>}
+      {showFav && (
+        <span>
+          ♥ {count} {t('inFavorites')}
+        </span>
+      )}
     </div>
   );
 }

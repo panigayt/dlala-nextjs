@@ -393,7 +393,10 @@ export default function FavoriteToggle({ listingId, sellerId, initialCount, titl
         <span aria-hidden="true" className="text-[20px] leading-none" style={{ color: fav === true ? '#e0245e' : '#6a6a6a' }}>
           {fav === true ? '♥' : '♡'}
         </span>
-        <span className="tabular-nums">{count}</span>
+        {/* 23 Oct 2026 (Zak): the pill's number renders only at >= 1 —
+            a zero count is negative proof on a young catalog. The heart
+            itself (and toggling) is unchanged. */}
+        {count >= 1 && <span className="tabular-nums">{count}</span>}
       </button>
       {toast && (
         <span
