@@ -173,8 +173,15 @@ function FacetBar({ filters }: { filters: SearchFilters }) {
 // (~/workspace/dlala-040/index.html .filters). Backend already supports
 // cat/wilaya/min/max/sort via URL params; this is the UI for them.
 // Current values are pre-selected via defaultValue (the shell remounts on
-// every filter navigation, so they are always fresh); the text query q
-// is preserved in a hidden input.
+// every filter navigation, so they are always fresh).
+// R21-1 fix (23 Oct 2026): the text query q is a VISIBLE input — the
+// homepage SearchBar row (same strings, styling and GET-to-/search
+// mechanism) as the form's first row. Before, q existed only as a hidden
+// field when it was already in the URL, so the bare /search page told the
+// visitor «اكتب كلمة للبحث في الإعلانات» (t('searchEmpty')) with no field
+// anywhere on the page to type that word into. The visible input submits
+// with the rest of the form, preserving the other filters exactly as the
+// hidden field did.
 function FilterBar({ filters }: { filters: SearchFilters }) {
   const { t, lang } = useLang();
   const formRef = useRef<HTMLFormElement>(null);
@@ -201,7 +208,26 @@ function FilterBar({ filters }: { filters: SearchFilters }) {
       }}
       className="flex flex-wrap items-center gap-2 mb-4"
     >
-      {q ? <input type="hidden" name="q" value={q} /> : null}
+      <div className="flex w-full gap-2">
+        <label htmlFor="search-q" className="sr-only">
+          {t('search')}
+        </label>
+        <input
+          id="search-q"
+          name="q"
+          type="search"
+          defaultValue={q}
+          placeholder={t('search')}
+          autoComplete="off"
+          className="flex-1 min-w-0 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900"
+        />
+        <button
+          type="submit"
+          className="rounded-xl bg-emerald-700 px-6 py-3 font-bold text-white hover:bg-emerald-800"
+        >
+          {t('searchBtn')}
+        </button>
+      </div>
       <label htmlFor="search-cat" className="sr-only">
         {t('allCategories')}
       </label>
