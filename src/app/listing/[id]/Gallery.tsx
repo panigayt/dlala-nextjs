@@ -457,13 +457,22 @@ export default function Gallery({
                   on weak connections; meaningful alt (was "") for
                   screen readers (button already has aria-label, belt
                   and suspenders). */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={thumbs[i] || p}
+              {/* R24-4 (24 Oct 2026): the strip was the gallery's only
+                  slot WITHOUT the broken-image fallback chain — a failed
+                  thumbnail painted the browser's broken-image glyph +
+                  alt-text tile. SafeImg renders the same plain lazy img
+                  (Round 21 behavior unchanged) but adds the hero's
+                  resilience: strip thumb → full photo → (photo 0) the
+                  w32 LQIP → the neutral 📷 tile, plus the pre-hydration
+                  failure detection (complete && naturalWidth === 0). */}
+              <SafeImg
+                key={thumbs[i] || p}
+                candidates={[thumbs[i] || p, p, i === 0 ? heroLqip : '']}
                 alt={`${localizedTitle} — ${t('photo')} ${i + 1}/${all.length}`}
+                className="w-20 h-20 object-cover"
+                tileClassName="w-20 h-20"
                 loading="lazy"
                 decoding="async"
-                className="w-20 h-20 object-cover"
               />
             </button>
           ))}

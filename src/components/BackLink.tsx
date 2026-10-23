@@ -39,7 +39,9 @@ export default function BackLink() {
         href="/"
         id="backLink"
         onClick={onClick}
-        className="text-emerald-700 hover:underline"
+        // R24-1 (24 Oct 2026): py grows the hit box — the link measured
+        // 17px tall (< WCAG 2.5.8 24px floor); text size/color unchanged.
+        className="text-emerald-700 hover:underline py-[5px]"
       >
         <span aria-hidden="true" className="inline-block min-w-[0.6em] text-center">
           {lang === 'ar' ? '›' : '‹'}

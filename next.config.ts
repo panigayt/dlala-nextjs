@@ -66,6 +66,15 @@ const nextConfig: NextConfig = {
               // the /g/collect beacons require *.google-analytics.com in
               // connect-src (+ img-src for the noscript/pixel fallback).
               // Without these, browsers silently block all GA4 traffic.
+              // R24-6 (24 Oct 2026): 'unsafe-eval' AUDITED, KEPT. The built
+              // chunks contain zero eval( and zero new Function, and the
+              // full client flow pass runs clean without it — BUT one
+              // core-js global-detection fallback, Function("return this"),
+              // survives in a shared chunk. It is short-circuit-dead in
+              // every browser/worker (globalThis/window/self win first),
+              // yet its presence means the bundle is not provably
+              // eval-free, so the directive stays until that chunk's
+              // polyfill is gone. Re-audit per release.
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://*.googleapis.com https://apis.google.com https://www.googletagmanager.com",
               "style-src 'self' 'unsafe-inline'",
               // 17 Oct 2026 (audit: "CSP img-src wildcard" — reviewed, KEPT).

@@ -262,7 +262,9 @@ export function SellerCardBody({
           <span className="font-bold truncate text-zinc-900">
             <Link
               href={`/seller/${sellerId}`}
-              className="hover:underline"
+              // R24-1 (24 Oct 2026): py grows the hit box — the link
+              // measured 17px tall (< WCAG 2.5.8 24px floor).
+              className="hover:underline py-[5px]"
             >
               {name}
             </Link>

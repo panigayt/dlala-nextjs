@@ -34,7 +34,10 @@
   align-items: center;
   gap: 20px;
 }
-.logo { display: flex; align-items: center; gap: 2px; font-weight: 800; font-size: 22px; color: #fff; text-decoration: none; }
+/* R24-1 (24 Oct 2026): min-height 40px — the logo link measured 77×30 in
+   the R24 tap census (the #site-header rule below covers the header
+   instance; this covers every .logo instance, e.g. the drawer head). */
+.logo { display: flex; align-items: center; gap: 2px; font-weight: 800; font-size: 22px; color: #fff; text-decoration: none; min-height: 40px; }
 .logo-d {
   background: #fff; color: var(--emerald);
   width: 34px; height: 34px; border-radius: 8px;
@@ -47,7 +50,11 @@
 .nav::-webkit-scrollbar { display: none; }
 .nav a { padding: 8px 12px; border-radius: 8px; opacity: .85; font-size: 14px; white-space: nowrap; flex-shrink: 0; color: #fff; text-decoration: none; }
 .nav a:hover { background: rgba(255, 255, 255, .12); opacity: 1; }
-.nav a.active { background: rgba(255, 255, 255, .18); opacity: 1; font-weight: 700; }
+/* R24-2 (24 Oct 2026): white overlay .18→.15 — the active pill's effective
+   blend over the emerald header was rgb(55,133,110) = 4.43:1 for the white
+   14px bold label (< WCAG AA 4.5:1). At .15 the blend is rgb(48,129,105)
+   ≈ 4.66:1. Only the active pill's shade deepens; nothing else changes. */
+.nav a.active { background: rgba(255, 255, 255, .15); opacity: 1; font-weight: 700; }
 .lang-switch { display: flex; gap: 4px; }
 .lang-btn {
   background: transparent; border: 1px solid rgba(255, 255, 255, .4);
@@ -225,6 +232,11 @@ button.drawer-link:hover { background: #eef3f0; }
 .footer-cats { width: 100%; margin-top: 8px; line-height: 1.9; }
 .footer-cats a { color: var(--muted); text-decoration: none; }
 .footer-cats a:hover { color: var(--emerald); }
+/* R24-1 (24 Oct 2026): tap targets — footer guide/category TEXT links
+   measured 15px tall (< WCAG 2.5.8 24px floor). Vertical padding grows
+   the painted hit box of the inline links without touching font size,
+   color, wrapping or the line rhythm. */
+.footer-guides a, .footer-cats a { padding: 5px 3px; }
 
 /* skip link (FIX-WEB-015) */
 .skip-link {

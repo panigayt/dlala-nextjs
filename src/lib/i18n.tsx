@@ -94,7 +94,9 @@ function readStoredLang(): Lang {
 // generateMetadata can localize <title> (localStorage is client-only).
 function writeLangCookie(l: Lang): void {
   try {
-    document.cookie = 'dlala_lang=' + l + '; path=/; max-age=31536000; SameSite=Lax';
+    // R24-6 (24 Oct 2026): + Secure — the site is HTTPS-only behind HSTS
+    // preload, so the language cookie never needs a plaintext hop.
+    document.cookie = 'dlala_lang=' + l + '; path=/; max-age=31536000; SameSite=Lax; Secure';
   } catch {
     // ignore — persistence is best-effort
   }

@@ -1,0 +1,8 @@
+# Dlala (dzdlala.com) — vulnerability disclosure (RFC 9116).
+# Found a security issue? Report it through the site's problem-report
+# channel ("Signaler un problème" in Settings) — the same audited intake
+# the team monitors daily.
+Contact: https://www.dzdlala.com/settings#report
+Expires: 2027-10-23T22:46:03.000Z
+Preferred-Languages: ar, fr, en
+Canonical: https://www.dzdlala.com/.well-known/security.txt

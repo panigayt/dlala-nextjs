@@ -36,7 +36,9 @@ a.vitrine-id { text-decoration: none; color: inherit; }
   color: #fff; background: #111; border: none;
   border-radius: 20px; padding: 3px 12px; margin-inline-start: 0;
 }
-.vitrine-sub { color: #888; font-size: 12px; } /* Round 58 (18 Oct 2026): 12px min text */
+/* R24-2 (24 Oct 2026): #888 on white was 3.54:1 at 12px (< WCAG AA 4.5:1);
+   #767676 = 4.54:1. */
+.vitrine-sub { color: #767676; font-size: 12px; } /* Round 58 (18 Oct 2026): 12px min text */
 .vitrine-tag { display: none; }
 /* FINAL effective rules (css/style.css:1279-1291): the later unconditional
    block wins the cascade in 0.0.0.39 — the minis are a HORIZONTAL SCROLL
