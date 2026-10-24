@@ -1,11 +1,12 @@
 'use client';
 
 // Service-worker registration — image cache only (Zak ordered 14 Oct 2026).
-// Registers /sw.js (public/sw.js) which cache-firsts listing photos from
-// firebasestorage.googleapis.com + img.dzdlala.com (dlala-next-img-v1).
+// Registers /sw.js (public/sw.js): listing-photo cache-first
+// (dlala-next-img-v1) + R24-3 offline navigation (previously visited
+// pages served from cache when offline; /_next/static chunks
+// cache-first). API/Firestore/gstatic still pass through untouched.
 // - No firebase import here: the lazy gstatic boundary stays intact
 //   (0 bundle bytes for Firebase; the SW itself imports nothing).
-// - Images only: HTML/_next/API/Firestore all pass through untouched.
 // - Registration waits for window load so it never contends with first paint.
 
 import { useEffect } from 'react';
