@@ -147,7 +147,13 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
     setBox({ kind: 'loading' });
     setMsg(null);
     try {
-      const d = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
+      // R30-1 (24 Oct 2026): FromServer variants — default-source
+      // getDoc/getDocs RESOLVE with the (empty) cache when the server is
+      // unreachable instead of rejecting, so an outage silently rendered
+      // the activatable state with zero candidates and the error box +
+      // retry below never fired. FromServer rejects → the catch surfaces
+      // it. Same documents on the success path — zero added reads.
+      const d = await fsMod.getDocFromServer(fsMod.doc(db, 'users', user.uid));
       const u = (d.exists() ? d.data() : {}) as Record<string, unknown>;
       setUserData(u);
 
@@ -170,7 +176,7 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
       }
 
       // Load candidates
-      const snap = await fsMod.getDocs(
+      const snap = await fsMod.getDocsFromServer(
         fsMod.query(
           fsMod.collection(db, 'listings'),
           fsMod.where('sellerId', '==', user.uid),

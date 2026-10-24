@@ -133,9 +133,20 @@ export default function ConversationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [hiddenId, setHiddenId] = useState<string | null>(null);
+  // R30-1 (24 Oct 2026): has a SERVER snapshot confirmed the initial
+  // load? A Firestore listener never errors on connectivity loss — it
+  // delivers cache snapshots (or stays silent) — so an outage used to
+  // render the "no conversations" empty state for accounts that HAVE
+  // conversations. The empty state is gated on this flag; before it, a
+  // spinner shows, and a watchdog (see subscribe) raises the error
+  // banner if the server never confirms.
+  const [serverLoaded, setServerLoaded] = useState(false);
   const clientRef = useRef<FirebaseClient | null>(null);
   const userRef = useRef<CompatUser | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const serverLoadedRef = useRef(false);
+  const watchdogRef = useRef<number | null>(null);
+  const langRef = useRef<Lang>('ar');
   // D10 (R12, 18 Oct 2026): cache resolved peer names + listing meta
   // across snapshots — loadMeta was re-fetching every doc on every live
   // update (N+1 read amplification). Only uncached IDs are fetched now.
@@ -265,8 +276,23 @@ export default function ConversationsPage() {
         }
         unsubRef.current = null;
       }
+      langRef.current = lang;
       const onSnap = (snap: CompatQuerySnap) => {
-        setError(null);
+        // R30-1: only a server snapshot (metadata.fromCache === false)
+        // confirms the load — it clears any error and unlocks the
+        // empty state. Cache snapshots still render their docs (real
+        // local data, e.g. a warm re-subscribe); they just don't
+        // confirm, so an offline empty cache can no longer masquerade
+        // as "you have no conversations".
+        if (!snap.metadata.fromCache) {
+          serverLoadedRef.current = true;
+          setServerLoaded(true);
+          if (watchdogRef.current) {
+            window.clearTimeout(watchdogRef.current);
+            watchdogRef.current = null;
+          }
+          setError(null);
+        }
         const docs = snap.docs
           .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Conv)
           .filter((c) => !(c.hiddenFor || []).includes(uid))
@@ -316,6 +342,22 @@ export default function ConversationsPage() {
         onSnap,
         onErr
       );
+      // R30-1 watchdog: if no server snapshot confirms the load within
+      // the window, surface the error banner (its retry re-subscribes
+      // and re-arms). 15s matches the withTimeout idiom used across
+      // the app and stays patient on the weak connections Dlala is
+      // designed for; a late server snapshot clears the banner again
+      // (onSnap above). Painted/cached conversations stay visible
+      // beneath the banner — only the false EMPTY claim is suppressed.
+      if (!serverLoadedRef.current) {
+        if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
+        watchdogRef.current = window.setTimeout(() => {
+          watchdogRef.current = null;
+          if (!serverLoadedRef.current) {
+            setError(convSt(langRef.current, 'errorGeneric'));
+          }
+        }, 15000);
+      }
     },
     // lang is passed as an argument (not closed over); the effect lists it
     // in deps so a language switch re-subscribes with the new lang
@@ -354,6 +396,10 @@ export default function ConversationsPage() {
     document.addEventListener('visibilitychange', onVis);
     return () => {
       document.removeEventListener('visibilitychange', onVis);
+      if (watchdogRef.current) {
+        window.clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
       if (unsubRef.current) {
         try {
           unsubRef.current();
@@ -531,7 +577,16 @@ export default function ConversationsPage() {
             );
           })}
 
-          {convs.length === 0 && !error && (
+          {convs.length === 0 && !error && !serverLoaded && (
+            <div className="text-center py-10">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-700" />
+              <p className="mt-3 text-zinc-600">{st('loading')}</p>
+            </div>
+          )}
+
+          {/* R30-1: the empty state renders ONLY after a server snapshot
+              confirmed the load — never from a silent/cache-only load. */}
+          {convs.length === 0 && !error && serverLoaded && (
             <div className="rounded-xl bg-white shadow-sm p-8 text-center">
               <div className="text-5xl mb-3">💬</div>
               <h3 className="font-bold text-zinc-900 mb-1">

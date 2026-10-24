@@ -184,8 +184,14 @@ function MyFollowsContent({ user }: { user: CompatUser }) {
       // firebase-compat import). Loader stays at the usage site.
       const client = await getFirebaseCdn();
       const { db, fsMod } = client;
+      // R30-1 (24 Oct 2026): getDocsFromServer — default-source getDocs
+      // RESOLVES with the (empty) cache when the server is unreachable
+      // instead of rejecting, so an outage silently rendered the
+      // "no follows" empty state and the error + retry state below
+      // never fired. FromServer rejects → the catch surfaces it. Same
+      // documents on the success path — zero added reads.
       const snap = await withTimeout(
-        fsMod.getDocs(
+        fsMod.getDocsFromServer(
           fsMod.query(
             fsMod.collection(db, 'follows'),
             fsMod.where('followerId', '==', user.uid),

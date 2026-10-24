@@ -102,8 +102,14 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       // Round 12: modular SDK via getFirebaseCdn (was dynamic
       // firebase-compat import). Loader stays at the usage site.
       const { db, fsMod } = await getFirebaseCdn();
+      // R30-1 (24 Oct 2026): getDocsFromServer — default-source getDocs
+      // RESOLVES with the (empty) cache when the server is unreachable
+      // instead of rejecting, so an outage silently rendered the
+      // "no ads" empty state and the error + retry state below never
+      // fired. FromServer rejects → the catch surfaces it. Same
+      // documents on the success path — zero added reads.
       const snap = await withTimeout(
-        fsMod.getDocs(
+        fsMod.getDocsFromServer(
           fsMod.query(
             fsMod.collection(db, 'listings'),
             fsMod.where('sellerId', '==', user.uid),

@@ -20,6 +20,17 @@
 //   itself fails. (The legacy F7 rule — full-page error when every
 //   per-listing hydration failed — trapped users whose single favorite was
 //   a sold listing on a retry that could never succeed; removed in R26-2.)
+// - R30-1 (24 Oct 2026): all initial-load reads use the FromServer
+//   variants. The default-source getDocs/getDoc RESOLVE with the (empty)
+//   cache when the server is unreachable instead of rejecting, so an
+//   outage silently rendered the "no favorites yet" empty state and the
+//   full-page error below never fired. FromServer rejects → the catch in
+//   load() surfaces the error + retry. Same documents read on the
+//   success path (default source reads the server whenever reachable) —
+//   zero added reads. Per-listing reads are FromServer too: the
+//   'deleted' classification below is only sound when the read truly
+//   reached the server; a cache fallback would report a live listing as
+//   "removed" during an outage.
 // - Un-favorite removes the fav doc (+ listingFavoriters doc, best-effort)
 // - "Shown / total" footer with "show more" pagination
 // - Empty state with browse CTA
@@ -200,14 +211,14 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
       fsMod: FirebaseModules['fs'],
       colQuery: FirebaseQuery
     ): Promise<{ cards: FavCard[]; lastDoc: FirebaseDocSnap | null; full: boolean }> => {
-      const snap = await withTimeout(fsMod.getDocs(colQuery), 20000);
+      const snap = await withTimeout(fsMod.getDocsFromServer(colQuery), 20000);
       const lastDoc = snap.empty ? null : snap.docs[snap.docs.length - 1];
       const hydrated: FavCard[] = await Promise.all(
         snap.docs.map(async (d) => {
           const raw = d.data() as FavItem;
           const fav: FavItem = { listingId: String(raw.listingId || ''), price: raw.price, createdAt: raw.createdAt };
           try {
-            const l = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'listings/' + fav.listingId)), 15000);
+            const l = await withTimeout(fsMod.getDocFromServer(fsMod.doc(db, 'listings/' + fav.listingId)), 15000);
             // Distinguish "deleted" (read succeeded, doc absent) from
             // "unreadable" (read failed — caught below). A failed read must
             // NEVER render as a "removed" placeholder (Round 30).
@@ -339,7 +350,9 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
       try {
         const { getFirebaseCdn } = await import('@/lib/firebase');
         const { db, fsMod } = await getFirebaseCdn();
-        const l = await withTimeout(fsMod.getDoc(fsMod.doc(db, 'listings/' + listingId)), 15000);
+        // R30-1: FromServer — a cache-fallback !exists() under an outage
+        // would flip the card to the "removed" placeholder (see header).
+        const l = await withTimeout(fsMod.getDocFromServer(fsMod.doc(db, 'listings/' + listingId)), 15000);
         if (!mounted.current) return;
         if (!l.exists()) {
           setCards((prev) =>

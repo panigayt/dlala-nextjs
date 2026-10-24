@@ -383,8 +383,16 @@ export default function AlertsPage() {
       // their (allowed) event handlers. All setState below happens in
       // async continuations (after await).
       try {
+        // R30-1 (24 Oct 2026): every loadAll read uses getDocsFromServer.
+        // Default-source getDocs RESOLVES with the (empty) cache when the
+        // server is unreachable instead of rejecting, so an outage
+        // silently rendered the empty sections and the error + retry
+        // banner below never fired. FromServer rejects → the catch at the
+        // bottom surfaces it. Same documents on the success path (the
+        // default source reads the server whenever it is reachable) —
+        // zero added reads.
         // Saved searches
-        const sSnap = await fsMod.getDocs(
+        const sSnap = await fsMod.getDocsFromServer(
           fsMod.collection(db, `users/${user.uid}/savedSearches`)
         );
         const docs: SavedSearch[] = sSnap.docs.map((d) => ({
@@ -403,7 +411,7 @@ export default function AlertsPage() {
           // never appear as "New matches" (primary-query semantics).
           let fallbackNoStatusFilter = false;
           const lSnap = await fsMod
-            .getDocs(
+            .getDocsFromServer(
               fsMod.query(
                 fsMod.collection(db, 'listings'),
                 fsMod.where('status', 'in', ['available', 'negotiating']),
@@ -412,9 +420,11 @@ export default function AlertsPage() {
               )
             )
             .catch(() => {
-              // No composite index: unordered fallback, client-sorted
+              // No composite index: unordered fallback, client-sorted.
+              // (Under an outage this rejects too and loadAll's catch
+              // surfaces the error state — R30-1.)
               fallbackNoStatusFilter = true;
-              return fsMod.getDocs(
+              return fsMod.getDocsFromServer(
                 fsMod.query(fsMod.collection(db, 'listings'), fsMod.limit(60))
               );
             });
@@ -473,7 +483,7 @@ export default function AlertsPage() {
 
         // Notifications
         const nSnap = await fsMod
-          .getDocs(
+          .getDocsFromServer(
             fsMod.query(
               fsMod.collection(db, `users/${user.uid}/notifications`),
               fsMod.orderBy('createdAt', 'desc'),
@@ -481,7 +491,7 @@ export default function AlertsPage() {
             )
           )
           .catch(() =>
-            fsMod.getDocs(
+            fsMod.getDocsFromServer(
               fsMod.query(
                 fsMod.collection(db, `users/${user.uid}/notifications`),
                 fsMod.limit(30)
