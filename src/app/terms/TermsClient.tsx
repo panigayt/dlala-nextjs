@@ -8,7 +8,10 @@
 // header language switch re-renders the page in the chosen language
 // (previously it stacked all three languages and ignored the switch).
 //
-// Content below is VERBATIM from js/terms.js (TERMS.ar / .fr / .en).
+// Content below is VERBATIM from js/terms.js (TERMS.ar / .fr / .en),
+// except the R28-1 factual correction (24 Oct 2026, pending Zak's
+// approval): the account-deletion passage now names the real path
+// (Settings page on the website or in the app, not "from the app" only).
 
 import { useLang } from '@/lib/i18n';
 
@@ -28,7 +31,7 @@ const TERMS: Record<'ar' | 'fr' | 'en', string> = {
 <li>نحتفظ بحق إزالة أي إعلان مخالف دون إشعار مسبق.</li></ul>
 <h3>السلوك</h3><p>يُمنع الاحتيال والمضايقة وخطاب الكراهية والرسائل المزعجة. المخالفات المتكررة تؤدي إلى حظر الحساب نهائياً.</p>
 <h3>المسؤولية</h3><p>المعاملات تتم مباشرة بين المشتري والبائع على مسؤوليتهما. دلالة غير مسؤولة عن أي خسائر ناتجة عن استخدام المنصة.</p>
-<h3>حذف الحساب</h3><p>يمكنك حذف حسابك نهائياً مع بياناتك في أي وقت من التطبيق.</p>`,
+<h3>حذف الحساب</h3><p>يمكنك حذف حسابك نهائياً مع بياناتك في أي وقت من صفحة الإعدادات في الموقع أو التطبيق.</p>`,
   fr: `<h2>Conditions d'utilisation — DLALA</h2><p>Dernière mise à jour : septembre 2026</p>
 <p>En créant un compte sur DLALA, vous acceptez ces conditions.</p>
 <h3>Le service</h3><p>DLALA est un marché d'annonces gratuites. Nous sommes un simple intermédiaire technique et n'intervenons pas dans les transactions entre utilisateurs.</p>
@@ -43,7 +46,7 @@ const TERMS: Record<'ar' | 'fr' | 'en', string> = {
 <li>Nous pouvons retirer toute annonce non conforme sans préavis.</li></ul>
 <h3>Comportement</h3><p>Fraude, harcèlement, discours haineux et spam sont interdits. Les récidives entraînent un bannissement définitif.</p>
 <h3>Responsabilité</h3><p>Les transactions se font directement entre acheteur et vendeur, à leurs risques. DLALA n'est pas responsable des pertes liées à l'utilisation de la plateforme.</p>
-<h3>Suppression du compte</h3><p>Vous pouvez supprimer définitivement votre compte et vos données à tout moment depuis l'application.</p>`,
+<h3>Suppression du compte</h3><p>Vous pouvez supprimer définitivement votre compte et vos données à tout moment depuis la page Paramètres du site ou de l'application.</p>`,
   en: `<h2>Terms of Use — DLALA</h2><p>Last updated: September 2026</p>
 <p>By creating a DLALA account you agree to these terms.</p>
 <h3>The service</h3><p>DLALA is a free classifieds marketplace. We are a technical intermediary only and do not take part in transactions between users.</p>
@@ -58,7 +61,7 @@ const TERMS: Record<'ar' | 'fr' | 'en', string> = {
 <li>We may remove any non-compliant ad without prior notice.</li></ul>
 <h3>Conduct</h3><p>Fraud, harassment, hate speech and spam are forbidden. Repeat offences lead to a permanent ban.</p>
 <h3>Liability</h3><p>Transactions happen directly between buyer and seller at their own risk. DLALA is not liable for losses from using the platform.</p>
-<h3>Account deletion</h3><p>You may permanently delete your account and data at any time from the app.</p>`,
+<h3>Account deletion</h3><p>You may permanently delete your account and data at any time from the Settings page on the website or in the app.</p>`,
 };
 
 // sr-only page title per language — byte-exact substrings of the <h2> titles above.

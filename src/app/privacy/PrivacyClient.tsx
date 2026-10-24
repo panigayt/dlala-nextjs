@@ -8,7 +8,13 @@
 // header language switch re-renders the page in the chosen language
 // (previously it stacked all three languages and ignored the switch).
 //
-// Content below is VERBATIM from js/privacy.js (PRIVACY.ar / .fr / .en).
+// Content below is VERBATIM from js/privacy.js (PRIVACY.ar / .fr / .en),
+// except the R28-1 factual corrections (24 Oct 2026, pending Zak's
+// approval): deletion now names the real path (Settings page on the
+// website or in the app, not "from the app" only), the contact passage
+// names the site's «اتصل بنا / Nous contacter / Contact us» entry (not
+// an "in-app support section"), and the collected-data list itemizes
+// chat message content.
 
 import { useLang } from '@/lib/i18n';
 
@@ -19,34 +25,37 @@ const PRIVACY: Record<'ar' | 'fr' | 'en', string> = {
 <h3>البيانات التي نجمعها</h3><ul>
 <li>بيانات الحساب: الاسم، اسم المستخدم، البريد الإلكتروني.</li>
 <li>محتوى الإعلانات: العناوين، الأوصاف، الصور، الأسعار، الولاية.</li>
+<li>محتوى المحادثات: الرسائل التي ترسلها عبر المحادثة داخل الموقع.</li>
 <li>بيانات الاستخدام: المشاهدات والتفاعلات لتحسين الخدمة.</li></ul>
 <h3>استخدام البيانات</h3><p>نستخدم بياناتك لتشغيل السوق: عرض الإعلانات، التواصل بين المشترين والبائعين، ومنع الاحتيال. لا نبيع بياناتك لأي طرف ثالث.</p>
 <h3>مشاركة البيانات</h3><p>الإعلانات المنشورة عامة. رقم هاتفك لا يظهر إلا إذا شاركته بنفسك داخل محادثة.</p>
 <h3>الأمان</h3><p>نستخدم Firebase من Google مع قواعد أمان صارمة وتشفير أثناء النقل.</p>
-<h3>حقوقك</h3><p>يمكنك تعديل إعلاناتك وحذفها، وحذف حسابك نهائياً من التطبيق في أي وقت.</p>
-<h3>اتصل بنا</h3><p>عبر قسم الدعم داخل التطبيق.</p>`,
+<h3>حقوقك</h3><p>يمكنك تعديل إعلاناتك وحذفها، وحذف حسابك نهائياً من صفحة الإعدادات في الموقع أو التطبيق في أي وقت.</p>
+<h3>اتصل بنا</h3><p>عبر «اتصل بنا» في قائمة الموقع أو صفحة الإعدادات.</p>`,
   fr: `<h2>Politique de confidentialité — DLALA</h2><p>Dernière mise à jour : septembre 2026</p>
 <p>DLALA est un marché d'annonces gratuites destiné aux utilisateurs en Algérie.</p>
 <h3>Données collectées</h3><ul>
 <li>Données du compte : nom, nom d'utilisateur, e-mail.</li>
 <li>Contenu des annonces : titres, descriptions, photos, prix, wilaya.</li>
+<li>Contenu des conversations : les messages que vous envoyez via la messagerie du site.</li>
 <li>Données d'usage : vues et interactions pour améliorer le service.</li></ul>
 <h3>Utilisation</h3><p>Vos données servent au fonctionnement du marché : affichage des annonces, mise en relation acheteurs/vendeurs, lutte contre la fraude. Nous ne vendons jamais vos données.</p>
 <h3>Partage</h3><p>Les annonces publiées sont publiques. Votre numéro n'apparaît que si vous le partagez vous-même dans une conversation.</p>
 <h3>Sécurité</h3><p>Nous utilisons Firebase (Google) avec des règles de sécurité strictes et un chiffrement en transit.</p>
-<h3>Vos droits</h3><p>Vous pouvez modifier ou supprimer vos annonces, et supprimer définitivement votre compte depuis l'application à tout moment.</p>
-<h3>Contact</h3><p>Via la rubrique d'assistance dans l'application.</p>`,
+<h3>Vos droits</h3><p>Vous pouvez modifier ou supprimer vos annonces, et supprimer définitivement votre compte depuis la page Paramètres du site ou de l'application à tout moment.</p>
+<h3>Contact</h3><p>Via « Nous contacter » dans le menu du site ou la page Paramètres.</p>`,
   en: `<h2>Privacy Policy — DLALA</h2><p>Last updated: September 2026</p>
 <p>DLALA is a free classifieds marketplace for users in Algeria.</p>
 <h3>Data we collect</h3><ul>
 <li>Account data: name, username, email.</li>
 <li>Ad content: titles, descriptions, photos, prices, wilaya.</li>
+<li>Chat content: the messages you send through the on-site chat.</li>
 <li>Usage data: views and interactions to improve the service.</li></ul>
 <h3>Use</h3><p>Your data runs the marketplace: showing ads, connecting buyers and sellers, preventing fraud. We never sell your data.</p>
 <h3>Sharing</h3><p>Published ads are public. Your phone number appears only if you share it yourself inside a conversation.</p>
 <h3>Security</h3><p>We use Google Firebase with strict security rules and encryption in transit.</p>
-<h3>Your rights</h3><p>You may edit or delete your ads, and permanently delete your account from the app at any time.</p>
-<h3>Contact</h3><p>Through the in-app support section.</p>`,
+<h3>Your rights</h3><p>You may edit or delete your ads, and permanently delete your account from the Settings page on the website or in the app at any time.</p>
+<h3>Contact</h3><p>Through "Contact us" in the site menu or the Settings page.</p>`,
 };
 
 // sr-only page title per language — byte-exact substrings of the <h2> titles above.

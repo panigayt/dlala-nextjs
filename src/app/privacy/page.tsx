@@ -1,6 +1,7 @@
 // Privacy policy — server shell (metadata) + PrivacyClient (app-wide language store).
 //
-// Content is VERBATIM from ~/workspace/dlala-040/js/privacy.js (the PRIVACY map).
+// Content is VERBATIM from ~/workspace/dlala-040/js/privacy.js (the PRIVACY map),
+// except the R28-1 factual corrections noted in PrivacyClient.tsx.
 // Legacy parity: js/privacy.js renderPrivacy() injects only PRIVACY[LANG] and
 // onLangChange() re-renders on the header language switch — the client
 // component below does the same via useLang(). No app-only features.

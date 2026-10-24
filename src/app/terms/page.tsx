@@ -1,6 +1,7 @@
 // Terms of Use — server shell (metadata) + TermsClient (app-wide language store).
 //
-// Content is VERBATIM from ~/workspace/dlala-040/js/terms.js (the TERMS map).
+// Content is VERBATIM from ~/workspace/dlala-040/js/terms.js (the TERMS map),
+// except the R28-1 factual correction noted in TermsClient.tsx.
 // Legacy parity: js/terms.js renderTerms() injects only TERMS[LANG] and
 // onLangChange() re-renders on the header language switch — the client
 // component below does the same via useLang(). No app-only features.
