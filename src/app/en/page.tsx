@@ -79,9 +79,9 @@ export default async function HomeEn() {
         alternateName: ['dzdlala', 'دلالة'],
         url: 'https://www.dzdlala.com',
         logo: 'https://www.dzdlala.com/icon-512.png',
-        // sameAs: fill with official social profile URLs once created
-        // (Facebook/Instagram/TikTok) — empty until then.
-        sameAs: [],
+        // sameAs: official social profile URLs (Instagram filled;
+        // Facebook/TikTok when created).
+        sameAs: ['https://www.instagram.com/dzdlala/'],
       },
     ],
   }).replace(/</g, '\\u003c');
