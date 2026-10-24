@@ -1,0 +1,70 @@
+/* R33-1 (24 Oct 2026): listing detail print stylesheet.
+ *
+ * Defect (audit round 33): the detail page had ZERO @media print rules,
+ * so printing reproduced the screen byte-for-byte — sticky nav, drawer
+ * items, message/favorite/share/report buttons, footer, everything.
+ *
+ * Scope: this module is imported ONLY by the listing detail route
+ * (page.tsx), and .printScope is applied ONLY to that route's <main>,
+ * so these rules can never affect any other page — including the
+ * chrome rules, which are gated on body:has(.printScope) rather than
+ * bare chrome IDs. Screen styles are untouched — every rule below
+ * lives inside @media print.
+ *
+ * Why this shape: this Next/css-loader setup rejects pure :global(...)
+ * selectors ("not pure") and :global blocks alike, AND it hashes plain
+ * #ids/.classes as module-local (a bare #site-header compiles to
+ * #print_site-header__hash, which matches nothing on the real page).
+ * So every selector carries the local .printScope anchor while the
+ * real-world IDs/classes it must match stay inside :global(...).
+ *
+ * What prints: title, price (+ negotiable badge), photos, meta grid,
+ * stat row, seller name/rating, description, structured answers.
+ * What does not: all app chrome, all interactive elements (buttons and
+ * links carry no information on paper — the seller name, not the
+ * follow/view-store controls, is what a printout needs), and the
+ * matches/similar-ads section (discovery, not this listing).
+ * Card shadows are dropped so the printout is flat black-on-white.
+ * :has() needs Chrome 105+/Safari 15.4+; older browsers degrade to
+ * today's behavior (chrome printed), never to a broken page.
+ */
+@media print {
+  /* App chrome (SiteChrome): sticky header, drawer + overlay, footer,
+     skip link. IDs are stable (components/SiteChrome.tsx). Gated on
+     body:has(.printScope) so other routes' print is untouched; the IDs
+     stay :global so they compile to the real IDs, not hashed ones. */
+  body:has(.printScope) :global(#site-header),
+  body:has(.printScope) :global(#drawer),
+  body:has(.printScope) :global(#drawerOverlay),
+  body:has(.printScope) :global(#site-footer),
+  body:has(.printScope) :global(.skip-link) {
+    display: none !important;
+  }
+
+  /* Inside the detail <main>: every interactive element is hidden.
+     Buttons: message / favorite / share / report / price-suggestion /
+     follow / gallery thumbnails / lightbox triggers / rate CTA.
+     Links: back link, view-store link, report-user link.
+     The description renders as plain text (ListingShell), never links,
+     so no listing content is lost by hiding anchors. */
+  .printScope button,
+  .printScope a {
+    display: none !important;
+  }
+
+  /* Discovery section (matches/similar ads) — not this listing.
+     .listing-matches is a plain class in page.tsx, so it stays
+     :global; the local .printScope anchor keeps the selector pure. */
+  .printScope :global(.listing-matches) {
+    display: none !important;
+  }
+
+  /* Flat printout: no card shadows, full-width content. */
+  .printScope {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .printScope > div {
+    box-shadow: none !important;
+  }
+}

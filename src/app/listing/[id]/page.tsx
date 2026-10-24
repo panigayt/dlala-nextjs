@@ -28,6 +28,11 @@ import { Suspense, cache } from 'react';
 import { cacheLife } from 'next/cache';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+// R33-1: print stylesheet for this route only (module CSS, so it loads
+// solely on the listing detail page; all rules are @media print, so
+// screen rendering is untouched). The bound import applies .printScope
+// to <main>, which the print rules use as their scoping anchor.
+import printStyles from './print.module.css';
 import {
   fetchListing,
   fetchSimilarListings,
@@ -493,7 +498,7 @@ async function ListingContent({
 
   return (
     <>
-    <main id="main-content" className="max-w-4xl mx-auto px-4 py-6">
+    <main id="main-content" className={`${printStyles.printScope} max-w-4xl mx-auto px-4 py-6`}>
       {/* 17 Oct 2026 (audit H2): static-Arabic <title> metadata lands in
           <head>; the reader's localized SEO title goes on the tab here
           (R54: server computes ar/fr/en, client picks via useLang()). */}
@@ -639,7 +644,11 @@ async function ListingContent({
 
       {/* Matches section — js/listing.js loadMatches parity:
           wanted ads show reverse-matched offers («عروض مطابقة لطلبك»,
-          js/market.js matchingOffers); regular ads show similar ads. */}
+          js/market.js matchingOffers); regular ads show similar ads.
+          R33-1: the .listing-matches wrapper exists only so the print
+          stylesheet can hide this discovery section; it carries no
+          screen styling, so screen rendering is unchanged. */}
+      <div className="listing-matches">
       {isWanted ? (
         similarWindow !== null && (
           <MatchesLoader
@@ -658,6 +667,7 @@ async function ListingContent({
       ) : (
         similar !== null && <SimilarAds items={similar} />
       )}
+      </div>
 
     </main>
     </>
