@@ -13,6 +13,7 @@ import {
   LoadingSpinner,
   CompatQuerySnap,
   FirebaseClient,
+  FirebaseDocSnap,
   CompatUser,
   btnSecondaryCls,
 } from '@/lib/firebase';
@@ -55,6 +56,49 @@ function tsMs(v: unknown): number {
     if (typeof o.seconds === 'number') return o.seconds * 1000;
   }
   return 0;
+}
+
+// R32-3 (24 Oct 2026): first paint loads only the 20 most recent threads;
+// older threads page in by 20 (one-time queries) up to the 60-thread cap.
+// The 60-thread upfront load (docs + per-thread user/listing meta + a
+// photo per thread) was the weight on weak connections for heavy users.
+// The live listener still covers the top window, so new messages surface
+// immediately; paged rows merge underneath, deduped by id, newest first.
+const CONV_PAGE = 20;
+const CONV_CAP = 60;
+
+// Merge live top-window docs with older paged docs. On id collision the
+// freshest copy wins: live overwrites pages, and a later page overwrites
+// an earlier one (a re-fetched page is newer than the rows it overlaps).
+// Hidden threads stay filtered; the result is newest-first.
+function mergeConvs(live: Conv[], paged: Conv[], uid: string): Conv[] {
+  const byId = new Map<string, Conv>();
+  for (const c of paged) {
+    if (c && c.id) byId.set(c.id, c);
+  }
+  for (const c of live) {
+    if (c && c.id) byId.set(c.id, c);
+  }
+  const out = [...byId.values()].filter(
+    (c) => !(c.hiddenFor || []).includes(uid)
+  );
+  out.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt));
+  return out;
+}
+
+// Snapshot subset for one thread (same shape the instant-paint snapshot
+// has always stored).
+function snapshotConvShape(c: Conv) {
+  return {
+    id: c.id,
+    participants: c.participants || [],
+    lastMessage: c.lastMessage || null,
+    unread: c.unread || {},
+    listingId: c.listingId || '',
+    hiddenFor: c.hiddenFor || [],
+    updatedAt: snapMs(c.updatedAt),
+    createdAt: snapMs(c.createdAt),
+  };
 }
 
 // 0.0.0.22 (Zak): instant paint — last conversations render from
@@ -126,6 +170,17 @@ function localizedTitle(title: unknown, lang: Lang): string {
 export default function ConversationsPage() {
   const authState = useRequireAuth();
   const [convs, setConvs] = useState<Conv[]>([]);
+  // R32-3: the rendered list merges the live top window (listener) with
+  // older pages (one-time queries). Refs mirror the two sets so the
+  // snapshot handler and load-more merge without stale closures.
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const liveRef = useRef<Conv[]>([]);
+  const pagedRef = useRef<Conv[]>([]);
+  const cursorRef = useRef<FirebaseDocSnap | null>(null);
+  const pageEndRef = useRef(false);
+  const subEpochRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const [names, setNames] = useState<Record<string, string>>({});
   const [listings, setListings] = useState<
     Record<string, { title: string; photo: string }>
@@ -158,7 +213,7 @@ export default function ConversationsPage() {
   }>({ lang: '', names: {}, listings: {} });
   // Round 73 pattern (chat page): language switch re-renders = legacy
   // onLangChange() parity.
-  const { lang } = useLang();
+  const { lang, t } = useLang();
   const st = (k: string) => convSt(lang, k);
 
   const showToast = useCallback((msg: string, ms = 4000) => {
@@ -264,10 +319,40 @@ export default function ConversationsPage() {
     []
   );
 
+  // R32-3: write the instant-paint snapshot from the MERGED list (live +
+  // loaded pages) with the ACCUMULATED meta maps (metaCacheRef, not just
+  // the fresh entries of the latest fetch — otherwise a repaint after a
+  // cached-meta update would lose names/titles the user already sees).
+  const writeConvsSnapshot = useCallback((uid: string) => {
+    try {
+      snapshotWrite('convs', uid, {
+        convs: mergeConvs(liveRef.current, pagedRef.current, uid).map(
+          snapshotConvShape
+        ),
+        names: { ...metaCacheRef.current.names },
+        listings: { ...metaCacheRef.current.listings },
+      });
+    } catch {
+      /* best-effort */
+    }
+  }, []);
+
   const subscribe = useCallback(
     (client: FirebaseClient, user: CompatUser, lang: Lang) => {
       const uid = user.uid;
       const { db, fsMod } = client;
+      // R32-3: a fresh subscription restarts pagination — pages and their
+      // cursor belong to the previous subscription epoch, so stale pages
+      // must not mix with the new top window. loadMore ignores results
+      // from an older epoch (subEpochRef) for the same reason. Note this
+      // also means a returning tab (visibility re-subscribe) drops loaded
+      // older pages back to the top window + load-more — correctness over
+      // keeping them across a cursor-invalidating resubscribe.
+      pagedRef.current = [];
+      cursorRef.current = null;
+      pageEndRef.current = false;
+      subEpochRef.current += 1;
+      setHasMore(false);
       if (unsubRef.current) {
         try {
           unsubRef.current();
@@ -297,28 +382,32 @@ export default function ConversationsPage() {
           .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Conv)
           .filter((c) => !(c.hiddenFor || []).includes(uid))
           .sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt));
-        setConvs(docs);
+        // R32-3: the live window replaces the top of the list; older
+        // pages stay merged underneath. The cursor for the first older
+        // page is the query's last document (not the last visible one —
+        // hidden docs still occupy a slot in query order); it is only
+        // (re)set while unset, so a live update never breaks the page
+        // chain a loadMore is walking. hasMore uses the RAW query size
+        // (snap.docs), not the hidden-filtered count — a full window of
+        // hidden threads must not end the chain.
+        liveRef.current = docs;
+        const merged = mergeConvs(docs, pagedRef.current, uid);
+        setConvs(merged);
+        if (cursorRef.current === null) {
+          const qdocs = snap.docs;
+          cursorRef.current = qdocs.length ? qdocs[qdocs.length - 1] : null;
+        }
+        if (pagedRef.current.length === 0) {
+          setHasMore(
+            snap.docs.length === CONV_PAGE && merged.length < CONV_CAP
+          );
+        } else {
+          setHasMore(!pageEndRef.current && merged.length < CONV_CAP);
+        }
         // 0.0.0.22 (Zak): save the fresh render for instant paint on next
         // boot. Best-effort; the live subscription is the source of truth.
-        loadMeta(docs, uid, client, lang).then((meta) => {
-          try {
-            snapshotWrite('convs', uid, {
-              convs: docs.map((c) => ({
-                id: c.id,
-                participants: c.participants || [],
-                lastMessage: c.lastMessage || null,
-                unread: c.unread || {},
-                listingId: c.listingId || '',
-                hiddenFor: c.hiddenFor || [],
-                updatedAt: snapMs(c.updatedAt),
-                createdAt: snapMs(c.createdAt),
-              })),
-              names: meta.names,
-              listings: meta.listings,
-            });
-          } catch {
-            /* best-effort */
-          }
+        loadMeta(docs, uid, client, lang).then(() => {
+          writeConvsSnapshot(uid);
         }).catch(() => {
           /* meta load failed — skip snapshot */
         });
@@ -327,17 +416,20 @@ export default function ConversationsPage() {
         setError(convSt(lang, 'errorGeneric'));
       };
       // FIX-ROUND-37 H1 (18 Oct 2026): restored server-side
-      // orderBy('updatedAt', 'desc'). Without it, limit(60) returns an
-      // arbitrary 60 and users with >60 conversations can lose recent
-      // threads. Requires the composite index
+      // orderBy('updatedAt', 'desc'). Without it, the top window would be
+      // an arbitrary slice and users with many conversations could lose
+      // recent threads. Requires the composite index
       // conversations: participants [CONTAINS] + updatedAt [DESCENDING]
       // (declared in dlala-app/firebase/firestore.indexes.json).
+      // R32-3: the listener covers only the first CONV_PAGE threads;
+      // older threads page in via loadMore (same where + orderBy +
+      // startAfter cursor), up to the CONV_CAP total.
       unsubRef.current = fsMod.onSnapshot(
         fsMod.query(
           fsMod.collection(db, 'conversations'),
           fsMod.where('participants', 'array-contains', uid),
           fsMod.orderBy('updatedAt', 'desc'),
-          fsMod.limit(60)
+          fsMod.limit(CONV_PAGE)
         ),
         onSnap,
         onErr
@@ -362,8 +454,61 @@ export default function ConversationsPage() {
     // lang is passed as an argument (not closed over); the effect lists it
     // in deps so a language switch re-subscribes with the new lang
     // (legacy onLangChange() re-render parity).
-    [loadMeta]
+    [loadMeta, writeConvsSnapshot]
   );
+
+  // R32-3: fetch the next CONV_PAGE older threads (one-time query, not a
+  // listener) and merge them into the rendered list. The chain stops at
+  // a short page (server exhausted) or at the CONV_CAP total.
+  async function loadMore() {
+    const client = clientRef.current;
+    const user = userRef.current;
+    if (!client || !user || loadingMoreRef.current) return;
+    const cursor = cursorRef.current;
+    if (!cursor) return;
+    const uid = user.uid;
+    const lang = langRef.current;
+    const epoch = subEpochRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const { db, fsMod } = client;
+      const snap = await fsMod.getDocs(
+        fsMod.query(
+          fsMod.collection(db, 'conversations'),
+          fsMod.where('participants', 'array-contains', uid),
+          fsMod.orderBy('updatedAt', 'desc'),
+          fsMod.startAfter(cursor),
+          fsMod.limit(CONV_PAGE)
+        )
+      );
+      // A resubscribe in the meantime restarts pagination — discard
+      // this stale page rather than mixing epochs.
+      if (epoch !== subEpochRef.current) return;
+      const rawDocs = snap.docs;
+      const pageDocs = rawDocs
+        .map((d) => ({ id: d.id, ...((d.data() || {}) as object) }) as Conv)
+        .filter((c) => !(c.hiddenFor || []).includes(uid));
+      pagedRef.current = [...pagedRef.current, ...pageDocs];
+      if (rawDocs.length) cursorRef.current = rawDocs[rawDocs.length - 1];
+      pageEndRef.current = rawDocs.length < CONV_PAGE;
+      const merged = mergeConvs(liveRef.current, pagedRef.current, uid);
+      setConvs(merged);
+      setHasMore(!pageEndRef.current && merged.length < CONV_CAP);
+      // Resolve meta for the new page only (D10 cache skips the rest),
+      // then refresh the instant-paint snapshot with the merged list.
+      loadMeta(pageDocs, uid, client, lang).then(() => {
+        if (epoch === subEpochRef.current) writeConvsSnapshot(uid);
+      }).catch(() => {
+        /* meta load failed — skip snapshot */
+      });
+    } catch {
+      showToast(t('loadMoreFailed'));
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (authState.status !== 'signed-in') return;
@@ -422,7 +567,10 @@ export default function ConversationsPage() {
       await fsMod.updateDoc(fsMod.doc(db, `conversations/${id}`), {
         hiddenFor: fsMod.arrayUnion(user.uid),
       });
-      setConvs((prev) => prev.filter((c) => c.id !== id));
+      // R32-3: drop the thread from both sets, then re-merge.
+      liveRef.current = liveRef.current.filter((c) => c.id !== id);
+      pagedRef.current = pagedRef.current.filter((c) => c.id !== id);
+      setConvs(mergeConvs(liveRef.current, pagedRef.current, user.uid));
       setHiddenId(id);
       showToast(st('chatHidden'), 6000);
     } catch {
@@ -576,6 +724,19 @@ export default function ConversationsPage() {
               </div>
             );
           })}
+
+          {/* R32-3: older threads page in by 20, up to the 60-thread cap. */}
+          {hasMore && (
+            <div className="text-center pt-2">
+              <button
+                className="rounded-lg bg-emerald-700 px-6 py-2.5 font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? '…' : t('loadMore')}
+              </button>
+            </div>
+          )}
 
           {convs.length === 0 && !error && !serverLoaded && (
             <div className="text-center py-10">
