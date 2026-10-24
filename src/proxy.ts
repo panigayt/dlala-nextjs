@@ -16,6 +16,7 @@ import {
   stripHtmlSuffix,
   TRILINGUAL_404_HTML,
   localized404Html,
+  OWNER_RECOVERY_CSS,
 } from './proxy-404';
 
 // Round 14 (12 Oct 2026) — proxy-based REAL 404s (Zak: "نفذ 404 حقيقي").
@@ -181,7 +182,20 @@ export async function proxy(req: NextRequest) {
             },
           });
           if (rendered.status >= 500) throw new Error('render failed');
-          const body = req.method === 'HEAD' ? null : await rendered.text();
+          let body = req.method === 'HEAD' ? null : await rendered.text();
+          // R27-3 follow-up (24 Oct 2026): the re-emitted /fr|en page is
+          // a RENDERED page, not the static HTML — it never carried the
+          // owner-recovery mount + script. Inject both (plus the shared
+          // styles) for listing 404s only. The script re-gates on the
+          // /listing/<id> pathname (prefixed paths included) and renders
+          // nothing for non-owners, so buyers keep the bare 404. Seller /
+          // announcement 404s are untouched.
+          if (prefix === 'listing' && body && !body.includes('dlala-owner-recovery')) {
+            const recovery = `<style>${OWNER_RECOVERY_CSS}</style><div id="dlala-owner-recovery"></div><script src="/owner-404-recovery.js" defer></script>`;
+            body = body.includes('</body>')
+              ? body.replace('</body>', `${recovery}</body>`)
+              : body + recovery;
+          }
           const headers = new Headers(rendered.headers);
           // fetch() already decompressed the body — don't let the outer
           // response claim an encoding/length the plain body doesn't have.

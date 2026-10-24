@@ -77,6 +77,18 @@ export async function checkDocExists(
   }
 }
 
+// R27-3 follow-up (24 Oct 2026): the owner-recovery styles, shared by the
+// static listing 404 (localized404Html) and the proxy's injection into the
+// re-emitted /fr|en rendered page (src/proxy.ts). Keep in one place —
+// the script (public/owner-404-recovery.js) only sets classNames.
+export const OWNER_RECOVERY_CSS = `.dlala-owner-hint{font-size:15px;color:#52525b;margin-top:22px}
+.dlala-owner-panel{margin-top:22px;border:2px solid #0b6b4f;border-radius:12px;padding:16px;text-align:start}
+.dlala-owner-note{font-size:14px;color:#0b6b4f;font-weight:700;margin:0 0 8px}
+.dlala-owner-title{font-size:18px;color:#18181b;font-weight:700;margin:0 0 6px}
+.dlala-owner-price{font-size:17px;color:#0b6b4f;font-weight:800;margin:0 0 10px}
+.dlala-owner-sold{display:inline-block;background:#dc2626;color:#fff;border-radius:8px;padding:4px 12px;font-size:14px;font-weight:700;margin:0 0 12px}
+a.dlala-owner-manage{display:inline-block;background:#0b6b4f;color:#fff;border-radius:12px;padding:12px 32px;font-size:16px;text-decoration:none}`;
+
 // R15b BC-1 (18 Oct 2026): locale-aware 404. /fr/* and /en/* URLs get
 // the French/English variant (lang, dir, title, message order) instead
 // of always Arabic. The trilingual copy is preserved; the matching
@@ -139,13 +151,7 @@ nav{margin-top:26px;display:flex;flex-direction:column;gap:10px}
 a{display:block;border-radius:12px;padding:12px 32px;font-size:17px;text-decoration:none}
 a.solid{background:#0b6b4f;color:#fff}
 a.ghost{background:#fff;color:#0b6b4f;border:2px solid #0b6b4f}${opts?.listingId ? `
-.dlala-owner-hint{font-size:15px;color:#52525b;margin-top:22px}
-.dlala-owner-panel{margin-top:22px;border:2px solid #0b6b4f;border-radius:12px;padding:16px;text-align:start}
-.dlala-owner-note{font-size:14px;color:#0b6b4f;font-weight:700;margin:0 0 8px}
-.dlala-owner-title{font-size:18px;color:#18181b;font-weight:700;margin:0 0 6px}
-.dlala-owner-price{font-size:17px;color:#0b6b4f;font-weight:800;margin:0 0 10px}
-.dlala-owner-sold{display:inline-block;background:#dc2626;color:#fff;border-radius:8px;padding:4px 12px;font-size:14px;font-weight:700;margin:0 0 12px}
-a.dlala-owner-manage{display:inline-block;background:#0b6b4f;color:#fff;border-radius:12px;padding:12px 32px;font-size:16px;text-decoration:none}` : ''}
+${OWNER_RECOVERY_CSS}` : ''}
 </style>
 </head>
 <body>
