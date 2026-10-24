@@ -27,6 +27,7 @@ import {
   type CompatUser,
 } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 
@@ -141,6 +142,11 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  // R32-4: shared dialog keyboard/focus behavior — useModalDialog.
+  const infoDialogRef = useModalDialog({
+    open: showInfo,
+    onClose: () => setShowInfo(false),
+  });
   const [, setUserData] = useState<Record<string, unknown>>({});
 
   const load = async () => {
@@ -394,7 +400,13 @@ function VitrineApp({ user, client }: { user: CompatUser; client: FirebaseClient
 
       {showInfo && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" dir={dir}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-md">
+          <div
+            ref={infoDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('vitrinePageTitle')}
+            className="bg-white rounded-2xl p-5 w-full max-w-md"
+          >
             <h2 className="text-lg font-bold text-zinc-900 mb-3">{t('vitrinePageTitle')}</h2>
             <p className="text-sm text-zinc-700 mb-4">{t('vitrineInfo')}</p>
             <button onClick={() => setShowInfo(false)} className={btnSecondaryCls + ' w-full'}>

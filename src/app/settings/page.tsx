@@ -24,6 +24,7 @@ import { deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
 import { saveScrollForReturn } from '@/lib/scroll-restore';
 import { useLang, type Lang } from '@/lib/i18n';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 
 const BLOCK_FN_URL = 'https://europe-west3-dlala-85cea.cloudfunctions.net/toggleBlock';
 const APP_VERSION = 'v54';
@@ -55,6 +56,15 @@ function SettingsContent({ user }: { user: CompatUser }) {
   const [reportErr, setReportErr] = useState<string | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  // R32-4: shared dialog keyboard/focus behavior — useModalDialog.
+  const reportDialogRef = useModalDialog({
+    open: showReport,
+    onClose: () => setShowReport(false),
+  });
+  const deleteDialogRef = useModalDialog({
+    open: showDelete,
+    onClose: () => setShowDelete(false),
+  });
   const [deleteWord, setDeleteWord] = useState('');
   const [deletePw, setDeletePw] = useState('');
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
@@ -552,7 +562,13 @@ function SettingsContent({ user }: { user: CompatUser }) {
       {/* Report dialog */}
       {showReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" dir={dir}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            ref={reportDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('reportProblem')}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          >
             <h2 className="text-lg font-bold text-zinc-900 mb-4">{t('reportProblem')}</h2>
             <label className="block text-sm font-medium text-zinc-700 mb-1" htmlFor="repSubject">
               {t('reportSubject')}
@@ -604,7 +620,13 @@ function SettingsContent({ user }: { user: CompatUser }) {
       {/* Delete dialog */}
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" dir={dir}>
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('deleteAccount')}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          >
             <h2 className="text-lg font-bold text-zinc-900 mb-3">{t('deleteAccount')}</h2>
             <p className="text-sm text-zinc-600 mb-3">{t('deleteAccountStep2')}</p>
             <input

@@ -38,6 +38,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState, getFirebaseCdn } from '@/lib/firebase';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 import { withTimeout } from '@/lib/timeout';
 import { uploadToR2, deleteR2Objects } from '@/lib/r2-upload';
 import { authLoginHref } from '@/lib/auth-return';
@@ -73,13 +74,9 @@ function Modal({
   children: ReactNode;
 }) {
   const { t, lang } = useLang();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // R32-4: shared dialog keyboard/focus behavior (Escape, focus trap,
+  // focus-in on open, focus restore on close) — useModalDialog.
+  const dialogRef = useModalDialog({ onClose });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -87,6 +84,7 @@ function Modal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

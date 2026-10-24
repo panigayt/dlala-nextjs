@@ -46,6 +46,7 @@ import {
   SITE,
   listingSeoText,
   listingJsonLd,
+  wantedJsonLd,
   listingBrandName,
   isConditionExempt,
   condLabel as condLabelText,
@@ -229,17 +230,31 @@ function seoForListing(
   const hasRealImage = allImages.some(
     (u) => !u.includes('/icon-512.png') && !u.includes('/default_ads/')
   );
-  const jsonLd = listingJsonLd({
-    title: title || 'DLALA',
-    description: seo.description,
-    image: allImages,
-    brand: listingBrandName(l.answers),
-    url,
-    price: Number(l.price) || 0,
-    condition: l.condition,
-    status: l.status,
-    hasRealImage,
-  });
+  // R32-1 (24 Oct 2026): wanted ads get the Demand builder — the
+  // Product builder returns null for them (no real photo), which left
+  // wanted pages with zero JSON-LD. A wanted ad's stored price is its
+  // budget; its photos are carried only when real (never the wanted
+  // placeholder).
+  const jsonLd = l.isWanted
+    ? wantedJsonLd({
+        title: title || 'DLALA',
+        description: seo.description,
+        image: hasRealImage ? allImages : undefined,
+        brand: listingBrandName(l.answers),
+        url,
+        budget: Number(l.price) || 0,
+      })
+    : listingJsonLd({
+        title: title || 'DLALA',
+        description: seo.description,
+        image: allImages,
+        brand: listingBrandName(l.answers),
+        url,
+        price: Number(l.price) || 0,
+        condition: l.condition,
+        status: l.status,
+        hasRealImage,
+      });
   const metadata: Metadata = {
     title: seo.title,
     description: seo.description,

@@ -23,6 +23,7 @@ import { useLang, type Lang } from '@/lib/i18n';
 import { formatPrice } from '@/lib/firestore';
 import { deleteR2Objects } from '@/lib/r2-upload';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 
 interface OwnListing {
   id: string;
@@ -94,6 +95,16 @@ function MyListingsContent({ user }: { user: CompatUser }) {
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [confirmSoldId, setConfirmSoldId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // R32-4: shared dialog keyboard/focus behavior (Escape, focus trap,
+  // focus-in on open, focus restore on close) — useModalDialog.
+  const soldDialogRef = useModalDialog({
+    open: !!confirmSoldId,
+    onClose: () => setConfirmSoldId(null),
+  });
+  const deleteDialogRef = useModalDialog({
+    open: !!confirmDeleteId,
+    onClose: () => setConfirmDeleteId(null),
+  });
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
@@ -497,7 +508,13 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       {/* Custom confirm modal for Mark as Sold (replaces window.confirm) */}
       {confirmSoldId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            ref={soldDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('markSoldConfirm')}
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+          >
             <h3 className="text-lg font-bold text-zinc-900">{t('markSoldConfirm')}</h3>
             <div className="mt-6 flex gap-3 justify-end">
               <button
@@ -520,7 +537,13 @@ function MyListingsContent({ user }: { user: CompatUser }) {
       {/* Custom confirm modal for Delete (replaces window.confirm) */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('deleteConfirm')}
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+          >
             <h3 className="text-lg font-bold text-zinc-900">{t('delete')}?</h3>
             <p className="mt-2 text-sm text-zinc-600">{t('deleteConfirm')}</p>
             <div className="mt-6 flex gap-3 justify-end">

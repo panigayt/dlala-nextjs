@@ -25,6 +25,7 @@ import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 import { CATEGORIES, catName } from '@/lib/categories';
 import { numericPasteValue } from '@/components/NumericFilterInput';
 import { useLang, type Lang } from '@/lib/i18n';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 
 // Round 114: trilingual AR/FR/EN (js/i18n.js + js/alerts.js parity) —
 // user-facing strings now come from the shared i18n store via useLang().
@@ -358,6 +359,11 @@ export default function AlertsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   // 11 Oct 2026: custom delete confirmation modal (window.confirm hangs automation)
   const [deleteConfirm, setDeleteConfirm] = useState<SavedSearch | null>(null);
+  // R32-4: shared dialog keyboard/focus behavior — useModalDialog.
+  const deleteDialogRef = useModalDialog({
+    open: !!deleteConfirm,
+    onClose: () => setDeleteConfirm(null),
+  });
   // 12 Oct 2026: in-flight guard for delete (prevents double-click).
   const [deleting, setDeleting] = useState(false);
   // form fields
@@ -1129,7 +1135,13 @@ export default function AlertsPage() {
       {/* 11 Oct 2026: custom delete confirmation modal (replaces window.confirm) */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('deleteSearchConfirm')}
+            className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+          >
             <h3 className="text-lg font-bold text-zinc-900 mb-2">
               {t('delete')}
             </h3>

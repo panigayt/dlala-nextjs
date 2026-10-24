@@ -29,6 +29,7 @@ import { useRouter } from 'next/navigation';
 // string const on the new module — no SDK loader involved.
 import { useAuthState, btnSecondaryCls } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 import {
   fetchRateableDeals,
   submitRating,
@@ -105,6 +106,14 @@ export default function RateCta({
   const [toast, setToast] = useState<string | null>(null);
   const mounted = useRef(true);
   const toastTimer = useRef<number | null>(null);
+  // R32-4: shared dialog keyboard/focus behavior — useModalDialog.
+  // The close guard matches the overlay click's (!sending).
+  const dialogRef = useModalDialog({
+    open: !!active,
+    onClose: () => {
+      if (!sending) setActive(null);
+    },
+  });
 
   const signedIn = auth.status === 'signed-in';
   const user = signedIn ? auth.user : null;
@@ -248,6 +257,7 @@ export default function RateCta({
           onClick={() => !sending && setActive(null)}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={STR.rateThisUser}

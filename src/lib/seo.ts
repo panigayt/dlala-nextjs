@@ -269,14 +269,118 @@ export function listingJsonLd(o: ListingJsonLdInput): Record<string, unknown>[] 
   // 0.0.0.30 (Zak): category REMOVED — localized category name was flagged
   // "Valeur non valide"; no honest Google-taxonomy mapping exists.
   // Breadcrumb: same shape as the guide/model pages (price-guide.ts).
-  // Listing JSON-LD is always Arabic (R54), so the home crumb is Arabic.
-  const breadcrumb: Record<string, unknown> = {
+  return [ld, breadcrumbLd(o.title, o.url)];
+}
+
+// Breadcrumb shared by the listing builders below: home → this page.
+// Listing JSON-LD is always Arabic (R54), so the home crumb is Arabic.
+function breadcrumbLd(title: string, url: string): Record<string, unknown> {
+  return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'الرئيسية', item: SITE + '/' },
-      { '@type': 'ListItem', position: 2, name: o.title, item: o.url },
+      { '@type': 'ListItem', position: 2, name: title, item: url },
     ],
   };
-  return [ld, breadcrumb];
+}
+
+export interface WantedJsonLdInput {
+  title: string;
+  description: string;
+  image?: string | string[] | null;
+  brand?: string;
+  url: string;
+  /** The wanted ad's budget (its stored price field). */
+  budget?: number;
+}
+
+// R32-1 (24 Oct 2026): wanted listing pages shipped NO JSON-LD at all.
+// listingJsonLd() cannot serve them: a wanted ad has no real product
+// photo (its image is the wanted placeholder), so the Product gate
+// returns null — honestly, since a wanted ad is not a product for
+// sale. It is a DEMAND: someone seeking an item. This builder emits
+// the schema.org Demand shape — the sought item as itemOffered, the
+// budget as a PriceSpecification maxPrice (the sanctioned
+// structured-data place for the number; BW-1 still holds — no offers
+// block, no fake price, and a budget of 1 DZD, the no-budget
+// convention, emits no priceSpecification at all). Photos are carried
+// only when the ad has real ones (the caller passes none for the
+// placeholder). Same description guard and breadcrumb as listingJsonLd.
+export function wantedJsonLd(o: WantedJsonLdInput): Record<string, unknown>[] | null {
+  const description = (o.description || '').trim();
+  if (!description) return null;
+  const itemOffered: Record<string, unknown> = {
+    '@type': 'Product',
+    name: o.title,
+    description,
+  };
+  if (o.image) itemOffered.image = Array.isArray(o.image) ? o.image : [o.image];
+  // 0.0.0.30 (Zak): brand only when honestly known.
+  if (o.brand) itemOffered.brand = { '@type': 'Brand', name: o.brand };
+  const demand: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Demand',
+    name: o.title,
+    description,
+    url: o.url,
+    itemOffered,
+  };
+  if (typeof o.budget === 'number' && isFinite(o.budget) && o.budget > 1) {
+    demand.priceSpecification = {
+      '@type': 'PriceSpecification',
+      maxPrice: o.budget,
+      priceCurrency: 'DZD',
+    };
+  }
+  return [demand, breadcrumbLd(o.title, o.url)];
+}
+
+export interface SellerJsonLdInput {
+  /** Display name exactly as rendered on the page (store name for
+      verified pro stores, else the person's name). */
+  name: string;
+  url: string;
+  /** The seller's real photo/logo (absolute URL); omitted when none. */
+  image?: string;
+  /** Verified pro store → Store; everyone else → Person. */
+  isStore: boolean;
+  /** The listings rendered on the page (first page of the grid). */
+  listings: { name: string; url: string; image?: string }[];
+}
+
+// R32-2 (24 Oct 2026): seller/store pages shipped NO JSON-LD at all.
+// This builder emits the seller (Store for verified pro stores,
+// Person otherwise) plus an ItemList of exactly the listings the page
+// renders — no extra reads, nothing the page doesn't show. Deliberate
+// omissions: followerCount (server-maintained field proven unreliable
+// in R30-2 — never publish a number we can't stand behind) and any
+// aggregateRating (the page shows individual ratings, not an
+// aggregate we compute).
+export function sellerJsonLd(o: SellerJsonLdInput): Record<string, unknown>[] {
+  const seller: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': o.isStore ? 'Store' : 'Person',
+    name: o.name,
+    url: o.url,
+  };
+  if (o.image) seller.image = o.image;
+  const blocks: Record<string, unknown>[] = [seller];
+  if (o.listings.length) {
+    blocks.push({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      numberOfItems: o.listings.length,
+      itemListElement: o.listings.map((it, i) => {
+        const item: Record<string, unknown> = {
+          '@type': 'Product',
+          name: it.name,
+          url: it.url,
+        };
+        if (it.image) item.image = it.image;
+        return { '@type': 'ListItem', position: i + 1, item };
+      }),
+    });
+  }
+  return blocks;
 }

@@ -23,6 +23,7 @@ import {
 } from '@/lib/firebase';
 import { WILAYAS } from '@/lib/wilayas';
 import { useLang } from '@/lib/i18n';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 // 11 Oct 2026: withTimeout now in @/lib/timeout.
 import { withTimeout } from '@/lib/timeout';
 
@@ -33,6 +34,15 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
   const [state, setState] = useState<'loading' | 'error' | 'none' | 'requested'>('loading');
   const [showDialog, setShowDialog] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  // R32-4: shared dialog keyboard/focus behavior — useModalDialog.
+  const confirmDialogRef = useModalDialog({
+    open: showDialog,
+    onClose: () => setShowDialog(false),
+  });
+  const infoDialogRef = useModalDialog({
+    open: showInfo,
+    onClose: () => setShowInfo(false),
+  });
   const [name, setName] = useState('');
   const [wilaya, setWilaya] = useState('');
   const [delivery, setDelivery] = useState(false);
@@ -146,7 +156,13 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
 
       {showDialog && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" dir={dir}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div
+            ref={confirmDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('storeVerifyConfirm')}
+            className="bg-white rounded-2xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto"
+          >
             <h2 className="text-lg font-bold text-zinc-900 mb-4">{t('storeVerifyConfirm')}</h2>
             {formError && (
               <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -206,7 +222,13 @@ function StoreVerifyApp({ user, client }: { user: CompatUser; client: FirebaseCl
 
       {showInfo && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" dir={dir}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-md">
+          <div
+            ref={infoDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('proInfoTitle')}
+            className="bg-white rounded-2xl p-5 w-full max-w-md"
+          >
             <h2 className="text-lg font-bold text-zinc-900 mb-4">{t('proInfoTitle')}</h2>
             <ol className="list-decimal list-inside space-y-2 text-sm text-zinc-700 mb-4">
               {benefits.map((b, i) => (

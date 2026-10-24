@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '@/lib/firebase';
 import { useLang } from '@/lib/i18n';
+import { useModalDialog } from '@/lib/use-modal-dialog';
 // 11 Oct 2026: withTimeout now in @/lib/timeout — no firebase-compat import.
 import { withTimeout } from '@/lib/timeout';
 import { authLoginHref } from '@/lib/auth-return';
@@ -45,13 +46,8 @@ function Modal({
   children: ReactNode;
   lang: 'ar' | 'fr' | 'en';
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // R32-4: shared dialog keyboard/focus behavior — useModalDialog.
+  const dialogRef = useModalDialog({ onClose });
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -59,6 +55,7 @@ function Modal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}

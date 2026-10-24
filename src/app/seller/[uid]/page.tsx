@@ -119,10 +119,27 @@ import {
   fetchSellerListingsPage,
   fetchSellerRatings,
   encodePageCursor,
+  cardTitle,
+  cardImage,
   type ListingCard,
   type SellerProfile,
   type SellerRating,
 } from '@/lib/firestore';
+import { SITE, sellerJsonLd } from '@/lib/seo';
+
+// R32-2 (24 Oct 2026): seller JSON-LD renders exactly once, in the
+// route shell — the same discipline as the listing page's
+// ListingJsonLd (a script rendered inside <Suspense> is duplicated
+// by PPR: static shell + streamed segment).
+function SellerJsonLd({ json }: { json: string }) {
+  if (!json) return null;
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: json }}
+    />
+  );
+}
 
 async function _getSeller(uid: string): Promise<SellerProfile | null> {
   'use cache';
@@ -254,8 +271,56 @@ export default async function SellerPageRoute({
   // transient — the in-page error view at HTTP 200, never a 404.
   if (!seller && !sellerFailed) notFound();
 
+  // R32-2 (24 Oct 2026): seller/store JSON-LD — previously the page
+  // shipped none. Built from the SAME seller + first-page listings
+  // the page renders (no extra reads): the seller as Store (verified
+  // pro) or Person, plus an ItemList of the rendered listings.
+  // Name mirrors generateMetadata's R53 rule (store name for verified
+  // pro stores). '<' is escaped (\u003c) so user content can never
+  // break out of the script (listing-page discipline).
+  let jsonLdScript = '';
+  if (seller) {
+    try {
+      const name =
+        seller.storeTier === 'verified' && seller.storeName
+          ? seller.storeName
+          : seller.name || seller.storeName || 'Seller';
+      const url = `${SITE}/seller/${encodeURIComponent(uid)}`;
+      const rawPhoto = seller.photoUrl || seller.storeLogoUrl || '';
+      const image = rawPhoto
+        ? rawPhoto.startsWith('http')
+          ? rawPhoto
+          : `${SITE}${rawPhoto}`
+        : undefined;
+      const blocks = sellerJsonLd({
+        name,
+        url,
+        image,
+        isStore: seller.storeTier === 'verified',
+        listings: listings.map((l) => {
+          const raw = cardImage(l);
+          return {
+            name: cardTitle(l, 'ar'),
+            url: `${SITE}/listing/${encodeURIComponent(l.id)}`,
+            image: raw
+              ? raw.startsWith('http')
+                ? raw
+                : `${SITE}${raw}`
+              : undefined,
+          };
+        }),
+      });
+      jsonLdScript = JSON.stringify(blocks).replace(/</g, '\\u003c');
+    } catch {
+      jsonLdScript = '';
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50" dir="rtl">
+      <Suspense fallback={null}>
+        <SellerJsonLd json={jsonLdScript} />
+      </Suspense>
       <Suspense fallback={<SellerSkeleton />}>
         <SellerContent
           uid={uid}
