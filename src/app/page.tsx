@@ -142,7 +142,7 @@ export default async function Home() {
       {
         '@type': 'Organization',
         name: 'Dlala',
-        alternateName: 'dzdlala',
+        alternateName: ['dzdlala', 'دلالة'],
         url: 'https://www.dzdlala.com',
         logo: 'https://www.dzdlala.com/icon-512.png',
         // sameAs: fill with official social profile URLs once created
