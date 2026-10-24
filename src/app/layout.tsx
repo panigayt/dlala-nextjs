@@ -4,6 +4,7 @@ import "./globals.css";
 import "./chrome.css";
 import "./vitrine.css";
 import "./guides.css";
+import "./listing-print.css";
 import SiteChrome from "@/components/SiteChrome";
 import ChromeWithLang from "@/components/ChromeWithLang";
 import PendingActionApplier from "@/components/PendingActionApplier";

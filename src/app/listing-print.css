@@ -1,0 +1,69 @@
+/* R33-1 REWORK (24 Oct 2026): listing detail print stylesheet — GLOBAL,
+ * NOT a CSS module.
+ *
+ * Why global: the v1 fix (print.module.css) passed a local WEBPACK build
+ * but shipped dead CSS from production's Turbopack build: the module's
+ * .printScope export resolved to `undefined` at runtime (the <main>
+ * className was literally "undefined ..."), and the
+ * body:has(.printScope) :global(#...) selectors compiled away to an
+ * empty :is() — live-proven 24 Oct 2026 (publish-verify-print2.json:
+ * 26 buttons/links still visible under print emulation, chrome still
+ * displayed). CSS modules + :global + :has do not survive Turbopack
+ * the way they survive webpack here. A global stylesheet has no class
+ * mapping, no exports object, and no :global processing — both
+ * bundlers emit these literal selectors verbatim, so the
+ * webpack/Turbopack outputs cannot diverge this way again.
+ *
+ * Scope: imported ONLY in the root layout (Next requires global CSS
+ * there), but every rule is scoped to listing detail pages: the
+ * .dlala-listing-print class is applied ONLY to the listing detail
+ * route's <main> (page.tsx), and the chrome rules are gated on
+ * body:has(.dlala-listing-print). Other routes' print output is
+ * untouched. Every rule lives inside @media print — screen rendering
+ * is untouched.
+ *
+ * What prints: title, price (+ negotiable badge), photos, meta grid,
+ * stat row, seller name/rating, description, structured answers.
+ * What does not: all app chrome, all interactive elements (buttons
+ * and links carry no information on paper), and the matches/similar
+ * section (discovery, not this listing). Card shadows are dropped.
+ * :has() needs Chrome 105+/Safari 15.4+; older browsers degrade to
+ * today's behavior (chrome printed), never to a broken page.
+ */
+@media print {
+  /* App chrome (SiteChrome): sticky header, drawer + overlay, footer,
+     skip link. IDs are stable (components/SiteChrome.tsx). */
+  body:has(.dlala-listing-print) #site-header,
+  body:has(.dlala-listing-print) #drawer,
+  body:has(.dlala-listing-print) #drawerOverlay,
+  body:has(.dlala-listing-print) #site-footer,
+  body:has(.dlala-listing-print) .skip-link {
+    display: none !important;
+  }
+
+  /* Inside the detail <main>: every interactive element is hidden.
+     Buttons: message / favorite / share / report / price-suggestion /
+     follow / gallery thumbnails / lightbox triggers / rate CTA.
+     Links: back link, view-store link, report-user link.
+     The description renders as plain text (ListingShell), never links,
+     so no listing content is lost by hiding anchors. */
+  .dlala-listing-print button,
+  .dlala-listing-print a {
+    display: none !important;
+  }
+
+  /* Discovery section (matches/similar ads) — not this listing.
+     .listing-matches is a plain class in page.tsx. */
+  .dlala-listing-print .listing-matches {
+    display: none !important;
+  }
+
+  /* Flat printout: no card shadows, full-width content. */
+  .dlala-listing-print {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .dlala-listing-print > div {
+    box-shadow: none !important;
+  }
+}
