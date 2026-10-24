@@ -1523,6 +1523,68 @@ export function makeTextMatcher(f: SearchFilters): {
   return { qBrand, matches, phraseMatches, classify };
 }
 
+// R29-2 (24 Oct 2026): model-name typo tolerance — the R16 brand fuzzy
+// pass mirrored for model names, with the catalog itself as the
+// vocabulary. There is no model dictionary in code (models are free
+// text in titles), so the vocabulary is the pool's own title words:
+// a query token that occurs in NO pool title/description gets one
+// conservative edit-distance attempt against those words, using the
+// exact fuzzyBrandKey thresholds (Latin-only, min length 4, 1 typo for
+// words ≤6 chars, 2 for longer; deterministic tie-break — smallest
+// distance, then alphabetically smallest word — so the live and index
+// pipelines agree regardless of pool order). Brand tokens never reach
+// this pass (resolveQueryBrand claims them first, fuzzyBrandKey
+// included), and tokens that match anything today are never touched —
+// so every query that works today returns its identical set and order,
+// and the correction only ever rescues a query that returned zero
+// ('ibisa' → 'ibiza', 'sandaro' → 'sandero'). The corrected query
+// flows through the existing matcher AND ranker, so corrected results
+// rank exactly like the correctly-spelled query. The live pipeline's
+// early-stop phrase counter still uses the uncorrected matcher — it
+// undercounts typo queries, which only scans further (safe direction).
+// Saved-search matching is a separate matcher (savedSearchMatch.ts)
+// and is deliberately untouched by this search-surface fix.
+function correctModelTypos<T extends ListingCard>(docs: T[], f: SearchFilters): SearchFilters {
+  const q = (f.q || '').trim();
+  if (!q || !docs.length) return f;
+  const tokens = normSearchText(q).split(' ').filter(Boolean);
+  if (!tokens.length) return f;
+  const haystacks: string[] = [];
+  const titleWords = new Set<string>();
+  for (const d of docs) {
+    const title = normSearchText(allTextVariants(d.title));
+    const desc = normSearchText(allTextVariants(d.description));
+    haystacks.push(title, desc);
+    for (const w of title.split(/[^\p{L}\p{N}]+/u)) {
+      if (/^[a-z]{4,}$/.test(w)) titleWords.add(w);
+    }
+  }
+  let changed = false;
+  const out = tokens.map((t) => {
+    // Brand tokens belong to the brand pass — never "corrected".
+    if (normalizeCarBrand(t) || normalizePhoneBrand(t) || fuzzyBrandKey(t)) return t;
+    if (!/^[a-z]{4,}$/.test(t)) return t;
+    // Matches something today → untouched (byte-identical guarantee).
+    if (haystacks.some((h) => h.includes(t))) return t;
+    let best = '';
+    let bestDist = Infinity;
+    for (const w of titleWords) {
+      const d = editDistance(t, w);
+      const maxD = w.length <= 6 ? 1 : 2;
+      if (d > 0 && d <= maxD && (d < bestDist || (d === bestDist && w < best))) {
+        bestDist = d;
+        best = w;
+      }
+    }
+    if (best) {
+      changed = true;
+      return best;
+    }
+    return t;
+  });
+  return changed ? { ...f, q: out.join(' ') } : f;
+}
+
 // Stage 5 (both pipelines): collect matches in pool order up to
 // SEARCH_MAX_MATCHES, then relevance-rank for the recent sort
 // (FIX-WEB-021: relevance leads, recency breaks ties; price sorts keep
@@ -1537,7 +1599,10 @@ export function makeTextMatcher(f: SearchFilters): {
 // the kept union is emitted in pool order, so the price ordering the
 // user asked for stays exact.
 export function textMatchStage<T extends ListingCard>(docs: T[], f: SearchFilters): T[] {
-  const { qBrand, classify } = makeTextMatcher(f);
+  // R29-2: typo-correct model tokens against the pool before matching
+  // (no-op for every query that already matches — see correctModelTypos).
+  const cf = correctModelTypos(docs, f);
+  const { qBrand, classify } = makeTextMatcher(cf);
   const phrase: T[] = [];
   const tokenOnly: T[] = [];
   for (const d of docs) {
@@ -1547,9 +1612,9 @@ export function textMatchStage<T extends ListingCard>(docs: T[], f: SearchFilter
   }
   const keptPhrase = phrase.slice(0, SEARCH_MAX_MATCHES);
   const keptToken = tokenOnly.slice(0, SEARCH_MAX_MATCHES - keptPhrase.length);
-  if (!f.sort || f.sort === 'recent') {
-    return relevanceRank(keptPhrase, f.q || '', qBrand).concat(
-      relevanceRank(keptToken, f.q || '', qBrand)
+  if (!cf.sort || cf.sort === 'recent') {
+    return relevanceRank(keptPhrase, cf.q || '', qBrand).concat(
+      relevanceRank(keptToken, cf.q || '', qBrand)
     ) as T[];
   }
   const keep = new Set<ListingCard>([...keptPhrase, ...keptToken]);
