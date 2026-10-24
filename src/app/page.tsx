@@ -145,9 +145,9 @@ export default async function Home() {
         alternateName: ['dzdlala', 'دلالة'],
         url: 'https://www.dzdlala.com',
         logo: 'https://www.dzdlala.com/icon-512.png',
-        // sameAs: official social profile URLs (Instagram filled;
-        // Facebook/TikTok when created).
-        sameAs: ['https://www.instagram.com/dzdlala/'],
+        // sameAs: official social profile URLs (Instagram + TikTok filled;
+        // Facebook when created).
+        sameAs: ['https://www.instagram.com/dzdlala/', 'https://www.tiktok.com/@dzdlala'],
       },
     ],
   }).replace(/</g, '\\u003c');
