@@ -13,10 +13,16 @@
 //
 // Round 12: Firebase compat SDK → modular (getFirebaseCdn path via the new
 // useRequireAuth; client.fsMod carries the firestore namespace).
+//
+// R30-1 follow-up (24 Oct 2026): /my-store was the one surface the
+// R30-1 batch (c5843a6) left behind — it had no error/retry idiom
+// (the guard's error state rendered an eternal spinner). The guard
+// read and the initial lists now use the FromServer variants, and
+// failures land on the my-listings/favorites full-page error + retry.
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useRequireAuth,
   LoadingSpinner,
@@ -119,97 +125,133 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
     history.replaceState(null, '', '#' + t);
   };
 
-  // Guard + load
+  // Guard + load. R30-1 follow-up (24 Oct 2026): extracted from the
+  // mount effect into a callable load() so the guard's error state can
+  // offer a retry that re-runs it (the effect previously ran once and
+  // the 'error' state rendered an eternal spinner). The aliveRef
+  // replaces the per-effect cancelled flag — same role as the mounted
+  // ref in my-listings.
+  const aliveRef = useRef(true);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let u: Record<string, unknown> | null = null;
-      let readFailed = false;
-      try {
-        const d = await fsMod.getDoc(fsMod.doc(db, 'users', user.uid));
-        if (d.exists()) u = d.data() || {};
-      } catch {
-        readFailed = true;
-      }
-      if (cancelled) return;
-      if (u && u.storeTier !== 'verified') {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
+  const load = useCallback(async () => {
+    setGuard('loading');
+    let u: Record<string, unknown> | null = null;
+    let readFailed = false;
+    try {
+      // R30-1 follow-up: getDocFromServer — the default-source getDoc
+      // RESOLVES with a cache snapshot when the server is unreachable,
+      // and an empty cache resolves !exists(), which the branches below
+      // read as "not a merchant" and falsely redirected even a verified
+      // store to /store-verify mid-outage. FromServer rejects instead
+      // → readFailed → the error state + retry. A server-confirmed
+      // !exists() still redirects exactly as before.
+      const d = await fsMod.getDocFromServer(fsMod.doc(db, 'users', user.uid));
+      if (d.exists()) u = d.data() || {};
+    } catch {
+      readFailed = true;
+    }
+    if (!aliveRef.current) return;
+    if (u && u.storeTier !== 'verified') {
+      setGuard('denied');
+      window.location.replace('/store-verify');
+      return;
+    }
+    if (!u) {
+      if (!readFailed) {
         setGuard('denied');
         window.location.replace('/store-verify');
         return;
       }
-      if (!u) {
-        if (!readFailed) {
-          setGuard('denied');
-          window.location.replace('/store-verify');
-          return;
-        }
-        setGuard('error');
-        return;
-      }
-      setUserData(u);
-      setStoreName((u.storeName as string) || '');
-      setStoreBio((u.storeBio as string) || '');
-      setCoverUrl((u.storeCoverUrl as string) || '');
-      setLogoUrl((u.storeLogoUrl as string) || '');
-      const vids = Array.isArray(u.vitrineIds) ? (u.vitrineIds as string[]) : [];
-      setVitrineIds(vids);
+      setGuard('error');
+      return;
+    }
+    setUserData(u);
+    setStoreName((u.storeName as string) || '');
+    setStoreBio((u.storeBio as string) || '');
+    setCoverUrl((u.storeCoverUrl as string) || '');
+    setLogoUrl((u.storeLogoUrl as string) || '');
+    const vids = Array.isArray(u.vitrineIds) ? (u.vitrineIds as string[]) : [];
+    setVitrineIds(vids);
 
-      // Load listings + conversations
-      try {
-        const [adsSnap, convSnap] = await Promise.all([
-          fsMod.getDocs(
-            fsMod.query(
-              fsMod.collection(db, 'listings'),
-              fsMod.where('sellerId', '==', user.uid),
-              fsMod.limit(200)
-            )
-          ),
-          fsMod.getDocs(
-            fsMod.query(
-              fsMod.collection(db, 'conversations'),
-              fsMod.where('participants', 'array-contains', user.uid)
-            )
-          ),
-        ]);
-        if (cancelled) return;
-        const a = adsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as object) }) as Listing);
-        a.sort((x, y) => {
-          const dx = dateOf(x.createdAt)?.getTime() || 0;
-          const dy = dateOf(y.createdAt)?.getTime() || 0;
-          return dy - dx;
-        });
-        const c = convSnap.docs
-          .map((d) => ({ id: d.id, ...(d.data() as object) }) as Conv)
-          .filter((cc) => (cc as unknown as Record<string, unknown>).sellerId === user.uid);
-        setAds(a);
-        setConvs(c);
-        // Prune vitrine picks (sold/deleted)
-        const eligible = new Set(
-          a.filter((l) => l.status === 'available' || l.status === 'negotiating').map((l) => l.id)
-        );
-        const pruned = vids.filter((id, i) => eligible.has(id) && vids.indexOf(id) === i);
-        if (pruned.length !== vids.length) {
-          setVitrineIds(pruned);
-          setVitrineMsg(t('vitrinePruned'));
-          try {
-            await fsMod.updateDoc(fsMod.doc(db, 'users', user.uid), { vitrineIds: pruned });
-          } catch { /* ignore */ }
-        }
-      } catch {
-        setNotice(t('errorGeneric'));
+    // Load listings + conversations
+    try {
+      const [adsSnap, convSnap] = await Promise.all([
+        // R30-1 follow-up: getDocsFromServer — default-source getDocs
+        // RESOLVES with the (empty) cache during an outage, so the
+        // dashboard rendered zeros and the products tab its "no ads
+        // yet" empty state while the catch below never fired.
+        // FromServer rejects → the catch surfaces the error state.
+        // Same documents on the success path — zero added reads.
+        fsMod.getDocsFromServer(
+          fsMod.query(
+            fsMod.collection(db, 'listings'),
+            fsMod.where('sellerId', '==', user.uid),
+            fsMod.limit(200)
+          )
+        ),
+        fsMod.getDocsFromServer(
+          fsMod.query(
+            fsMod.collection(db, 'conversations'),
+            fsMod.where('participants', 'array-contains', user.uid)
+          )
+        ),
+      ]);
+      if (!aliveRef.current) return;
+      const a = adsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as object) }) as Listing);
+      a.sort((x, y) => {
+        const dx = dateOf(x.createdAt)?.getTime() || 0;
+        const dy = dateOf(y.createdAt)?.getTime() || 0;
+        return dy - dx;
+      });
+      const c = convSnap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as object) }) as Conv)
+        .filter((cc) => (cc as unknown as Record<string, unknown>).sellerId === user.uid);
+      setAds(a);
+      setConvs(c);
+      // Prune vitrine picks (sold/deleted)
+      const eligible = new Set(
+        a.filter((l) => l.status === 'available' || l.status === 'negotiating').map((l) => l.id)
+      );
+      const pruned = vids.filter((id, i) => eligible.has(id) && vids.indexOf(id) === i);
+      if (pruned.length !== vids.length) {
+        setVitrineIds(pruned);
+        setVitrineMsg(t('vitrinePruned'));
+        try {
+          await fsMod.updateDoc(fsMod.doc(db, 'users', user.uid), { vitrineIds: pruned });
+        } catch { /* ignore */ }
       }
-      setGuard('ok');
-    })();
-    return () => { cancelled = true; };
+    } catch {
+      // R30-1 follow-up: a failed lists load must not present as an
+      // empty dashboard — surface the same full-page error + retry as
+      // a guard-read failure (was: a notice over a false-empty page,
+      // and with the default source the catch never fired at all).
+      if (!aliveRef.current) return;
+      setGuard('error');
+      return;
+    }
+    setGuard('ok');
     // t() intentionally excluded: this is a mount-load; re-running the full
-    // data fetch on every language switch would be wasteful. The catch-path
-    // notice may render in the previous language in that rare race — harmless.
+    // data fetch on every language switch would be wasteful. The prune-path
+    // message may render in the previous language in that rare race — harmless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, user.uid]);
+  }, [db, fsMod, user.uid]);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- data fetch on mount, guarded by alive ref */
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const reload = useCallback(async () => {
     try {
-      const adsSnap = await fsMod.getDocs(
+      // R30-1 follow-up: FromServer, same as the initial load — a
+      // cache fallback here could resurrect stale ads after a
+      // mark-sold/delete. Failure keeps the last truthful state
+      // (the catch below), never a false empty.
+      const adsSnap = await fsMod.getDocsFromServer(
         fsMod.query(
           fsMod.collection(db, 'listings'),
           fsMod.where('sellerId', '==', user.uid),
@@ -373,6 +415,27 @@ function MyStoreApp({ user, client }: { user: CompatUser; client: FirebaseClient
   };
 
   if (guard === 'loading') return <LoadingSpinner />;
+  if (guard === 'error') {
+    // R30-1 follow-up: the full-page error + retry idiom (my-listings /
+    // favorites) — this state previously rendered a bare eternal
+    // LoadingSpinner with no way out.
+    return (
+      <div className="min-h-screen bg-zinc-50" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+        <main id="main-content" className="max-w-6xl mx-auto px-4 py-6">
+          <h1 className="text-xl font-bold text-zinc-900 mb-4">{t('myStore')}</h1>
+          <div className="rounded-xl bg-red-50 border border-red-200 p-6 text-center">
+            <p className="text-red-700 mb-4">⚠️ {t('errorGeneric')}</p>
+            <button
+              onClick={() => load()}
+              className="rounded-lg bg-emerald-700 px-6 py-2.5 font-bold text-white hover:bg-emerald-800"
+            >
+              {t('retry')}
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
   if (guard !== 'ok') return <LoadingSpinner label={t('loading')} />;
 
   // Dashboard stats
