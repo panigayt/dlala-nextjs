@@ -81,7 +81,15 @@ export async function checkDocExists(
 // the French/English variant (lang, dir, title, message order) instead
 // of always Arabic. The trilingual copy is preserved; the matching
 // language is listed first and gets the primary (solid) button.
-export function localized404Html(locale: 'ar' | 'fr' | 'en'): string {
+// R27-3 (24 Oct 2026): listing 404s carry the owner-recovery mount +
+// script (public/owner-404-recovery.js). The script tag is emitted ONLY
+// for listing 404s — every other 404 keeps byte-identical output — and
+// the script itself re-gates on the /listing/<id> pathname, so even a
+// misrouted emit cannot run it elsewhere.
+export function localized404Html(
+  locale: 'ar' | 'fr' | 'en',
+  opts?: { listingId?: string }
+): string {
   const isAr = locale === 'ar';
   const htmlLang = locale;
   const dir = isAr ? 'rtl' : 'ltr';
@@ -130,7 +138,14 @@ p{font-size:18px;color:#52525b;margin:0 0 10px}
 nav{margin-top:26px;display:flex;flex-direction:column;gap:10px}
 a{display:block;border-radius:12px;padding:12px 32px;font-size:17px;text-decoration:none}
 a.solid{background:#0b6b4f;color:#fff}
-a.ghost{background:#fff;color:#0b6b4f;border:2px solid #0b6b4f}
+a.ghost{background:#fff;color:#0b6b4f;border:2px solid #0b6b4f}${opts?.listingId ? `
+.dlala-owner-hint{font-size:15px;color:#52525b;margin-top:22px}
+.dlala-owner-panel{margin-top:22px;border:2px solid #0b6b4f;border-radius:12px;padding:16px;text-align:start}
+.dlala-owner-note{font-size:14px;color:#0b6b4f;font-weight:700;margin:0 0 8px}
+.dlala-owner-title{font-size:18px;color:#18181b;font-weight:700;margin:0 0 6px}
+.dlala-owner-price{font-size:17px;color:#0b6b4f;font-weight:800;margin:0 0 10px}
+.dlala-owner-sold{display:inline-block;background:#dc2626;color:#fff;border-radius:8px;padding:4px 12px;font-size:14px;font-weight:700;margin:0 0 12px}
+a.dlala-owner-manage{display:inline-block;background:#0b6b4f;color:#fff;border-radius:12px;padding:12px 32px;font-size:16px;text-decoration:none}` : ''}
 </style>
 </head>
 <body>
@@ -140,7 +155,9 @@ a.ghost{background:#fff;color:#0b6b4f;border:2px solid #0b6b4f}
 ${paragraphs}
 <nav aria-label="التنقل الرئيسي / Navigation principale / Main navigation">
 ${links}
-</nav>
+</nav>${opts?.listingId ? `
+<div id="dlala-owner-recovery"></div>
+<script src="/owner-404-recovery.js" defer></script>` : ''}
 </main>
 </body>
 </html>

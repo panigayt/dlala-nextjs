@@ -38,11 +38,17 @@ import {
 // in src/proxy-404.ts (edge-safe, no React, no firebase libs).
 // The Zak-ordered trilingual 404 (Round 14). R15b BC-1: locale-aware —
 // /fr/* and /en/* URLs get the French/English variant.
-function trilingual404(locale: 'ar' | 'fr' | 'en' = 'ar'): NextResponse {
-  return new NextResponse(localized404Html(locale), {
-    status: 404,
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  });
+function trilingual404(
+  locale: 'ar' | 'fr' | 'en' = 'ar',
+  listingId?: string
+): NextResponse {
+  return new NextResponse(
+    localized404Html(locale, listingId ? { listingId } : undefined),
+    {
+      status: 404,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    }
+  );
 }
 
 export async function proxy(req: NextRequest) {
@@ -128,7 +134,13 @@ export async function proxy(req: NextRequest) {
         check = await checkDocExists('announcements', id, true);
       }
       if (check === 'missing') {
-        return trilingual404(locale);
+        // R27-3: listing 404s carry the owner-recovery mount + script
+        // (unprefixed canonical URLs only — the locale-prefixed path
+        // below re-emits a rendered page, not this static HTML).
+        return trilingual404(
+          locale,
+          prefix === 'listing' ? stripHtmlSuffix(id) : undefined
+        );
       }
       // R19 BC-1 (18 Oct 2026): detail pages are single-locale — the
       // /fr|en detail URLs 404 by design (see src/app/listing/[id]/page.tsx).
