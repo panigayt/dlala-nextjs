@@ -370,6 +370,154 @@ async function fetchFeedSliver(
   });
 }
 
+// R26-3/R27-1 (24 Oct 2026): sold-eviction overlay — the live status
+// check that closes the snapshot staleness cluster. Every
+// dataset-derived surface (siteStats feed/search/category windows, 12h
+// CF cadence, plus 'use cache' windows on top) renders listings whose
+// status froze at compute time, so a listing marked sold after the run
+// keeps merchandising as available until the next recompute — in
+// /api/search (R26-3), on SEO landing pages with their totals (R27-1),
+// and in the home feed's dataset segment. The overlay is ONE bounded
+// live query — listings with updatedAt >= watermark (mark-sold bumps
+// updatedAt via serverTimestamp, my-listings confirmMarkSold) —
+// returning only id/status/hidden/categoryId/wilayaCode, capped at 200
+// rows; callers evict ids whose live status is sold or hidden. The
+// single-field updatedAt range needs NO new composite index (no
+// (status, updatedAt) index exists in firestore.indexes.json). Cost is
+// bounded by a 15-minute in-process memo keyed by watermark: at most
+// one overlay query per 15 min per watermark per instance (typically a
+// handful of rows; pathological cap 200 rows × 96 refreshes/day).
+// Fail-open by design: overlay failure returns null and callers render
+// the snapshot exactly as today; truncation evicts what was returned
+// (strictly better than none) and is console.warned. DELETED-since-
+// compute docs are NOT covered (a deleted doc is invisible to this
+// query) — that staleness class remains, stated here, not implied fixed.
+export interface SoldFlip {
+  id: string;
+  categoryId: string;
+  wilayaCode: number;
+}
+
+const SOLD_OVERLAY_LIMIT = 200;
+const SOLD_OVERLAY_TTL_MS = 15 * 60 * 1000;
+const soldOverlayCache = new Map<
+  string,
+  { at: number; flips: Map<string, SoldFlip> }
+>();
+
+export async function fetchSoldFlipsSince(
+  watermark: string | null
+): Promise<Map<string, SoldFlip> | null> {
+  if (!watermark) return new Map();
+  const cached = soldOverlayCache.get(watermark);
+  if (cached && Date.now() - cached.at < SOLD_OVERLAY_TTL_MS) return cached.flips;
+  try {
+    const url =
+      FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
+    const structuredQuery = {
+      from: [{ collectionId: 'listings' }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: 'updatedAt' },
+          op: 'GREATER_THAN_OR_EQUAL',
+          value: { timestampValue: watermark },
+        },
+      },
+      orderBy: [{ field: { fieldPath: 'updatedAt' }, direction: 'DESCENDING' }],
+      select: {
+        fields: ['status', 'hidden', 'categoryId', 'wilayaCode'].map((f) => ({
+          fieldPath: f,
+        })),
+      },
+      limit: SOLD_OVERLAY_LIMIT,
+    };
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structuredQuery }),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      console.warn(`sold-overlay query failed: ${res.status}`);
+      return null;
+    }
+    const body = await res.json().catch(() => null);
+    const rows = (Array.isArray(body) ? body : []).filter((r) => r.document);
+    if (rows.length >= SOLD_OVERLAY_LIMIT) {
+      console.warn(
+        'sold-overlay truncated at limit — flips older than the window may be missed'
+      );
+    }
+    const flips = new Map<string, SoldFlip>();
+    for (const row of rows) {
+      const d = row.document as { name?: string; fields?: Record<string, unknown> };
+      const id = String(d.name || '').split('/').pop() || '';
+      if (!id) continue;
+      const fs = d.fields || {};
+      const status = restValue(fs.status);
+      const hidden = restValue(fs.hidden) === true;
+      if (status !== 'sold' && !hidden) continue;
+      flips.set(id, {
+        id,
+        categoryId: String(restValue(fs.categoryId) || ''),
+        wilayaCode: Number(restValue(fs.wilayaCode) || 0),
+      });
+    }
+    soldOverlayCache.set(watermark, { at: Date.now(), flips });
+    return flips;
+  } catch (e) {
+    console.warn('sold-overlay failed:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// Pure eviction: drop ids the overlay reports sold/hidden. Null flips =
+// overlay unavailable → return the input untouched (fail-open).
+export function evictSoldIds<T extends { id?: unknown }>(
+  docs: T[],
+  flips: Map<string, SoldFlip> | null
+): T[] {
+  if (!flips || flips.size === 0) return docs;
+  return docs.filter((d) => !flips.has(String((d as { id?: unknown }).id || '')));
+}
+
+// Newest createdAt in a snapshot list as an RFC3339 watermark. Accepts
+// decoded Dates (snapshot items) and raw createdAtRaw strings (feed /
+// index entries). The input is deliberately unknown[] — snapshot shapes
+// differ (ModelListingSummary carries no createdAt field in its type
+// even though decoded items do), so fields are read dynamically. The
+// newest item's createdAt is <= the dataset's computedAt, so the overlay
+// window [watermark, now] always covers [computedAt, now] — every flip
+// since compute is in range.
+export function newestCreatedAtIso(docs: readonly unknown[]): string | null {
+  let bestMs = -1;
+  let bestRaw: string | null = null;
+  for (const d0 of docs) {
+    const d = d0 as { createdAt?: unknown; createdAtRaw?: unknown };
+    const raw = d.createdAtRaw;
+    if (typeof raw === 'string' && raw) {
+      const ms = Date.parse(raw);
+      if (Number.isFinite(ms) && ms > bestMs) {
+        bestMs = ms;
+        bestRaw = raw;
+      }
+      continue;
+    }
+    const c = d.createdAt;
+    if (c instanceof Date && !isNaN(c.getTime()) && c.getTime() > bestMs) {
+      bestMs = c.getTime();
+      bestRaw = c.toISOString();
+    } else if (typeof c === 'string' && c) {
+      const ms = Date.parse(c);
+      if (Number.isFinite(ms) && ms > bestMs) {
+        bestMs = ms;
+        bestRaw = c;
+      }
+    }
+  }
+  return bestRaw;
+}
+
 // One page of the default feed. Stats-hybrid first (see above); the
 // original live cursor implementation (renamed fetchFeedPageLive) is
 // the fallback for every position the precomputed doc cannot serve.
@@ -378,13 +526,21 @@ export async function fetchFeedPage(
   cursor: PageCursor | null = null
 ): Promise<{ docs: ListingCard[]; nextCursor: PageCursor | null }> {
   if (cursor) {
-    // Pages ≥2: precomputed doc only.
+    // Pages ≥2: precomputed doc only (+ R26-3/R27-1 sold eviction; the
+    // cursor still addresses dataset items, so it is kept as-is).
     const feed = await readStatsFeedArray().catch(() => null);
     if (feed) {
       const page = pageStatsFeed(feed, limit, cursor);
       if (page) {
+        const flips = await fetchSoldFlipsSince(
+          feed.computedAt
+            ? feed.computedAt.toISOString()
+            : newestCreatedAtIso(
+                feed.items as Array<{ createdAtRaw?: unknown }>
+              )
+        );
         return {
-          docs: page.docs as unknown as ListingCard[],
+          docs: evictSoldIds(page.docs, flips) as unknown as ListingCard[],
           nextCursor: page.nextCursor,
         };
       }
@@ -411,7 +567,12 @@ export async function fetchFeedPage(
           ...sliver.map((s) => s.doc),
           ...(rest as unknown as ListingCard[]),
         ];
-        const pageDocs = merged.slice(0, limit);
+        // R26-3/R27-1: evict sold-since-compute dataset docs BEFORE
+        // slicing, so the page stays full whenever the dataset has room.
+        const flips = await fetchSoldFlipsSince(
+          feed.computedAt ? feed.computedAt.toISOString() : watermark
+        );
+        const pageDocs = evictSoldIds(merged, flips).slice(0, limit);
         let nextCursor: PageCursor | null = null;
         if (pageDocs.length === limit && pageDocs.length > 0) {
           const last = pageDocs[pageDocs.length - 1];
@@ -434,12 +595,15 @@ export async function fetchFeedPage(
         });
         return { docs, nextCursor };
       }
-      // Sliver unavailable (transient): degrade to the doc alone —
-      // content exact as of the last compute, zero extra reads.
+      // Sliver unavailable (transient): degrade to the doc alone, with
+      // R26-3/R27-1 sold eviction (the memoized overlay, not a scan).
       const page = pageStatsFeed(feed, limit, null);
       if (page) {
+        const flips0 = await fetchSoldFlipsSince(
+          feed.computedAt ? feed.computedAt.toISOString() : watermark
+        );
         return {
-          docs: page.docs as unknown as ListingCard[],
+          docs: evictSoldIds(page.docs, flips0) as unknown as ListingCard[],
           nextCursor: page.nextCursor,
         };
       }
@@ -2617,22 +2781,26 @@ export async function runSearchPipelineFromIndexWithSliver(
   } catch {
     sliver = null;
   }
-  if (!sliver || sliver.length === 0) {
-    return runSearchPipelineFromIndex(entries, boost, f);
-  }
-  const sliverIds = new Set(sliver.map((s) => String(s.id)));
-  const merged: SearchIndexEntry[] = [
-    ...sliver,
-    ...entries.filter((e) => !sliverIds.has(String(e.id))),
-  ];
+  let merged: SearchIndexEntry[] = entries;
   let mergedBoost = boost;
-  const sids = [
-    ...new Set(sliver.map((s) => String(s.sellerId || '')).filter(Boolean)),
-  ];
-  if (sids.length) {
-    const fresh = await fetchSellerVerdictInputs(sids).catch(() => null);
-    if (fresh) mergedBoost = { ...boost, ...fresh };
+  if (sliver && sliver.length > 0) {
+    const sliverIds = new Set(sliver.map((s) => String(s.id)));
+    merged = [
+      ...sliver,
+      ...entries.filter((e) => !sliverIds.has(String(e.id))),
+    ];
+    const sids = [
+      ...new Set(sliver.map((s) => String(s.sellerId || '')).filter(Boolean)),
+    ];
+    if (sids.length) {
+      const fresh = await fetchSellerVerdictInputs(sids).catch(() => null);
+      if (fresh) mergedBoost = { ...boost, ...fresh };
+    }
   }
+  // R26-3: evict sold-since-compute entries BEFORE the pipeline trusts
+  // dataset membership (stage 1 never re-checks status).
+  const flips = await fetchSoldFlipsSince(searchIndexWatermark(entries));
+  merged = evictSoldIds(merged, flips);
   return runSearchPipelineFromIndex(merged, mergedBoost, f);
 }
 

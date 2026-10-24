@@ -15,6 +15,11 @@ import {
   fetchAvailableCars,
   filterModelItems,
 } from '@/lib/model-pages';
+import {
+  fetchSoldFlipsSince,
+  newestCreatedAtIso,
+  evictSoldIds,
+} from '@/lib/firestore';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
@@ -32,7 +37,11 @@ export async function GET(
   }
   try {
     const listings = await fetchAvailableCars();
-    const items = filterModelItems(listings, model, 'en');
+    // R27-1: evict sold-since-compute snapshot docs (live overlay, per
+    // render — NOT inside the 'use cache' fetch above).
+    const flips = await fetchSoldFlipsSince(newestCreatedAtIso(listings));
+    const live = evictSoldIds(listings, flips);
+    const items = filterModelItems(live, model, 'en');
     if (items.length < MIN_LISTINGS) {
       return new Response(notFoundPage('thin', 'en'), {
         status: 404,

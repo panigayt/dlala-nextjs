@@ -12,6 +12,11 @@ import {
   filterWilayaItems,
   popularWilayas,
 } from '@/lib/wilaya-pages';
+import {
+  fetchSoldFlipsSince,
+  newestCreatedAtIso,
+  evictSoldIds,
+} from '@/lib/firestore';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
@@ -38,10 +43,14 @@ export async function GET(
   }
   try {
     const listings = await fetchAvailableCars();
-    const items = filterWilayaItems(listings, wilaya.code);
+    // R27-1: evict sold-since-compute snapshot docs (live overlay, per
+    // render — NOT inside the 'use cache' fetch above).
+    const flips = await fetchSoldFlipsSince(newestCreatedAtIso(listings));
+    const live = evictSoldIds(listings, flips);
+    const items = filterWilayaItems(live, wilaya.code);
     // Total count for the meta description (all live cars in this wilaya).
     let total = 0;
-    for (const l of listings) {
+    for (const l of live) {
       if (l.categoryId !== 'cars') continue;
       if (l.status !== 'available' || l.hidden === true) continue;
       if (Number(l.wilayaCode) === wilaya.code) total++;
@@ -53,7 +62,7 @@ export async function GET(
         headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
       });
     }
-    const popular = popularWilayas(listings, wilaya.code, 6);
+    const popular = popularWilayas(live, wilaya.code, 6);
     const html = buildWilayaPage(wilaya, items, total, popular, 'ar');
     return new Response(html, {
       status: 200,
