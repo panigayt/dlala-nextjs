@@ -8,11 +8,7 @@ import {
   categoryCount,
   categorySubLinks,
 } from '@/lib/category-pages';
-import {
-  fetchSoldFlipsSince,
-  newestCreatedAtIso,
-  evictSoldIds,
-} from '@/lib/firestore';
+import { evictInvisibleIds } from '@/lib/firestore';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
@@ -28,19 +24,24 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   }
   try {
     const listings = await fetchAvailableListings(cat.id);
-    // R27-1: evict sold-since-compute snapshot docs (live overlay, per
-    // render — NOT inside the 'use cache' fetch above, whose days window
-    // would freeze the eviction).
-    const flips = await fetchSoldFlipsSince(newestCreatedAtIso(listings));
-    const live = evictSoldIds(listings, flips);
-    const items = filterCategoryItems(live, cat.id, 'en');
+    // (Live probe below runs per render — NOT inside the 'use cache'
+    // fetch above, whose window would freeze the eviction.)
+    // R27-1 REWORK: probe the RENDERED cards for live visibility (the
+    // v1 overlay query always 403s — see evictInvisibleIds). Totals
+    // are adjusted by the evicted cards found here; flips outside the
+    // newest 12 cards still inflate the window/agg totals slightly
+    // (stated residual — cards themselves are exact).
+    const items0 = filterCategoryItems(listings, cat.id, 'en');
+    const items = await evictInvisibleIds(items0);
+    const evictedCards = items0.length - items.length;
     let total = 0;
-    for (const l of live) {
+    for (const l of listings) {
       const f = l as unknown as Record<string, unknown>;
       if (String(f.categoryId) !== cat.id) continue;
       if (f.status !== 'available' || f.hidden === true) continue;
       total++;
     }
+    total = Math.max(0, total - evictedCards);
     if (total < CATEGORY_MIN_LISTINGS) {
       return new Response(notFoundPage('thin', 'en'), {
         status: 404,
@@ -56,14 +57,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     // The snapshot aggregation counts sold-since-compute docs too; subtract
     // this category's flips (clamped; a create-then-sell inside one cycle
     // can leave ±1 — strictly smaller than today's error of +N sold).
-    const soldInCat = flips
-      ? [...flips.values()].filter((fl) => fl.categoryId === cat.id).length
-      : 0;
+    const soldInCat = evictedCards;
     const displayTotal =
       aggTotal > 0 ? Math.max(0, aggTotal - soldInCat) : total;
     // R53 Team B (18 Oct 2026): internal-link fix — the category hub
     // now cross-links its model/wilaya sub-landing pages (cars only).
-    const sub = categorySubLinks(live, 'en');
+    const sub = categorySubLinks(listings, 'en');
     const html = buildCategoryPage(cat, items, displayTotal, 'en', sub);
     return new Response(html, {
       status: 200,

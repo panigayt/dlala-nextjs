@@ -370,153 +370,129 @@ async function fetchFeedSliver(
   });
 }
 
-// R26-3/R27-1 (24 Oct 2026): sold-eviction overlay — the live status
-// check that closes the snapshot staleness cluster. Every
-// dataset-derived surface (siteStats feed/search/category windows, 12h
-// CF cadence, plus 'use cache' windows on top) renders listings whose
-// status froze at compute time, so a listing marked sold after the run
-// keeps merchandising as available until the next recompute — in
-// /api/search (R26-3), on SEO landing pages with their totals (R27-1),
-// and in the home feed's dataset segment. The overlay is ONE bounded
-// live query — listings with updatedAt >= watermark (mark-sold bumps
-// updatedAt via serverTimestamp, my-listings confirmMarkSold) —
-// returning only id/status/hidden/categoryId/wilayaCode, capped at 200
-// rows; callers evict ids whose live status is sold or hidden. The
-// single-field updatedAt range needs NO new composite index (no
-// (status, updatedAt) index exists in firestore.indexes.json). Cost is
-// bounded by a 15-minute in-process memo keyed by watermark: at most
-// one overlay query per 15 min per watermark per instance (typically a
-// handful of rows; pathological cap 200 rows × 96 refreshes/day).
-// Fail-open by design: overlay failure returns null and callers render
-// the snapshot exactly as today; truncation evicts what was returned
-// (strictly better than none) and is console.warned. DELETED-since-
-// compute docs are NOT covered (a deleted doc is invisible to this
-// query) — that staleness class remains, stated here, not implied fixed.
-export interface SoldFlip {
-  id: string;
-  categoryId: string;
-  wilayaCode: number;
+// R26-3/R27-1 REWORK (24 Oct 2026) — replaces the v1 sold-eviction
+// overlay (fetchSoldFlipsSince), which NEVER worked in production.
+// Root cause, live-proven 24 Oct 2026 against production Firestore
+// REST with the public key:
+//   - The v1 overlay queried listings with ONLY an updatedAt filter.
+//     Firestore rules are not filters: the listings list rule allows
+//     anonymous reads only for non-sold, non-hidden docs, so a query
+//     that COULD return a sold doc is denied wholesale. The exact v1
+//     query returns HTTP 403 PERMISSION_DENIED — the overlay therefore
+//     ALWAYS failed open (null) and evicted nothing, on search, feed
+//     and landing alike. The watermark was irrelevant (ruled out live:
+//     pool max createdAt 2026-10-23T13:17:14Z < fixture updatedAt
+//     2026-10-23T23:31:24Z, yet the fixture still merchandised).
+//   - There is no rules-compatible BULK query for sold ids: batchGet
+//     fails whole-request on any denied doc, and __name__-addressed
+//     queries are denied wholesale when the set contains an unreadable
+//     doc (both live-proven). A status-filtered query passes the gate
+//     but returns only still-available docs, so absence in it cannot
+//     distinguish "not updated" from "flipped to sold".
+// The only rules-compatible primitive is a per-doc GET: 200 = still
+// publicly visible (live status in the body), 403/404 = flipped to
+// sold/hidden or deleted → evict, anything else = transient → keep
+// (fail-open; transients are never memoized, so a later render
+// re-probes instead of cementing a stale "visible"). Cost is bounded
+// by construction: callers probe ONLY rendered slices (feed page,
+// search pool, landing cards — never the whole dataset window),
+// sliver docs are skipped (just read live as available), and results
+// are memoized 15 min per id per instance. Worst case per fresh
+// render = slice size reads (feed page ≤48 with headroom, search
+// pool ≤120, landing ≤40); repeated renders within the TTL probe
+// nothing new.
+
+export interface VisibilityProbe {
+  visible: boolean;
+  status?: string;
 }
 
-const SOLD_OVERLAY_LIMIT = 200;
-const SOLD_OVERLAY_TTL_MS = 15 * 60 * 1000;
-const soldOverlayCache = new Map<
+const VISIBILITY_TTL_MS = 15 * 60 * 1000;
+const PROBE_CONCURRENCY = 20;
+const visibilityMemo = new Map<
   string,
-  { at: number; flips: Map<string, SoldFlip> }
+  { at: number; visible: boolean; status?: string }
 >();
 
-export async function fetchSoldFlipsSince(
-  watermark: string | null
-): Promise<Map<string, SoldFlip> | null> {
-  if (!watermark) return new Map();
-  const cached = soldOverlayCache.get(watermark);
-  if (cached && Date.now() - cached.at < SOLD_OVERLAY_TTL_MS) return cached.flips;
+async function probeListingVisibility(id: string): Promise<VisibilityProbe> {
+  const cached = visibilityMemo.get(id);
+  if (cached && Date.now() - cached.at < VISIBILITY_TTL_MS) {
+    return { visible: cached.visible, status: cached.status };
+  }
+  let result: VisibilityProbe;
   try {
-    const url =
-      FIRESTORE_REST_BASE + ':runQuery?key=' + encodeURIComponent(FIREBASE_API_KEY);
-    const structuredQuery = {
-      from: [{ collectionId: 'listings' }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: 'updatedAt' },
-          op: 'GREATER_THAN_OR_EQUAL',
-          value: { timestampValue: watermark },
-        },
-      },
-      orderBy: [{ field: { fieldPath: 'updatedAt' }, direction: 'DESCENDING' }],
-      select: {
-        fields: ['status', 'hidden', 'categoryId', 'wilayaCode'].map((f) => ({
-          fieldPath: f,
-        })),
-      },
-      limit: SOLD_OVERLAY_LIMIT,
-    };
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ structuredQuery }),
-      cache: 'no-store',
-    });
-    if (!res.ok) {
-      console.warn(`sold-overlay query failed: ${res.status}`);
-      return null;
+    const res = await fetch(
+      `${FIRESTORE_REST_BASE}/listings/${encodeURIComponent(id)}?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
+      { cache: 'no-store' }
+    );
+    if (res.status === 403 || res.status === 404) {
+      // Sold, admin-hidden, or deleted: anonymous reads are denied
+      // (sold) or the doc is gone (deleted). Either way it must not
+      // merchandise as available.
+      result = { visible: false };
+    } else if (!res.ok) {
+      // Transient (5xx/429/etc): fail-open, do NOT memoize.
+      console.warn(`visibility probe transient for ${id}: ${res.status}`);
+      return { visible: true };
+    } else {
+      const body = await res.json().catch(() => null);
+      const fields =
+        (body as { fields?: Record<string, unknown> } | null)?.fields || {};
+      const status = restValue(fields.status);
+      const hidden = restValue(fields.hidden) === true;
+      const visible =
+        (status === 'available' || status === 'negotiating') && !hidden;
+      result = {
+        visible,
+        status: typeof status === 'string' ? status : undefined,
+      };
     }
-    const body = await res.json().catch(() => null);
-    const rows = (Array.isArray(body) ? body : []).filter((r) => r.document);
-    if (rows.length >= SOLD_OVERLAY_LIMIT) {
-      console.warn(
-        'sold-overlay truncated at limit — flips older than the window may be missed'
-      );
-    }
-    const flips = new Map<string, SoldFlip>();
-    for (const row of rows) {
-      const d = row.document as { name?: string; fields?: Record<string, unknown> };
-      const id = String(d.name || '').split('/').pop() || '';
-      if (!id) continue;
-      const fs = d.fields || {};
-      const status = restValue(fs.status);
-      const hidden = restValue(fs.hidden) === true;
-      if (status !== 'sold' && !hidden) continue;
-      flips.set(id, {
-        id,
-        categoryId: String(restValue(fs.categoryId) || ''),
-        wilayaCode: Number(restValue(fs.wilayaCode) || 0),
-      });
-    }
-    soldOverlayCache.set(watermark, { at: Date.now(), flips });
-    return flips;
   } catch (e) {
-    console.warn('sold-overlay failed:', e instanceof Error ? e.message : e);
-    return null;
+    // Network failure: fail-open, do NOT memoize.
+    console.warn(
+      `visibility probe failed for ${id}:`,
+      e instanceof Error ? e.message : e
+    );
+    return { visible: true };
   }
+  visibilityMemo.set(id, {
+    at: Date.now(),
+    visible: result.visible,
+    status: result.status,
+  });
+  return result;
 }
 
-// Pure eviction: drop ids the overlay reports sold/hidden. Null flips =
-// overlay unavailable → return the input untouched (fail-open).
-export function evictSoldIds<T extends { id?: unknown }>(
+// Drop ids the live probe reports invisible, preserving input order.
+// Docs in `skip` (live-fresh sliver docs, just read through a
+// status-filtered query) are kept without probing. A doc whose probe
+// fails transiently is kept (fail-open). Ids with no id are kept.
+export async function evictInvisibleIds<T extends { id?: unknown }>(
   docs: T[],
-  flips: Map<string, SoldFlip> | null
-): T[] {
-  if (!flips || flips.size === 0) return docs;
-  return docs.filter((d) => !flips.has(String((d as { id?: unknown }).id || '')));
+  opts?: { skip?: ReadonlySet<string> }
+): Promise<T[]> {
+  const skip = opts?.skip;
+  const idsToProbe: string[] = [];
+  for (const d of docs) {
+    const id = String((d as { id?: unknown }).id || '');
+    if (!id || (skip && skip.has(id))) continue;
+    if (!idsToProbe.includes(id)) idsToProbe.push(id);
+  }
+  const probes = new Map<string, VisibilityProbe>();
+  for (let i = 0; i < idsToProbe.length; i += PROBE_CONCURRENCY) {
+    const chunk = idsToProbe.slice(i, i + PROBE_CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map((id) => probeListingVisibility(id))
+    );
+    chunk.forEach((id, j) => probes.set(id, results[j]));
+  }
+  return docs.filter((d) => {
+    const id = String((d as { id?: unknown }).id || '');
+    if (!id || (skip && skip.has(id))) return true;
+    return probes.get(id)?.visible !== false;
+  });
 }
 
-// Newest createdAt in a snapshot list as an RFC3339 watermark. Accepts
-// decoded Dates (snapshot items) and raw createdAtRaw strings (feed /
-// index entries). The input is deliberately unknown[] — snapshot shapes
-// differ (ModelListingSummary carries no createdAt field in its type
-// even though decoded items do), so fields are read dynamically. The
-// newest item's createdAt is <= the dataset's computedAt, so the overlay
-// window [watermark, now] always covers [computedAt, now] — every flip
-// since compute is in range.
-export function newestCreatedAtIso(docs: readonly unknown[]): string | null {
-  let bestMs = -1;
-  let bestRaw: string | null = null;
-  for (const d0 of docs) {
-    const d = d0 as { createdAt?: unknown; createdAtRaw?: unknown };
-    const raw = d.createdAtRaw;
-    if (typeof raw === 'string' && raw) {
-      const ms = Date.parse(raw);
-      if (Number.isFinite(ms) && ms > bestMs) {
-        bestMs = ms;
-        bestRaw = raw;
-      }
-      continue;
-    }
-    const c = d.createdAt;
-    if (c instanceof Date && !isNaN(c.getTime()) && c.getTime() > bestMs) {
-      bestMs = c.getTime();
-      bestRaw = c.toISOString();
-    } else if (typeof c === 'string' && c) {
-      const ms = Date.parse(c);
-      if (Number.isFinite(ms) && ms > bestMs) {
-        bestMs = ms;
-        bestRaw = c;
-      }
-    }
-  }
-  return bestRaw;
-}
 
 // One page of the default feed. Stats-hybrid first (see above); the
 // original live cursor implementation (renamed fetchFeedPageLive) is
@@ -532,15 +508,11 @@ export async function fetchFeedPage(
     if (feed) {
       const page = pageStatsFeed(feed, limit, cursor);
       if (page) {
-        const flips = await fetchSoldFlipsSince(
-          feed.computedAt
-            ? feed.computedAt.toISOString()
-            : newestCreatedAtIso(
-                feed.items as Array<{ createdAtRaw?: unknown }>
-              )
-        );
+        // R26-3/R27-1 REWORK: probe the page slice for live visibility
+        // (the v1 overlay query always 403s — see evictInvisibleIds).
+        // nextCursor still addresses dataset items, kept as-is.
         return {
-          docs: evictSoldIds(page.docs, flips) as unknown as ListingCard[],
+          docs: (await evictInvisibleIds(page.docs)) as unknown as ListingCard[],
           nextCursor: page.nextCursor,
         };
       }
@@ -567,12 +539,32 @@ export async function fetchFeedPage(
           ...sliver.map((s) => s.doc),
           ...(rest as unknown as ListingCard[]),
         ];
-        // R26-3/R27-1: evict sold-since-compute dataset docs BEFORE
-        // slicing, so the page stays full whenever the dataset has room.
-        const flips = await fetchSoldFlipsSince(
-          feed.computedAt ? feed.computedAt.toISOString() : watermark
-        );
-        const pageDocs = evictSoldIds(merged, flips).slice(0, limit);
+        // R26-3/R27-1 REWORK: probe dataset docs for live visibility,
+        // lazily in order, until the page is full. Sliver docs were
+        // just read live as available and are kept without probing.
+        // Budget: at most limit + HEADROOM dataset probes, so a flip
+        // cluster cannot turn page 1 into a whole-corpus probe; pages
+        // stay full whenever head flips fit the headroom (the
+        // realistic case). A short page keeps the existing
+        // nextCursor-null behavior below.
+        const FEED_PROBE_HEADROOM = 24;
+        const FEED_PROBE_CHUNK = 12;
+        const kept: ListingCard[] = [];
+        let datasetProbed = 0;
+        let probeIdx = 0;
+        while (
+          kept.length < limit &&
+          probeIdx < merged.length &&
+          datasetProbed < limit + FEED_PROBE_HEADROOM
+        ) {
+          const chunk = merged.slice(probeIdx, probeIdx + FEED_PROBE_CHUNK);
+          probeIdx += chunk.length;
+          datasetProbed += chunk.filter(
+            (d) => !sliverIds.has(String(d.id))
+          ).length;
+          kept.push(...(await evictInvisibleIds(chunk, { skip: sliverIds })));
+        }
+        const pageDocs = kept.slice(0, limit);
         let nextCursor: PageCursor | null = null;
         if (pageDocs.length === limit && pageDocs.length > 0) {
           const last = pageDocs[pageDocs.length - 1];
@@ -596,14 +588,11 @@ export async function fetchFeedPage(
         return { docs, nextCursor };
       }
       // Sliver unavailable (transient): degrade to the doc alone, with
-      // R26-3/R27-1 sold eviction (the memoized overlay, not a scan).
+      // R26-3/R27-1 REWORK live-visibility probing of the page slice.
       const page = pageStatsFeed(feed, limit, null);
       if (page) {
-        const flips0 = await fetchSoldFlipsSince(
-          feed.computedAt ? feed.computedAt.toISOString() : watermark
-        );
         return {
-          docs: evictSoldIds(page.docs, flips0) as unknown as ListingCard[],
+          docs: (await evictInvisibleIds(page.docs)) as unknown as ListingCard[],
           nextCursor: page.nextCursor,
         };
       }
@@ -2797,10 +2786,19 @@ export async function runSearchPipelineFromIndexWithSliver(
       if (fresh) mergedBoost = { ...boost, ...fresh };
     }
   }
-  // R26-3: evict sold-since-compute entries BEFORE the pipeline trusts
-  // dataset membership (stage 1 never re-checks status).
-  const flips = await fetchSoldFlipsSince(searchIndexWatermark(entries));
-  merged = evictSoldIds(merged, flips);
+  // R26-3 REWORK: probe index entries for live visibility BEFORE the
+  // pipeline trusts dataset membership (stage 1 never re-checks
+  // status). Sliver entries were just read live as available and are
+  // skipped. (The v1 overlay query always 403s — see
+  // evictInvisibleIds.)
+  const skipSliver =
+    sliver && sliver.length > 0
+      ? new Set(sliver.map((s) => String(s.id)))
+      : undefined;
+  merged = await evictInvisibleIds(
+    merged,
+    skipSliver ? { skip: skipSliver } : undefined
+  );
   return runSearchPipelineFromIndex(merged, mergedBoost, f);
 }
 

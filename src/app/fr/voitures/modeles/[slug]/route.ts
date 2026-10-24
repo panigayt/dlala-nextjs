@@ -14,11 +14,7 @@ import {
   fetchAvailableCars,
   filterModelItems,
 } from '@/lib/model-pages';
-import {
-  fetchSoldFlipsSince,
-  newestCreatedAtIso,
-  evictSoldIds,
-} from '@/lib/firestore';
+import { evictInvisibleIds } from '@/lib/firestore';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
@@ -36,11 +32,13 @@ export async function GET(
   }
   try {
     const listings = await fetchAvailableCars();
-    // R27-1: evict sold-since-compute snapshot docs (live overlay, per
-    // render — NOT inside the 'use cache' fetch above).
-    const flips = await fetchSoldFlipsSince(newestCreatedAtIso(listings));
-    const live = evictSoldIds(listings, flips);
-    const items = filterModelItems(live, model, 'fr');
+    // (Live probe below runs per render — NOT inside the 'use cache'
+    // fetch above, whose window would freeze the eviction.)
+    // R27-1 REWORK: probe the RENDERED cards for live visibility (the
+    // v1 overlay query always 403s — see evictInvisibleIds). The
+    // thin-content guard below now runs on probed items.
+    const items0 = filterModelItems(listings, model, 'fr');
+    const items = await evictInvisibleIds(items0);
     if (items.length < MIN_LISTINGS) {
       return new Response(notFoundPage('thin', 'fr'), {
         status: 404,

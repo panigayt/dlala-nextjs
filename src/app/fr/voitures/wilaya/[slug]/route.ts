@@ -12,11 +12,7 @@ import {
   filterWilayaItems,
   popularWilayas,
 } from '@/lib/wilaya-pages';
-import {
-  fetchSoldFlipsSince,
-  newestCreatedAtIso,
-  evictSoldIds,
-} from '@/lib/firestore';
+import { evictInvisibleIds } from '@/lib/firestore';
 
 const HTML_HEADERS = { 'Content-Type': 'text/html; charset=utf-8' };
 
@@ -44,24 +40,30 @@ export async function GET(
   }
   try {
     const listings = await fetchAvailableCars();
-    // R27-1: evict sold-since-compute snapshot docs (live overlay, per
-    // render — NOT inside the 'use cache' fetch above).
-    const flips = await fetchSoldFlipsSince(newestCreatedAtIso(listings));
-    const live = evictSoldIds(listings, flips);
-    const items = filterWilayaItems(live, wilaya.code, 'fr');
+    // (Live probe below runs per render — NOT inside the 'use cache'
+    // fetch above, whose window would freeze the eviction.)
+    // R27-1 REWORK: probe the RENDERED cards for live visibility (the
+    // v1 overlay query always 403s — see evictInvisibleIds). The
+    // window total is adjusted by the evicted cards found here; flips
+    // outside the newest 12 cards still inflate the meta total
+    // slightly (stated residual — cards themselves are exact).
+    const items0 = filterWilayaItems(listings, wilaya.code, 'fr');
+    const items = await evictInvisibleIds(items0);
+    const evictedCards = items0.length - items.length;
     let total = 0;
-    for (const l of live) {
+    for (const l of listings) {
       if (l.categoryId !== 'cars') continue;
       if (l.status !== 'available' || l.hidden === true) continue;
       if (Number(l.wilayaCode) === wilaya.code) total++;
     }
+    total = Math.max(0, total - evictedCards);
     if (total < WILAYA_MIN_LISTINGS) {
       return new Response(notFoundPage('thin', 'fr'), {
         status: 404,
         headers: { ...HTML_HEADERS, 'Cache-Control': 'public, max-age=300' },
       });
     }
-    const popular = popularWilayas(live, wilaya.code, 6);
+    const popular = popularWilayas(listings, wilaya.code, 6);
     const html = buildWilayaPage(wilaya, items, total, popular, 'fr');
     return new Response(html, {
       status: 200,
