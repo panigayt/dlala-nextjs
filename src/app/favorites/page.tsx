@@ -9,10 +9,17 @@
 // - Price-drop badge when live price < favorited price
 // - Orphan favorites (listing read succeeded and doc does NOT exist) show a
 //   "removed" placeholder — shown ONLY when the doc definitively doesn't exist.
-// - Unreadable listings (read failed: timeout/network/permission) show a
-//   per-card error with retry, NEVER the "removed" placeholder (Round 30).
-// - F7 (legacy sweep): if EVERY hydration fails on first load, the page shows
-//   a full-page error state with retry — never a misleading empty/removed state.
+// - Unreadable listings (read failed: timeout/network) show a per-card
+//   error with retry, NEVER the "removed" placeholder (Round 30).
+// - Permission-DENIED reads are a distinct class (R26-2, 24 Oct 2026): sold
+//   listings are readable only by their seller, so for a favoriter the
+//   denial is permanent — the card renders "no longer available" WITH a
+//   working remove control (the only unfavorite path; the detail page 404s
+//   for non-owners too).
+// - The full-page error state fires ONLY when the favorites LIST read
+//   itself fails. (The legacy F7 rule — full-page error when every
+//   per-listing hydration failed — trapped users whose single favorite was
+//   a sold listing on a retry that could never succeed; removed in R26-2.)
 // - Un-favorite removes the fav doc (+ listingFavoriters doc, best-effort)
 // - "Shown / total" footer with "show more" pagination
 // - Empty state with browse CTA
@@ -71,7 +78,7 @@ interface LiveListing {
   createdAt?: unknown;
 }
 
-type CardStatus = 'ok' | 'deleted' | 'failed';
+type CardStatus = 'ok' | 'deleted' | 'failed' | 'unavailable';
 
 // Projection of a hydrated favorite for the instant-paint snapshot —
 // verbatim port of js/favorites.js favCardSnapshot: everything
@@ -137,8 +144,11 @@ interface FavCard {
   live: LiveListing | null; // only set when status === 'ok'
   status: CardStatus;
   // 'deleted' = the listing read SUCCEEDED and the doc does not exist (true orphan).
-  // 'failed'  = the listing read FAILED (timeout/network/permission) — never
-  //             render the "removed" placeholder for these; they get a retry card.
+  // 'failed'  = the listing read FAILED (timeout/network) — never render the
+  //             "removed" placeholder for these; they get a retry card.
+  // 'unavailable' = the read was DENIED (permission-denied — a sold listing
+  //             is owner-only): permanent for this user; graceful card with
+  //             a remove control, no retry (R26-2).
 }
 
 function listingTitle(l: LiveListing, lang: Lang): string {
@@ -208,8 +218,16 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
               live: { id: l.id, exists: true, ...data } as LiveListing,
               status: 'ok' as const,
             };
-          } catch {
-            return { fav, live: null, status: 'failed' as const };
+          } catch (e) {
+            // R26-2 (24 Oct 2026): a permission-denied read is NOT a
+            // transient failure — sold listings are readable only by their
+            // seller (security rules), so for a favoriter this denial is
+            // permanent. Classify it 'unavailable' (graceful card + remove
+            // control); every other failure stays 'failed' (retry card).
+            // withTimeout passes the Firestore error through untouched, so
+            // its `code` survives (a timeout rejects as 'deadline-exceeded').
+            const denied = (e as { code?: string })?.code === 'permission-denied';
+            return { fav, live: null, status: denied ? ('unavailable' as const) : ('failed' as const) };
           }
         })
       );
@@ -231,13 +249,14 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
       );
       const { cards: page, lastDoc, full } = await hydratePage(db, fsMod, q);
       if (!mounted.current) return;
-      // F7 (legacy sweep): if EVERY hydration failed on first load, that is a
-      // full-page error state — never show the misleading "no favorites" empty
-      // state (and never the "removed" placeholders).
-      if (page.length > 0 && page.every((c) => c.status === 'failed')) {
-        setError(t('errorGeneric'));
-        return;
-      }
+      // R26-2 (24 Oct 2026): the legacy F7 all-failed full-page error is
+      // GONE. It fired when every per-listing hydration failed — but a
+      // single sold favorite (read denied) made a one-favorite page hit
+      // exactly that branch and trapped the user on a retry that could
+      // never succeed. The full-page error now belongs ONLY to a failure
+      // of the favorites LIST read itself (the catch below); per-listing
+      // outcomes stay per-card ('failed' → retry, 'unavailable' → remove,
+      // 'deleted' → removed placeholder).
       cursorRef.current = lastDoc;
       setCards(page);
       // js/favorites.js 0.0.0.22 + js/snapshot.js: save the first page so
@@ -340,6 +359,17 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
         }
       } catch (e) {
         console.error(e);
+        // R26-2: a denial on retry means the listing is permanently
+        // unreadable for this user (sold) — flip the card to the
+        // unavailable state with its remove control instead of leaving a
+        // retry that can never succeed.
+        if ((e as { code?: string })?.code === 'permission-denied' && mounted.current) {
+          setCards((prev) =>
+            prev
+              ? prev.map((c) => (c.fav.listingId === listingId ? { ...c, status: 'unavailable' as const } : c))
+              : prev
+          );
+        }
       } finally {
         if (mounted.current) setRetrying(null);
       }
@@ -441,6 +471,35 @@ function FavoritesContent({ user }: { user: { uid: string } }) {
                           {retryBusy ? '…' : t('retry')}
                         </button>
                       </div>
+                    </div>
+                  );
+                }
+                if (status === 'unavailable') {
+                  // R26-2: the listing exists but this user can no longer
+                  // read it (sold — owner-only reads). Graceful card in the
+                  // orphan placeholder's design language, WITH the remove
+                  // control: it is the only unfavorite path anywhere, since
+                  // the detail page 404s for non-owners too.
+                  return (
+                    <div key={lid} className="relative rounded-xl bg-white shadow-sm overflow-hidden">
+                      <div className="p-6 text-center">
+                        <p className="text-3xl mb-2">🔒</p>
+                        <p className="text-sm text-zinc-500">{t('favListingUnavailable')}</p>
+                      </div>
+                      <button
+                        onClick={() => removeFavorite(lid)}
+                        disabled={busy}
+                        aria-label={t('removeFavorite')}
+                        title={t('removeFavorite')}
+                        className="absolute top-2 end-2 w-9 h-9 rounded-full bg-black/60 text-white text-base disabled:opacity-50"
+                      >
+                        ✕
+                      </button>
+                      {removeErr === lid && (
+                        <p className="absolute bottom-2 start-2 end-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                          {t('errorGeneric')}
+                        </p>
+                      )}
                     </div>
                   );
                 }

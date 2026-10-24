@@ -575,6 +575,12 @@ function PublishForm({
   const [qty, setQty] = useState(() => readDraft(user.uid)?.qty || '1');
   const [negotiable, setNegotiable] = useState(() => readDraft(user.uid)?.negotiable || false);
   const [desc, setDesc] = useState(() => readDraft(user.uid)?.desc || '');
+  // R26-1 (24 Oct 2026): the description exactly as stored, captured by the
+  // edit-mode loader. validate() grandfathers an UNCHANGED stored value —
+  // pipeline-imported listings can carry descriptions under the publish-time
+  // 20-char minimum (or empty), and re-validating the stored text made 72
+  // live listings un-editable (every save, price edits included, bounced).
+  const [origDesc, setOrigDesc] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>(() => readDraft(user.uid)?.answers || {});
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<{ url: string; hash: string; thumb: string | null }[]>([]);
@@ -654,7 +660,9 @@ function PublishForm({
         }
         const lang = 'ar';
         setTitle((d.title as Record<string, string>)?.[lang] || '');
-        setDesc((d.description as Record<string, string>)?.[lang] || '');
+        const storedDesc = (d.description as Record<string, string>)?.[lang] || '';
+        setDesc(storedDesc);
+        setOrigDesc(storedDesc);
         setCat((d.categoryId as string) || '');
         setWilaya(String(d.wilayaCode ?? ''));
         setPrice(String(d.price ?? ''));
@@ -877,20 +885,35 @@ function PublishForm({
     // CL-5 (18 Oct 2026): minimum lengths — a 1-char title/description
     // passes the "required" check but is useless. 10/20 chars minimum.
     if (title.trim().length < 10) { fail(t('errorTitleTooShort')); return false; }
-    if (!desc.trim()) { fail(t('errorDescRequired')); return false; }
-    if (desc.trim().length > 2000) { fail(t('errorDescTooLong')); return false; }
-    if (desc.trim().length < 20) { fail(t('errorDescTooShort')); return false; }
+    // R26-1 (24 Oct 2026): in EDIT mode, an unchanged stored description is
+    // grandfathered — the publish-time required/min/max checks below apply
+    // only when the user actually edited the text (or in publish mode). The
+    // stored value is never rewritten by this: the seller's own words pass
+    // through untouched, exactly as the rules' owner-edit path allows them
+    // (trilingualOk enforces only the 5000-char cap + XSS filter, no
+    // minimum). A CHANGED description is validated in full.
+    const descIsStored =
+      !!editId && origDesc !== null && desc.trim() === origDesc.trim();
+    if (!descIsStored) {
+      if (!desc.trim()) { fail(t('errorDescRequired')); return false; }
+      if (desc.trim().length > 2000) { fail(t('errorDescTooLong')); return false; }
+      if (desc.trim().length < 20) { fail(t('errorDescTooShort')); return false; }
+    }
     if (!cat) { fail(t('errorCatRequired')); return false; }
     const isJobsCat = cat === 'jobs';
     const priceNum = price.trim() === '' ? NaN : Number(price);
     // BE-5 (R16, 18 Oct 2026): 0 DZD is not a valid price — the
     // negotiable convention is 1 DZD (Ouedkniss pipeline rule).
-    if (!isJobsCat && !(priceNum >= 1)) { fail(t('errorPriceMin')); return false; }
+    // R26-4 (24 Oct 2026): in WANTED mode the same `price` state backs the
+    // «الميزانية» (budget) input — the refusal must name the budget, not a
+    // "price" the wanted form doesn't have. Semantics unchanged (the amount
+    // stays mandatory ≥ 1, integer, ≤ 100M in both modes).
+    if (!isJobsCat && !(priceNum >= 1)) { fail(t(isWanted ? 'errorBudgetMin' : 'errorPriceMin')); return false; }
     // BN-1 (R19, 18 Oct 2026): DZD prices must be integers — a fraction
     // (e.g. 99.5) would store as a Firestore doubleValue and break
     // centime-exact arithmetic once money moves.
-    if (!isJobsCat && !Number.isInteger(priceNum)) { fail(t('errorPriceInteger')); return false; }
-    if (!isJobsCat && priceNum > 100000000) { fail(t('errorPriceTooHigh')); return false; }
+    if (!isJobsCat && !Number.isInteger(priceNum)) { fail(t(isWanted ? 'errorBudgetInteger' : 'errorPriceInteger')); return false; }
+    if (!isJobsCat && priceNum > 100000000) { fail(t(isWanted ? 'errorBudgetTooHigh' : 'errorPriceTooHigh')); return false; }
     // Wanted publishes always carry wilaya 0 (forced at save) — no check
     // needed; the value cannot be stale by construction.
     if (!isWanted && !(Number(wilaya) >= 1)) { fail(t('errorRequired')); return false; }

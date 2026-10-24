@@ -34,6 +34,12 @@ export const PUB_STR: Record<string, { ar: string; fr: string; en: string }> = {
   errYearInteger: { ar: "السنة يجب أن تكون عدداً صحيحاً (بدون كسور).", fr: "L'année doit être un nombre entier (sans décimales).", en: "The year must be a whole number (no decimals)." },
   // DK-4 (R36, 18 Oct 2026): client-side non-negative salary check.
   errSalaryNegative: { ar: "الراتب لا يمكن أن يكون سالباً.", fr: "Le salaire ne peut pas être négatif.", en: "The salary cannot be negative." },
+  // R26-4 (24 Oct 2026): wanted-mode budget refusals — same rules as the
+  // sale price checks, but naming the «الميزانية» field the wanted form
+  // actually shows (was: the sale "price" messages on a form with no price).
+  errorBudgetMin: { ar: "الميزانية يجب أن تكون 1 دج على الأقل.", fr: "Le budget doit être d'au moins 1 DZD.", en: "Budget must be at least 1 DZD." },
+  errorBudgetInteger: { ar: "الميزانية يجب أن تكون عدداً صحيحاً (بدون كسور).", fr: "Le budget doit être un nombre entier (sans décimales).", en: "The budget must be a whole number (no decimals)." },
+  errorBudgetTooHigh: { ar: "الميزانية مرتفعة جداً (الحد الأقصى 100,000,000 دج).", fr: "Le budget est trop élevé (maximum 100 000 000 DZD).", en: "The budget is too high (max 100,000,000 DZD)." },
   errorCatRequired: { ar: "يرجى اختيار الفئة.", fr: "Veuillez choisir une catégorie.", en: "Please choose a category." },
   errorDescRequired: { ar: "يرجى إدخال وصف الإعلان.", fr: "Veuillez saisir la description de l'annonce.", en: "Please enter the listing description." },
   errorDescTooLong: { ar: "وصف الإعلان طويل جداً (الحد 2000 حرف).", fr: "La description de l'annonce est trop longue (2000 caractères maximum).", en: "The listing description is too long (2000 characters max)." },
