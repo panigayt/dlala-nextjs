@@ -325,6 +325,9 @@ export function installDisabledUserWatch(client: FirebaseClient): void {
         } catch {
           /* best effort — the SDK usually signed out already */
         }
+        // R29-4: a forced sign-out here must reach the user's other
+        // open tabs too (see installCrossTabSignOutWatch below).
+        broadcastSignOut();
         try {
           const here = window.location.pathname + window.location.search;
           window.location.href =
@@ -336,6 +339,54 @@ export function installDisabledUserWatch(client: FirebaseClient): void {
       .finally(() => {
         checking = false;
       });
+  });
+}
+
+// R29-4 (24 Oct 2026): cross-tab sign-out propagation.
+//
+// The Firebase SDK does not sync sign-out across tabs: signing out in
+// tab 2 left an already-open tab 1 presenting — and able to use — the
+// session until a reload or the ID token's expiry (R29 reproduction:
+// tab 1 still rendered /account signed-in ~8s after tab 2 signed out).
+// Standard fix: every sign-out path calls broadcastSignOut() after a
+// successful signOut(); every other tab listens for the 'storage'
+// event (installCrossTabSignOutWatch, installed beside
+// installDisabledUserWatch in both auth hooks) and, if it still holds
+// a user, signs out locally — its onAuthStateChanged then re-gates
+// exactly as a reload would (useRequireAuth bounces to
+// /auth?return=…, useAuthState flips the chrome to signed-out). The
+// receiving tab signs out via authMod.signOut directly and does NOT
+// re-broadcast, so the signal cannot cascade, and a tab that signs in
+// afterwards never sees a stale signal (events fire only on change,
+// in other tabs; anything older than 30s is ignored regardless).
+export const SIGNOUT_BROADCAST_KEY = 'dlala_signout_at';
+
+export function broadcastSignOut(): void {
+  try {
+    window.localStorage.setItem(SIGNOUT_BROADCAST_KEY, String(Date.now()));
+  } catch {
+    // localStorage unavailable (private mode) — the other tabs keep
+    // the old reload-gated behavior; never break the sign-out itself.
+  }
+}
+
+let crossTabWatchAuth: Auth | null = null;
+
+export function installCrossTabSignOutWatch(client: FirebaseClient): void {
+  if (typeof window === 'undefined') return;
+  if (crossTabWatchAuth === client.auth) return;
+  crossTabWatchAuth = client.auth;
+  const { auth, authMod } = client;
+  window.addEventListener('storage', (e) => {
+    if (e.key !== SIGNOUT_BROADCAST_KEY || !e.newValue) return;
+    const at = Number(e.newValue);
+    if (!Number.isFinite(at)) return;
+    const age = Date.now() - at;
+    if (age < -5000 || age > 30000) return; // stale or clock-skewed junk
+    if (!auth.currentUser) return; // already signed out in this tab
+    authMod.signOut(auth).catch(() => {
+      /* best effort — a manual reload still re-gates */
+    });
   });
 }
 
@@ -358,6 +409,8 @@ export function useRequireAuth(): AuthState {
         if (cancelled) return;
         // Round 18 BL-1: mid-session disabled-user detection (once per Auth).
         installDisabledUserWatch(client);
+        // R29-4: cross-tab sign-out propagation (once per Auth).
+        installCrossTabSignOutWatch(client);
         unsub = client.authMod.onAuthStateChanged(client.auth, (u) => {
           if (cancelled) return;
           if (u) {
@@ -401,6 +454,9 @@ export function useAuthState(): AuthState {
         // Installed here (SiteChrome mounts this hook on every page) as well
         // as in useRequireAuth — the install itself is idempotent.
         installDisabledUserWatch(client);
+        // R29-4: cross-tab sign-out propagation — same idempotent
+        // install, so it is live on every page via SiteChrome.
+        installCrossTabSignOutWatch(client);
         unsub = client.authMod.onAuthStateChanged(client.auth, (u) => {
           if (cancelled) return;
           // js/app.js attachAuth parity: mirror the uid so on-device

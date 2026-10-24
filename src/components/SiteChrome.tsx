@@ -11,7 +11,7 @@ import { usePathname, useRouter } from 'next/navigation';
 // Round 12: firebase-client user → CDN path. The new useAuthState() loads
 // the modular SDK from gstatic lazily inside its effect — the dynamic
 // boundary holds: nothing Firebase-shaped enters the initial bundle.
-import { useAuthState, type CompatUser, type FirebaseClient } from '@/lib/firebase';
+import { useAuthState, broadcastSignOut, type CompatUser, type FirebaseClient } from '@/lib/firebase';
 import { useLang, type Lang } from '@/lib/i18n';
 // R53 Team B (18 Oct 2026): footer category-landing links — lib/categories is
 // pure data (no server imports), safe for this client component.
@@ -426,6 +426,8 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
       showToast(t('logoutFailed'));
       return;
     }
+    // R29-4: tell the user's other open tabs to sign out too.
+    broadcastSignOut();
     router.push('/');
   }, [client, router, showToast, t, closeDrawerInstant]);
 

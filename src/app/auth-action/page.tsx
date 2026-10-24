@@ -130,6 +130,14 @@ function AuthActionInner() {
       } catch {
         /* best-effort */
       }
+      // R29-4: the same revocation applies to this browser's OTHER
+      // open tabs (they hold the now-revoked session otherwise).
+      try {
+        const { broadcastSignOut } = await import('@/lib/firebase');
+        broadcastSignOut();
+      } catch {
+        /* best-effort */
+      }
       setStage('resetDone');
     } catch (e) {
       if (isInvalidCodeError(e)) setStage('invalid');

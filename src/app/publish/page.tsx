@@ -37,6 +37,7 @@ import { uploadToR2, r2KeyFor, deleteR2Objects } from '@/lib/r2-upload';
 import { encodePhoto } from '@/lib/stripExif';
 import { checkDuplicates } from '@/lib/duplicates';
 import { drawWatermark } from './watermark';
+import { numericPasteValue } from '@/components/NumericFilterInput';
 
 const MAX_PHOTOS = 10;
 const PUBLISH_FN_URL =
@@ -1664,6 +1665,13 @@ function PublishForm({
                   className={inputCls + ' text-left'}
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
+                  onPaste={(e) => {
+                    // R29-5: a price copied from a listing or the
+                    // price guide («3 125 000») must land as digits,
+                    // not collapse to ''.
+                    const v = numericPasteValue(e);
+                    if (v !== null) setPrice(v);
+                  }}
                 />
                 {priceWords && (
                   <div className="text-xs text-emerald-700 mt-1">{priceWords}</div>

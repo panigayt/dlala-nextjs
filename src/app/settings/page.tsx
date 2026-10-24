@@ -388,6 +388,15 @@ function SettingsContent({ user }: { user: CompatUser }) {
       } catch {
         // already signed out
       }
+      // R29-4: the account is gone — every other open tab must drop
+      // its session too, even if this tab's signOut raced the
+      // finisher, so the broadcast is unconditional here.
+      try {
+        const { broadcastSignOut } = await import('@/lib/firebase');
+        broadcastSignOut();
+      } catch {
+        /* best effort */
+      }
       // 11 Oct 2026: removed window.alert — redirect shows confirmation.
       router.push('/');
     } catch (e) {

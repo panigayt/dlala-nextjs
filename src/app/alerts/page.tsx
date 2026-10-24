@@ -23,6 +23,7 @@ import { WILAYAS } from '@/lib/wilayas';
 import { snapshotRead, snapshotWrite, snapMs } from '@/lib/snapshot';
 
 import { CATEGORIES, catName } from '@/lib/categories';
+import { numericPasteValue } from '@/components/NumericFilterInput';
 import { useLang, type Lang } from '@/lib/i18n';
 
 // Round 114: trilingual AR/FR/EN (js/i18n.js + js/alerts.js parity) —
@@ -1059,6 +1060,12 @@ export default function AlertsPage() {
                     className={inputCls + ' text-left'}
                     value={fMin}
                     onChange={(e) => setFMin(e.target.value)}
+                    onPaste={(e) => {
+                      // R29-5: formatted pastes keep their digits
+                      // instead of silently dropping the bound.
+                      const v = numericPasteValue(e);
+                      if (v !== null) setFMin(v);
+                    }}
                   />
                 </div>
                 <div>
@@ -1076,6 +1083,11 @@ export default function AlertsPage() {
                     className={inputCls + ' text-left'}
                     value={fMax}
                     onChange={(e) => setFMax(e.target.value)}
+                    onPaste={(e) => {
+                      // R29-5: see sMin above.
+                      const v = numericPasteValue(e);
+                      if (v !== null) setFMax(v);
+                    }}
                   />
                 </div>
               </div>

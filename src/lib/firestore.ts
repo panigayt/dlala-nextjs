@@ -1466,13 +1466,31 @@ function relevanceRank(docs: ListingCard[], q: string, brandKey = ''): ListingCa
 //     substring semantics; relevanceRank ranks it below true brand
 //     docs (description hit 10 < brand hit 30).
 //   - text: the remaining tokens (textQ) as one normalized substring
-//     of the title or description, ALL language variants (R16).
+//     of the title or description, ALL language variants (R16) — the
+//     PHRASE class, unchanged.
+// R29-1 (24 Oct 2026): multi-token queries additionally match a
+// TOKEN class — every remaining token present as a whole word in the
+// title. The phrase-only stage made «clio 2019» return ZERO while 13
+// listings carry both tokens ("Renault Clio 4 2019" — the generation
+// sits between model and year, so the literal phrase never occurs).
+// Whole words in the TITLE, deliberately: substring tokens over
+// title+description would flood «clio 4» from 34 to 66 (the token "4"
+// hides inside "2014", "4 portes" descriptions, …), breaking result
+// sets that work today. On the R29 catalog snapshot the token class
+// adds exactly the phrase-missed both-token titles («clio 2019» → 13,
+// «clio 4 2019» → 13) and nothing to «clio 4» (34), «golf 8» (13),
+// «ibiza 2019» (7), «sandero 2017» (8). classify() returns 2 = phrase,
+// 1 = token-only, 0 = no match; single-token and brand-only queries
+// can only ever produce class 2, byte-identical to before.
 export function makeTextMatcher(f: SearchFilters): {
   qBrand: string;
   matches: (d: ListingCard) => boolean;
+  phraseMatches: (d: ListingCard) => boolean;
+  classify: (d: ListingCard) => 0 | 1 | 2;
 } {
   const { qBrand, textQ, brandText } = resolveQueryBrand(f.q || '');
-  const matches = (d: ListingCard): boolean => {
+  const textTokens = textQ ? textQ.split(' ').filter(Boolean) : [];
+  const classify = (d: ListingCard): 0 | 1 | 2 => {
     const answers = (d.answers || {}) as Record<string, unknown>;
     // AZ-1 (18 Oct 2026): the doc-side brand must use the same map family
     // as the query key — pb* keys (phone brands) normalize via the phone
@@ -1486,13 +1504,23 @@ export function makeTextMatcher(f: SearchFilters): {
     const desc = normSearchText(allTextVariants(d.description));
     if (qBrand && docBrand !== qBrand) {
       if (!brandText || (!title.includes(brandText) && !desc.includes(brandText))) {
-        return false;
+        return 0;
       }
     }
-    if (textQ && !title.includes(textQ) && !desc.includes(textQ)) return false;
-    return true;
+    if (!textQ || title.includes(textQ) || desc.includes(textQ)) return 2;
+    if (textTokens.length >= 2) {
+      // R29-1 token class: every token a whole word of the title.
+      // Word = maximal run of Unicode letters/digits in the normalized
+      // title (normSearchText has already collapsed whitespace; the
+      // split also strips punctuation glued to words, "4," → "4").
+      const words = new Set(title.split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+      if (textTokens.every((t) => words.has(t))) return 1;
+    }
+    return 0;
   };
-  return { qBrand, matches };
+  const matches = (d: ListingCard): boolean => classify(d) > 0;
+  const phraseMatches = (d: ListingCard): boolean => classify(d) === 2;
+  return { qBrand, matches, phraseMatches, classify };
 }
 
 // Stage 5 (both pipelines): collect matches in pool order up to
@@ -1501,16 +1529,31 @@ export function makeTextMatcher(f: SearchFilters): {
 // pool order — the legacy renderFeed sort branch). R5-1: the brandKey
 // is passed through so brand-matched docs score as title-contains (30)
 // and a pure brand query orders by recency instead of all-zero scores.
+// R29-1 (24 Oct 2026): selection is phrase-first — the phrase class
+// fills up to SEARCH_MAX_MATCHES exactly as the pre-fix stage did (so
+// every query that works today returns its identical set and, for the
+// recent sort, its identical relevance order), and token-class matches
+// take only the slots the phrase class leaves free. For price sorts
+// the kept union is emitted in pool order, so the price ordering the
+// user asked for stays exact.
 export function textMatchStage<T extends ListingCard>(docs: T[], f: SearchFilters): T[] {
-  const { qBrand, matches } = makeTextMatcher(f);
-  const matched: T[] = [];
+  const { qBrand, classify } = makeTextMatcher(f);
+  const phrase: T[] = [];
+  const tokenOnly: T[] = [];
   for (const d of docs) {
-    if (matched.length >= SEARCH_MAX_MATCHES) break;
-    if (matches(d)) matched.push(d);
+    const c = classify(d);
+    if (c === 2) phrase.push(d);
+    else if (c === 1) tokenOnly.push(d);
   }
-  return ((!f.sort || f.sort === 'recent')
-    ? relevanceRank(matched, f.q || '', qBrand)
-    : matched) as T[];
+  const keptPhrase = phrase.slice(0, SEARCH_MAX_MATCHES);
+  const keptToken = tokenOnly.slice(0, SEARCH_MAX_MATCHES - keptPhrase.length);
+  if (!f.sort || f.sort === 'recent') {
+    return relevanceRank(keptPhrase, f.q || '', qBrand).concat(
+      relevanceRank(keptToken, f.q || '', qBrand)
+    ) as T[];
+  }
+  const keep = new Set<ListingCard>([...keptPhrase, ...keptToken]);
+  return docs.filter((d) => keep.has(d));
 }
 
 // 0.0.0.31 FIX-WEB-014 (+050): result-count text with proper Arabic plurals.
@@ -1851,12 +1894,18 @@ async function runSearchPipeline(
   // Stage 5's match count over the docs accumulated so far — decoded
   // and facet-refined on the fly, minus the wanted merge (whose docs
   // iterate after the main pool and can never displace a main match).
+  // R29-1 (24 Oct 2026): count PHRASE-class matches only. Token-class
+  // matches fill only the slots the phrase class leaves free, so the
+  // scan may stop early only once SEARCH_MAX_MATCHES phrase matches
+  // are in hand — stopping on the combined count could strand deeper
+  // phrase matches behind token matches that would be displaced by
+  // them. Worst case stays SEARCH_TEXT_SCAN_CAP, as before.
   const countMatchesSoFar = (raw: unknown[]): number => {
     if (!textMatcher) return 0;
     let acc = raw.map((r) => restDocToObj(r as { name: string; fields?: Record<string, unknown> }));
     if (hasFacetFilter(f)) acc = acc.filter((d) => matchFacets(d, f));
     let n = 0;
-    for (const d of acc) if (textMatcher.matches(d)) n++;
+    for (const d of acc) if (textMatcher.phraseMatches(d)) n++;
     return n;
   };
   const cursorOf = (doc: unknown) => {

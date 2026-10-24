@@ -46,6 +46,7 @@ import { tasteNoteFav } from '@/lib/taste';
 import { emitFavChange } from './ListingShell';
 import { useLang } from '@/lib/i18n';
 import { armFavRescue, disarmFavRescue, setFavRescueToken } from '@/lib/fav-rescue';
+import { numericPasteValue } from '@/components/NumericFilterInput';
 
 // Report reasons — verbatim order from js/market.js REPORT_REASONS; labels
 // via t('reasonX') (legacy: t('reason' + r[0].toUpperCase() + r.slice(1))).
@@ -873,6 +874,12 @@ export default function ListingActions({ listingId, sellerId, title, price, phot
             dir="ltr"
             value={offerAmt}
             onChange={(e) => setOfferAmt(e.target.value)}
+            onPaste={(e) => {
+              // R29-5: a price copied from a listing («3,100,000»)
+              // must land as digits, not collapse to ''.
+              const v = numericPasteValue(e);
+              if (v !== null) setOfferAmt(v);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') onOfferGo();
             }}

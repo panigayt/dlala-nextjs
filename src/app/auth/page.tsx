@@ -685,9 +685,11 @@ function AuthPageInner() {
     try {
       // Lazy-load the Firebase SDK (gstatic CDN path — the single Auth instance the drawer observes) — keeps it off the
       // initial page chunk.
-      const { getFirebaseCdn } = await import('@/lib/firebase');
+      const { getFirebaseCdn, broadcastSignOut } = await import('@/lib/firebase');
       const { auth, authMod } = await getFirebaseCdn();
       await authMod.signOut(auth);
+      // R29-4: propagate to the user's other open tabs.
+      broadcastSignOut();
     } catch (e) {
       // A failed sign-out must surface in the VISIBLE mode (verify), never
       // in the hidden login mode.
