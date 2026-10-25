@@ -20,7 +20,15 @@ export function generateMetadata(): Metadata {
   return {
     title,
     description: 'شروط استخدام موقع وتطبيق دلالة',
-    alternates: { canonical: 'https://www.dzdlala.com/terms' },
+    alternates: {
+      canonical: 'https://www.dzdlala.com/terms',
+      languages: {
+        ar: 'https://www.dzdlala.com/terms',
+        fr: 'https://www.dzdlala.com/fr/terms',
+        en: 'https://www.dzdlala.com/en/terms',
+        'x-default': 'https://www.dzdlala.com/terms',
+      },
+    },
     openGraph: {
       type: 'website',
       siteName: 'DLALA',

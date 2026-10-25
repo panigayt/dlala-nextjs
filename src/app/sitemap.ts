@@ -81,6 +81,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // 11 Oct 2026: /auth removed — auth-gated utility (production parity).
     { url: `${BASE}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${BASE}/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${BASE}/fr/privacy`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${BASE}/en/privacy`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${BASE}/fr/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${BASE}/en/terms`, changeFrequency: 'yearly', priority: 0.2 },
     // Round 129: SEO guides (production parity — the production sitemap
     // lists the guide articles weekly/0.7; the index pages are real crawlable
     // routes served by the production guides function, included here).

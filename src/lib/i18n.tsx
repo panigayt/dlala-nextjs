@@ -135,7 +135,7 @@ export function titleKeyForPath(pathname: string): string | null {
   }
 }
 
-function updateDocTitle(l: Lang): void {
+export function updateDocTitle(l: Lang): void {
   try {
     const key = titleKeyForPath(window.location.pathname);
     if (key) document.title = t(key, l);

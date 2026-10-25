@@ -12,7 +12,7 @@ import { usePathname, useRouter } from 'next/navigation';
 // the modular SDK from gstatic lazily inside its effect — the dynamic
 // boundary holds: nothing Firebase-shaped enters the initial bundle.
 import { useAuthState, broadcastSignOut, type CompatUser, type FirebaseClient } from '@/lib/firebase';
-import { useLang, type Lang } from '@/lib/i18n';
+import { useLang, updateDocTitle, getAppLang, type Lang } from '@/lib/i18n';
 // R53 Team B (18 Oct 2026): footer category-landing links — lib/categories is
 // pure data (no server imports), safe for this client component.
 import { catName } from '@/lib/categories';
@@ -108,6 +108,11 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/';
   const router = useRouter();
   const { lang, setLang, t } = useLang();
+  // R38-1 systemic: client-side navigation applies the new route's static
+  // server title (e.g. Arabic on /auth) and nothing re-localizes it.
+  // Re-run the localized title on every pathname change; mapped routes
+  // get their localized title, dynamic pages (null key) keep the server title.
+  useEffect(() => { updateDocTitle(getAppLang()); }, [pathname]);
   const auth = useAuthState();
 
   const activePage = pageIdFor(pathname);
@@ -716,7 +721,7 @@ function ChromeInner({ children }: { children: React.ReactNode }) {
         <div className="footer-inner">
           <span>{t('allRights')}</span>
           <span className="footer-links">
-            <Link href="/privacy">{t('privacyLink')}</Link> · {APP_VERSION}
+            <Link href="/privacy">{t('privacyLink')}</Link> · <Link href="/terms">{t('termsLink')}</Link> · {APP_VERSION}
           </span>
           <div className="footer-guides">
             <strong>📚 {t('guidesTitle')}</strong>

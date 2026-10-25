@@ -27,6 +27,7 @@
  * What does not: all app chrome, all interactive elements (buttons
  * and links carry no information on paper), and the matches/similar
  * section (discovery, not this listing). Card shadows are dropped.
+ * Exception: gallery buttons print (they carry the photos); see R53-1.
  * :has() needs Chrome 105+/Safari 15.4+; older browsers degrade to
  * today's behavior (chrome printed), never to a broken page.
  */
@@ -46,10 +47,27 @@
      follow / gallery thumbnails / lightbox triggers / rate CTA.
      Links: back link, view-store link, report-user link.
      The description renders as plain text (ListingShell), never links,
-     so no listing content is lost by hiding anchors. */
+     so no listing content is lost by hiding anchors.
+     Exceptions (R53-1, R53-2): gallery buttons print (they carry the
+     photos); the seller-name link prints. See the rules below. */
   .dlala-listing-print button,
   .dlala-listing-print a {
     display: none !important;
+  }
+
+  /* R53-1 exception: gallery buttons CARRY the photos — un-hide them in
+     print (hero + thumbnails). All other buttons stay hidden. The
+     opacity reset stops unselected thumbnails (opacity-70) printing faded. */
+  .dlala-listing-print button.cursor-zoom-in,
+  .dlala-listing-print button.shrink-0.rounded-lg.overflow-hidden {
+    display: block !important;
+    opacity: 1 !important;
+  }
+
+  /* R53-2 exception: the seller name IS a link — un-hide it in print.
+     The view-store CTA (a sibling, different classes) stays hidden. */
+  .dlala-listing-print span.font-bold.truncate a {
+    display: inline !important;
   }
 
   /* Discovery section (matches/similar ads) — not this listing.

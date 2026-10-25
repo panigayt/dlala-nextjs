@@ -20,7 +20,15 @@ export function generateMetadata(): Metadata {
   return {
     title,
     description: 'سياسة الخصوصية لتطبيق وموقع دلالة',
-    alternates: { canonical: 'https://www.dzdlala.com/privacy' },
+    alternates: {
+      canonical: 'https://www.dzdlala.com/privacy',
+      languages: {
+        ar: 'https://www.dzdlala.com/privacy',
+        fr: 'https://www.dzdlala.com/fr/privacy',
+        en: 'https://www.dzdlala.com/en/privacy',
+        'x-default': 'https://www.dzdlala.com/privacy',
+      },
+    },
     openGraph: {
       type: 'website',
       siteName: 'DLALA',
